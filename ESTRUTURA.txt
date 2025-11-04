@@ -1,0 +1,55 @@
+gestao-obras-chatbot/
+│
+├── prisma/
+│   ├── schema.prisma           # ✅ Modelo do banco (PostgreSQL)
+│   └── seed.ts                 # ✅ Dados iniciais
+│
+├── src/
+│   ├── db/                     # ✅ Conexão com banco
+│   │   └── index.ts
+│   │
+│   ├── models/                 # ✅ Modelos (CRUD)
+│   │   ├── cliente.ts
+│   │   ├── obra.ts
+│   │   ├── profissional.ts
+│   │   ├── area.ts
+│   │   └── projeto.ts
+│   │
+│   ├── services/               # ✅ Regras de negócio
+│   │   ├── projetoService.ts
+│   │   └── obraService.ts
+│   │
+│   ├── routes/                 # ✅ Rotas API (futura integração)
+│   │   └── projetoRoutes.ts
+│   │
+│   ├── chatbot/                # ✅ Lógica do chatbot WhatsApp
+│   │   └── bot.ts
+│   │
+│   └── index.ts                # ✅ Ponto de entrada principal
+│
+├── generated/                   # Prisma Client (auto-gerado)
+│   └── prisma/
+│
+├── .env                        # ✅ Variáveis de ambiente
+├── .gitignore                  # ✅ Arquivos ignorados
+├── package.json                # ✅ Dependências
+├── tsconfig.json               # ✅ Configuração TypeScript
+├── README.md                   # ✅ Documentação completa
+├── INICIO-RAPIDO.md            # ✅ Guia de configuração
+└── ESTRUTURA.txt               # Este arquivo
+
+TECNOLOGIAS:
+- TypeScript
+- Prisma ORM
+- PostgreSQL
+- WhatsApp Web.js
+- OpenAI (opcional)
+
+COMANDOS:
+npm run dev              # Executar em desenvolvimento
+npm run build            # Compilar TypeScript
+npm start                # Executar em produção
+npm run prisma:generate  # Gerar Prisma Client
+npm run prisma:migrate   # Criar migrations
+npm run prisma:studio    # Interface visual do banco
+npm run db:seed          # Popular banco com dados iniciais

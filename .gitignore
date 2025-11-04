@@ -1,6 +1,8 @@
 # Virtual environment
 .venv/
-.env/
+
+# Environment variables
+.env
 
 # Python cache
 __pycache__/
@@ -14,3 +16,15 @@ Pipfile.lock
 
 # VSCode
 .vscode/
+
+# Prisma
+/generated/prisma
+node_modules
+
+# Build
+dist/
+*.log
+
+# WhatsApp session
+.wwebjs_auth/
+.wwebjs_cache/
