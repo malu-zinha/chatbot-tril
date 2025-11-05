@@ -1,6 +1,18 @@
 import 'dotenv/config';
-import { connectDatabase, disconnectDatabase } from './db';
-import { startBot } from './chatbot/bot';
+// Substitui a importação por implementações simples.
+// Troque pela lógica real do seu banco (mongoose, pg, prisma, etc.) quando preparar ./db.ts
+async function connectDatabase(): Promise<void> {
+  console.log('🔌 Conectando ao banco de dados (temporário)...');
+  // Exemplo: usar mongoose
+  // await mongoose.connect(process.env.MONGO_URI!);
+}
+
+async function disconnectDatabase(): Promise<void> {
+  console.log('🔌 Desconectando do banco de dados (temporário)...');
+  // Exemplo: usar mongoose
+  // await mongoose.disconnect();
+}
+import { startBot } from './bot/whatsappBot';
 
 async function main() {
   console.log('🚀 Iniciando sistema de gestão de obras...\n');
