@@ -28,3 +28,13 @@ dist/
 # WhatsApp session
 .wwebjs_auth/
 .wwebjs_cache/
+
+# Google Credentials (IMPORTANTE: nunca commitar!)
+credentials.json
+*-credentials.json
+
+# Temporary files
+temp/
+*.ogg
+*.mp3
+*.wav

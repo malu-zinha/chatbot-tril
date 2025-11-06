@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { connectDatabase, disconnectDatabase } from './db';
-import { startBot } from './chatbot/bot';
+import { connectDatabase, disconnectDatabase } from './db/index.ts';
+import { startBot } from './bot/whatsappBot.ts';
 
 async function main() {
   console.log('🚀 Iniciando sistema de gestão de obras...\n');

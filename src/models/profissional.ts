@@ -1,4 +1,4 @@
-import prisma from '../db';
+import prisma from '../db/index.ts';
 
 export interface ProfissionalData {
   nome: string;

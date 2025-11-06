@@ -1,5 +1,5 @@
-import { ObraModel, ObraData } from '../models/obra';
-import { ClienteModel } from '../models/cliente';
+import { ObraModel, ObraData } from '../models/obra.ts';
+import { ClienteModel } from '../models/cliente.ts';
 
 export class ObraService {
   static async criarObra(data: ObraData) {

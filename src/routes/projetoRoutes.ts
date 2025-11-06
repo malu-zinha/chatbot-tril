@@ -1,7 +1,7 @@
 // Exemplo de rotas para API REST (futura integração)
 // Pode usar Express.js ou Fastify
 
-import { ProjetoService } from '../services/projetoService';
+import { ProjetoService } from '../services/projetoService.ts';
 
 export class ProjetoRoutes {
   // GET /projetos/:obraId
