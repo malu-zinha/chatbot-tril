@@ -1,6 +1,6 @@
-import { ProjetoModel } from '../models/projeto';
-import { ObraModel } from '../models/obra';
-import { AreaModel } from '../models/area';
+import { ProjetoModel } from '../models/projeto.ts';
+import { ObraModel } from '../models/obra.ts';
+import { AreaModel } from '../models/area.ts';
 
 export class ProjetoService {
   static async criarProjeto(obraId: string, areaNome: string) {

@@ -24,3 +24,9 @@ export interface Campo {
   nome: string;
   valor: string;
 }
+
+export interface OpenAIResponse {
+  text: string;
+  fields?: Array<{ name: string; value: string }>;
+  suggestion?: string;
+}

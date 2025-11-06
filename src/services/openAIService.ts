@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
-import { OpenAIResponse } from '../types/botTypes';
-import { Area, getSuggestedFields } from '../utils/areaMapper';
+import { OpenAIResponse } from '../types/botTypes.ts';
+import { Area, getSuggestedFields } from '../utils/areaMapper.ts';
 
 // Inicializar cliente OpenAI
 const openai = new OpenAI({

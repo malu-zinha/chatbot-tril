@@ -1,7 +1,6 @@
 // Schema do Prisma para gestão de obras
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
