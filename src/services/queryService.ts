@@ -30,42 +30,47 @@ export class QueryService {
     headers: string[]
   ): Promise<QueryResult> {
     try {
+      console.log(`📊 Processando query com ${sheetData.length} registros`);
+      console.log(`📋 Colunas: ${headers.join(', ')}`);
+      
       // Criar contexto com amostra dos dados
       const sampleData = sheetData.slice(0, 5); // Primeiros 5 registros como exemplo
       
-      const systemPrompt = `Você é um assistente especializado em consultar dados de planilhas.
+      const systemPrompt = `Você é um assistente que responde perguntas EXCLUSIVAMENTE baseado nos dados fornecidos abaixo.
 
-DADOS DISPONÍVEIS:
-- Colunas: ${headers.join(', ')}
-- Total de registros: ${sheetData.length}
-- Amostra dos dados (primeiros registros):
-${JSON.stringify(sampleData, null, 2)}
+IMPORTANTE: Você DEVE usar APENAS os dados que estou fornecendo. NÃO invente informações. NÃO diga que não tem dados se eles estão listados abaixo.
 
-TODOS OS DADOS:
+DADOS COMPLETOS DA PLANILHA:
 ${JSON.stringify(sheetData, null, 2)}
 
-Sua tarefa é:
-1. Interpretar a pergunta do usuário
-2. Buscar nos dados fornecidos
-3. Retornar uma resposta clara e objetiva
-4. Se houver múltiplos resultados, liste-os de forma organizada
-5. Se não encontrar dados relevantes, informe de forma amigável
+COLUNAS DISPONÍVEIS: ${headers.join(', ')}
+TOTAL DE REGISTROS: ${sheetData.length}
 
-Retorne APENAS um JSON no formato:
+REGRAS OBRIGATÓRIAS:
+1. Busque a resposta NOS DADOS ACIMA
+2. Se encontrar informação relevante, responda com os dados encontrados
+3. Use as colunas: ${headers.join(', ')}
+4. Seja específico e mostre os valores encontrados
+5. Formate a resposta para WhatsApp (*negrito*, _itálico_, quebras de linha)
+6. NUNCA diga "não tenho informações" se os dados existem acima
+
+FORMATO DE RESPOSTA (JSON obrigatório):
 {
-  "answer": "resposta em texto formatado para WhatsApp (use *negrito*, _itálico_, e quebras de linha)",
+  "answer": "Resposta clara com os dados encontrados acima",
   "data": [...dados relevantes encontrados...],
   "confidence": "high" | "medium" | "low"
-}`;
+}
+
+Analise a pergunta do usuário e responda usando APENAS os dados fornecidos acima.`;
 
       const client = getOpenAIClient();
       const completion = await client.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o-mini", // Mais barato e eficiente
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: question }
         ],
-        temperature: 0.3,
+        temperature: 0.1, // Mais preciso e determinístico
         response_format: { type: "json_object" }
       });
 
@@ -73,6 +78,8 @@ Retorne APENAS um JSON no formato:
       if (!response) throw new Error('Resposta vazia da OpenAI');
 
       const result = JSON.parse(response);
+      console.log(`✅ Resposta gerada com confiança: ${result.confidence}`);
+      
       return {
         answer: result.answer || 'Não consegui processar a pergunta.',
         data: result.data || [],
@@ -142,7 +149,7 @@ Analise a pergunta e retorne JSON:
 
       const client = getOpenAIClient();
       const intentCompletion = await client.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o-mini", // Mais barato e eficiente
         messages: [{ role: "user", content: intentPrompt }],
         temperature: 0.2,
         response_format: { type: "json_object" }
@@ -162,8 +169,11 @@ Analise a pergunta e retorne JSON:
         );
       }
 
+      // Se não encontrou dados relevantes, usa todos (limitado)
+      const dataToQuery = relevantData.length > 0 ? relevantData.slice(0, 50) : sheetData.slice(0, 50);
+      
       // Agora gera a resposta com dados filtrados
-      return this.querySheet(question, relevantData.slice(0, 50), headers);
+      return this.querySheet(question, dataToQuery, headers);
 
     } catch (error) {
       console.error('Erro no query otimizado:', error);

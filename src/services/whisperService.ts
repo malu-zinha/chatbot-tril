@@ -20,6 +20,12 @@ export class WhisperService {
    */
   static async transcribe(audioPath: string): Promise<string> {
     try {
+      // Verificar se o arquivo existe
+      if (!fs.existsSync(audioPath)) {
+        throw new Error('Arquivo de áudio não encontrado');
+      }
+
+      console.log(`🎤 Transcrevendo áudio: ${audioPath}`);
       const audioFile = fs.createReadStream(audioPath);
       const client = getOpenAIClient();
       
@@ -30,9 +36,20 @@ export class WhisperService {
         response_format: 'text'
       });
 
+      console.log(`✅ Áudio transcrito com sucesso`);
       return transcription as string;
     } catch (error: any) {
-      console.error('Erro ao transcrever áudio:', error.message);
+      console.error('❌ Erro detalhado ao transcrever áudio:', error);
+      
+      // Mensagens de erro mais específicas
+      if (error.message?.includes('Connection error')) {
+        throw new Error('Erro de conexão com a API OpenAI. Verifique sua internet e chave da API.');
+      } else if (error.message?.includes('API key')) {
+        throw new Error('Chave da API OpenAI inválida. Verifique o arquivo .env');
+      } else if (error.message?.includes('insufficient_quota')) {
+        throw new Error('Sem créditos na conta OpenAI. Adicione créditos em platform.openai.com');
+      }
+      
       throw new Error(`Falha na transcrição: ${error.message}`);
     }
   }

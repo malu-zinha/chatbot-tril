@@ -1,25 +1,14 @@
-# Virtual environment
-.venv/
-
 # Environment variables
 .env
-
-# Python cache
-__pycache__/
-*.py[cod]
 
 # macOS
 .DS_Store
 
-# pipenv
-Pipfile.lock
-
 # VSCode
 .vscode/
 
-# Prisma
-/generated/prisma
-node_modules
+# Node modules
+node_modules/
 
 # Build
 dist/
@@ -33,7 +22,7 @@ dist/
 credentials.json
 *-credentials.json
 
-# Temporary files
+# Temporary audio files
 temp/
 *.ogg
 *.mp3

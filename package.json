@@ -1,16 +1,15 @@
 {
-  "name": "whatsapp-bot-obras",
+  "name": "whatsapp-sheets-bot",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "start": "ts-node --esm src/index.ts",
     "dev": "nodemon --exec 'ts-node --esm' src/index.ts",
-    "sheets": "ts-node --esm src/index-sheets.ts",
-    "sheets:dev": "nodemon --exec 'ts-node --esm' src/index-sheets.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "test:query": "node test-query.js",
+    "test:simple": "node test-query-simple.js"
   },
   "dependencies": {
-    "@prisma/client": "^6.18.0",
     "axios": "^1.13.2",
     "dotenv": "^16.3.0",
     "googleapis": "^164.1.0",
@@ -22,7 +21,6 @@
     "@types/node": "^20.0.0",
     "@types/qrcode-terminal": "^0.12.0",
     "nodemon": "^3.0.0",
-    "prisma": "^6.18.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
   }
