@@ -17,7 +17,79 @@ export interface QueryResult {
   confidence: 'high' | 'medium' | 'low';
 }
 
+export interface IntentClassification {
+  type: 'query' | 'command';
+  confidence: 'high' | 'medium' | 'low';
+  reasoning?: string;
+}
+
 export class QueryService {
+  /**
+   * Classifica se a mensagem é uma consulta ou comando de edição
+   * @param message - Mensagem do usuário
+   */
+  static async classifyIntent(message: string): Promise<IntentClassification> {
+    try {
+      const systemPrompt = `Você classifica mensagens como CONSULTA ou COMANDO de edição.
+
+CONSULTA: perguntas sobre dados (ex: "qual o status?", "quantos projetos?")
+COMANDO: ordens para alterar dados (ex: "mude o status", "adicione projeto", "atualize")
+
+Palavras-chave de COMANDO:
+- mude, altere, atualize, modifique, troque
+- adicione, crie, insira
+- remova, delete, exclua
+- defina, configure
+
+Palavras-chave de CONSULTA:
+- qual, quanto, quantos, quais
+- mostre, liste, exiba
+- como está, status de
+- busque, procure
+
+Retorne JSON:
+{
+  "type": "query" | "command",
+  "confidence": "high" | "medium" | "low",
+  "reasoning": "breve explicação"
+}`;
+
+      const client = getOpenAIClient();
+      const completion = await client.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message }
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" }
+      });
+
+      const response = completion.choices[0]?.message?.content;
+      if (!response) throw new Error('Resposta vazia');
+
+      const classification = JSON.parse(response);
+      console.log(`🔍 Classificação: ${classification.type} (${classification.confidence})`);
+      
+      return classification;
+
+    } catch (error: any) {
+      console.error('Erro ao classificar intent:', error.message);
+      
+      // Fallback: classificação simples baseada em palavras-chave
+      const lowerMsg = message.toLowerCase();
+      
+      const commandKeywords = ['mude', 'altere', 'atualize', 'modifique', 'adicione', 'crie', 'remova', 'delete', 'defina'];
+      const isCommand = commandKeywords.some(keyword => lowerMsg.includes(keyword));
+      
+      return {
+        type: isCommand ? 'command' : 'query',
+        confidence: 'low',
+        reasoning: 'Classificação por fallback (erro na LLM)'
+      };
+    }
+  }
+
   /**
    * Interpreta uma pergunta em linguagem natural e busca na planilha
    * @param question - Pergunta do usuário

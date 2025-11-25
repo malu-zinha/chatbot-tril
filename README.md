@@ -4,11 +4,18 @@ Chatbot WhatsApp que consulta dados do Google Sheets usando inteligência artifi
 
 ## ✨ Funcionalidades
 
+### Consultas
 - 📊 Consulta dados de planilhas do Google Sheets
 - 💬 Perguntas em **texto** ou **áudio** (transcrição via Whisper)
 - 🤖 IA para interpretar perguntas em linguagem natural
 - ⚡ Cache inteligente para performance
-- 🔄 Sincronização automática com a planilha
+
+### **NOVO: Edição de Planilhas**
+- ✏️ **Edita projetos** via comandos em linguagem natural
+- 🔄 **Sincronização automática** entre abas Engenheiro e Evandro
+- ➕ **Adiciona novos projetos** em ambas as abas
+- ✅ **Confirmação obrigatória** antes de executar mudanças
+- 📝 **Preview das mudanças** com detalhes do que será alterado
 
 ## 🏗️ Estrutura do Projeto
 
@@ -17,11 +24,18 @@ chatbot-tril/
 ├── src/
 │   ├── index.ts                          # Entry point principal
 │   ├── bot/
-│   │   └── sheetsBot.ts                  # Lógica do bot WhatsApp
+│   │   └── sheetsBot.ts                  # Lógica do bot WhatsApp (consulta + edição)
 │   └── services/
-│       ├── googleSheetsService.ts        # Integração com Google Sheets
-│       ├── queryService.ts               # Processamento de queries com IA
+│       ├── googleSheetsService.ts        # Integração com Google Sheets (read + write)
+│       ├── queryService.ts               # Processamento de queries + classificação
+│       ├── commandService.ts             # Interpretação de comandos de edição (NOVO)
+│       ├── sheetSyncService.ts           # Sincronização entre abas (NOVO)
 │       └── whisperService.ts             # Transcrição de áudio
+├── test-query.js                         # Teste de consultas com IA
+├── test-query-simple.js                  # Teste de busca simples
+├── test-sheet-update.js                  # Teste de edição e sincronização (NOVO)
+├── GUIA-EDICAO-PLANILHAS.md             # Guia completo de edição (NOVO)
+├── ENV_CONFIG.md                         # Documentação de variáveis de ambiente
 ├── package.json
 └── tsconfig.json
 ```
@@ -73,20 +87,36 @@ Escaneie o QR Code que aparece no terminal com seu WhatsApp.
 
 ## 💬 Como Usar o Bot
 
-### Comandos
+### Comandos do Sistema
 
 - `menu` ou `oi` - Menu inicial
 - `atualizar` - Atualizar cache da planilha manualmente
 
-### Exemplos de Perguntas
+### 📊 Consultas (Leitura)
 
 **Texto:**
-- "Qual o total de vendas?"
-- "Mostre os clientes de São Paulo"
-- "Quantos produtos temos no estoque?"
+- "Qual o status do projeto PRJ-001?"
+- "Mostre os projetos em execução"
+- "Quantos projetos temos?"
 
 **Áudio:**
 - Grave sua pergunta e envie como áudio
+
+### ✏️ Comandos de Edição (Novo!)
+
+**Atualizar projetos:**
+- "Mude o projeto PRJ-001 para Em Execução"
+- "Atualize o status do PRJ-002 para Parado Cliente"
+
+**Adicionar projetos:**
+- "Adicione novo projeto: Cliente Alfa Ltda, Obra Predial, Área Elétrico"
+
+**Sistema de confirmação:**
+- Bot mostra preview das mudanças
+- Você confirma com "sim" ou cancela com "não"
+- Sincronização automática com aba Evandro
+
+📖 **Guia completo:** Veja `GUIA-EDICAO-PLANILHAS.md`
 
 ## 📦 Dependências Principais
 
@@ -98,31 +128,54 @@ Escaneie o QR Code que aparece no terminal com seu WhatsApp.
 ## 🔧 Scripts Disponíveis
 
 ```bash
-npm run dev          # Desenvolvimento com hot reload (WhatsApp Bot)
-npm start            # Produção (WhatsApp Bot)
-npm run build        # Build TypeScript
-npm run test:query   # Teste de consulta no terminal (sem WhatsApp)
+npm run dev           # Desenvolvimento com hot reload (WhatsApp Bot)
+npm start             # Produção (WhatsApp Bot)
+npm run build         # Build TypeScript
+npm run test:query    # Teste de consulta no terminal (COM IA)
+npm run test:simple   # Teste de busca simples (SEM IA)
+npm run test:update   # Teste de edição e sincronização (NOVO!)
 ```
 
-### 🧪 Modo Teste (Terminal)
+### 🧪 Modos de Teste (Terminal)
 
-Para testar a consulta da planilha **sem precisar do WhatsApp**:
+#### 1. Teste de Consultas com IA
 
 ```bash
 npm run test:query
 ```
 
-**Funcionalidades do modo teste:**
-- ✅ Consulta a planilha direto do terminal
+- ✅ Consulta a planilha com interpretação por IA
 - ✅ Faz perguntas em texto
-- ✅ Testa a IA sem gastar com transcrição de áudio
-- ✅ Ideal para desenvolvimento e debug
+- ✅ Ideal para testar queries complexas
 
-**Comandos no modo teste:**
-- Digite qualquer pergunta para consultar
-- `reload` ou `atualizar` - Recarrega dados da planilha
+#### 2. Teste de Busca Simples (Sem IA)
+
+```bash
+npm run test:simple
+```
+
+- ✅ Busca por palavras-chave (sem gastar OpenAI)
+- ✅ Rápido e eficiente
+- ✅ Ideal para testes básicos
+
+#### 3. **NOVO:** Teste de Edição e Sincronização
+
+```bash
+npm run test:update
+```
+
+- ✅ Testa comandos de edição sem WhatsApp
+- ✅ Interpreta comandos com IA
+- ✅ Mostra preview das mudanças
+- ✅ Pede confirmação antes de executar
+- ✅ Executa sincronização entre abas
+- ✅ Ideal para testar mudanças sem risco
+
+**Comandos disponíveis:**
+- Digite qualquer pergunta ou comando
+- `reload` ou `atualizar` - Recarrega dados
 - `ajuda` ou `help` - Mostra comandos
-- `sair` ou `exit` - Encerra o teste
+- `sair` ou `exit` - Encerra
 
 ## 📝 Notas
 
@@ -133,17 +186,31 @@ npm run test:query
 ## 🎯 Arquitetura
 
 ```
-WhatsApp → sheetsBot → queryService → OpenAI
-                    ↓
-              googleSheetsService → Google Sheets API
+WhatsApp → sheetsBot → classifyIntent → Query ou Command?
+                              ↓                    ↓
+                         queryService        commandService
+                              ↓                    ↓
+                        OpenAI (consulta)    OpenAI (parse)
+                              ↓                    ↓
+                    googleSheetsService ← sheetSyncService
+                              ↓                    ↓
+                        Google Sheets API (read/write)
 ```
 
 **Fluxo de Consulta:**
 1. Usuário envia mensagem/áudio
-2. Bot processa (transcreve áudio se necessário)
-3. Query service usa IA para entender a pergunta
-4. Busca dados na planilha (cache ou API)
-5. Retorna resposta formatada
+2. Whisper transcreve (se áudio)
+3. IA classifica: consulta ou comando?
+4. Se consulta: busca dados e responde
+5. Se comando: vai para fluxo de edição
+
+**Fluxo de Edição (NOVO):**
+1. CommandService interpreta comando com IA
+2. Valida e gera preview das mudanças
+3. Aguarda confirmação do usuário
+4. GoogleSheetsService atualiza aba Engenheiro
+5. SheetSyncService sincroniza com aba Evandro
+6. Retorna resultado formatado
 
 ---
 
