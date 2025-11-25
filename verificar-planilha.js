@@ -15,22 +15,32 @@ async function verificar() {
     
     // Verificar aba Engenheiro
     console.log('📊 ABA ENGENHEIRO:');
-    const engineerData = await sheetsService.readSheet(SPREADSHEET_ID, `${ENGINEER_SHEET}!A1:Z1000`);
+    const engineerData = await sheetsService.readSheet(SPREADSHEET_ID, `${ENGINEER_SHEET}!A2:Z1000`);
     console.log(`   Headers: ${engineerData.headers.join(' | ')}`);
     console.log(`   Total de registros: ${engineerData.rows.length}`);
     
     if (engineerData.rows.length > 0) {
-      console.log(`   Primeira linha: ${engineerData.rows[0].join(' | ')}`);
+      console.log(`   Primeira linha de DADOS: ${engineerData.rows[0].join(' | ')}`);
+      console.log(`\n   🔍 IDs dos projetos na aba Engenheiro:`);
+      for (let i = 0; i < Math.min(5, engineerData.rows.length); i++) {
+        const id = engineerData.rows[i][0];
+        console.log(`      - Projeto ${i + 1}: ID = "${id}" (tipo: ${typeof id})`);
+      }
     }
     
     console.log('\n📊 ABA EVANDRO:');
     try {
-      const evandroData = await sheetsService.readSheet(SPREADSHEET_ID, `${EVANDRO_SHEET}!A1:Z1000`);
+      const evandroData = await sheetsService.readSheet(SPREADSHEET_ID, `${EVANDRO_SHEET}!A2:Z1000`);
       console.log(`   Headers: ${evandroData.headers.join(' | ')}`);
       console.log(`   Total de registros: ${evandroData.rows.length}`);
       
       if (evandroData.rows.length > 0) {
-        console.log(`   Primeira linha: ${evandroData.rows[0].join(' | ')}`);
+        console.log(`   Primeira linha de DADOS: ${evandroData.rows[0].join(' | ')}`);
+        console.log(`\n   🔍 IDs dos projetos na aba Evandro:`);
+        for (let i = 0; i < Math.min(5, evandroData.rows.length); i++) {
+          const id = evandroData.rows[i][0];
+          console.log(`      - Projeto ${i + 1}: ID = "${id}" (tipo: ${typeof id})`);
+        }
       }
     } catch (error) {
       console.log(`   ❌ ERRO: ${error.message}`);

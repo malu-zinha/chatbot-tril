@@ -342,7 +342,8 @@ function askCommand() {
   console.log('║  ✅ PRONTO PARA TESTAR!                           ║');
   console.log('╚════════════════════════════════════════════════════╝');
   console.log('\n📝 Exemplos de comandos:');
-  console.log('  • "Mude o PRJ-001 para Em Execução"');
+  console.log('  • "Mude o projeto 1 para Em Execução"');
+  console.log('  • "Mude o status do projeto 2 para Parado Cliente"');
   console.log('  • "Adicione projeto: Cliente X, Obra Y, Área Elétrico"');
   console.log('\n💡 Digite "ajuda" para ver todos os comandos disponíveis');
   

@@ -47,6 +47,14 @@ export class CommandService {
 CAMPOS DISPONÍVEIS NA PLANILHA:
 ${availableFields.join(', ')}
 
+REGRAS IMPORTANTES:
+1. O campo "Nº" contém o ID do projeto (são números simples: "1", "2", "3", etc)
+2. Se o usuário mencionar "projeto 1", "projeto 001", "projeto um" → retorne projectId: "1"
+3. Se o usuário mencionar "projeto 2", "projeto dois" → retorne projectId: "2"
+4. NUNCA converta para formato "PRJ-XXX", mantenha números simples
+5. Para datas, use formato brasileiro DD/MM/AAAA
+6. Status deve ser um dos valores válidos abaixo
+
 TIPOS DE AÇÃO:
 - "update": Atualizar projeto existente
 - "add": Adicionar novo projeto
@@ -65,18 +73,26 @@ VALORES VÁLIDOS PARA "Status do Projeto":
 Analise o comando e retorne JSON:
 {
   "action": "update" | "add" | "delete" | "query",
-  "projectId": "PRJ-XXX" (se for update/delete),
+  "projectId": "1" (número simples se for update/delete),
   "fields": { "campo": "valor" } (campos a atualizar/adicionar),
   "confidence": "high" | "medium" | "low"
 }
 
 EXEMPLOS:
 
-Comando: "Mude o projeto PRJ-001 para Em Execução"
+Comando: "Mude o projeto 1 para Em Execução"
 Resposta: {
   "action": "update",
-  "projectId": "PRJ-001",
+  "projectId": "1",
   "fields": { "Status do Projeto": "Em Execução" },
+  "confidence": "high"
+}
+
+Comando: "Mude o status do projeto 2 para Parado Cliente"
+Resposta: {
+  "action": "update",
+  "projectId": "2",
+  "fields": { "Status do Projeto": "Parado Cliente" },
   "confidence": "high"
 }
 
@@ -92,7 +108,7 @@ Resposta: {
   "confidence": "high"
 }
 
-Comando: "Qual o status do projeto PRJ-001?"
+Comando: "Qual o status do projeto 1?"
 Resposta: {
   "action": "query",
   "confidence": "high"
@@ -281,28 +297,25 @@ Resposta: {
         fullRange
       );
 
-      // Encontrar maior número de projeto
+      // Encontrar maior número de projeto (agora são números simples: "1", "2", "3")
       let maxNum = 0;
       for (const row of data) {
         const id = row['Nº'];
-        if (id && typeof id === 'string') {
-          const match = id.match(/PRJ-(\d+)/);
-          if (match) {
-            const num = parseInt(match[1], 10);
-            if (num > maxNum) {
-              maxNum = num;
-            }
+        if (id) {
+          const num = parseInt(String(id), 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
           }
         }
       }
 
-      // Próximo ID
+      // Próximo ID (número simples)
       const nextNum = maxNum + 1;
-      return `PRJ-${String(nextNum).padStart(3, '0')}`;
+      return String(nextNum);
 
     } catch (error: any) {
       console.error('Erro ao gerar próximo ID:', error.message);
-      return 'PRJ-001';
+      return '1';
     }
   }
 }
