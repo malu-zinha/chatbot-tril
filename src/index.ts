@@ -8,7 +8,7 @@
  */
 
 import dotenv from 'dotenv';
-import { startSheetsBot } from './bot/sheetsBot.ts';
+import { startSheetsBot } from '../chatbot/handlers/sheetsBot.js';
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -19,7 +19,9 @@ console.log('🚀 Iniciando Chatbot WhatsApp + Google Sheets...\n');
 const requiredEnvVars = [
   'OPENAI_API_KEY',
   'GOOGLE_SHEETS_ID',
-  'GOOGLE_APPLICATION_CREDENTIALS'
+  'GOOGLE_APPLICATION_CREDENTIALS',
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY'
 ];
 
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);

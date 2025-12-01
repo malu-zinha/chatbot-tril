@@ -6,13 +6,14 @@
     "start": "ts-node --esm src/index.ts",
     "dev": "nodemon --exec 'ts-node --esm' src/index.ts",
     "build": "tsc",
-    "test:query": "node test-query.js",
-    "test:simple": "node test-query-simple.js",
-    "test:update": "node test-sheet-update.js",
-    "verificar": "node verificar-planilha.js",
-    "copiar:evandro": "node copiar-para-evandro.js"
+    "test:query": "node tests/test-query.js",
+    "test:simple": "node tests/test-query-simple.js",
+    "test:update": "node tests/test-sheet-update.js",
+    "verificar": "node integrations/sheets/verificar-planilha.js",
+    "copiar:evandro": "node integrations/sheets/copiar-para-evandro.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.38.0",
     "axios": "^1.13.2",
     "dotenv": "^16.3.0",
     "googleapis": "^164.1.0",
