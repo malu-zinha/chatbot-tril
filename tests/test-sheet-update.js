@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
 import readline from 'readline';
-import { getGoogleSheetsService } from './src/services/googleSheetsService.ts';
-import { CommandService } from './src/services/commandService.ts';
-import { SheetSyncService } from './src/services/sheetSyncService.ts';
+import { getGoogleSheetsService } from '../integrations/sheets/googleSheetsService.ts';
+import { CommandService } from '../chatbot/handlers/commandService.ts';
+import { SheetSyncService } from '../integrations/sheets/sheetSyncService.ts';
 
 // Carregar variáveis de ambiente
 dotenv.config();

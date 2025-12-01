@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import readline from 'readline';
-import { getGoogleSheetsService } from './src/services/googleSheetsService.ts';
+import { getGoogleSheetsService } from '../integrations/sheets/googleSheetsService.ts';
+import { QueryService } from '../chatbot/handlers/queryService.ts';
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -20,7 +21,7 @@ const rl = readline.createInterface({
 });
 
 console.log('╔════════════════════════════════════════════╗');
-console.log('║  🧪 TESTE SIMPLES - SEM IA (Sem OpenAI)  ║');
+console.log('║  🧪 TESTE DE CONSULTA - MODO TERMINAL     ║');
 console.log('╚════════════════════════════════════════════╝\n');
 
 // Validar configurações
@@ -52,12 +53,12 @@ async function loadSheet() {
     
     // Mostrar amostra dos dados
     if (data.length > 0) {
-      console.log('📌 Amostra dos dados (primeiros 5 registros):');
-      console.log('─'.repeat(80));
-      data.slice(0, 5).forEach((row, idx) => {
-        console.log(`${idx + 1}. ${JSON.stringify(row, null, 2)}`);
+      console.log('📌 Primeiros registros da planilha:');
+      console.log('─'.repeat(60));
+      data.slice(0, 3).forEach((row, idx) => {
+        console.log(`${idx + 1}. ${JSON.stringify(row)}`);
       });
-      console.log('─'.repeat(80));
+      console.log('─'.repeat(60));
     }
     
     return true;
@@ -67,42 +68,30 @@ async function loadSheet() {
   }
 }
 
-// Busca simples (SEM IA)
-function simpleSearch(keyword) {
-  const keywords = keyword.toLowerCase().split(/\s+/);
-  
-  const matches = cachedSheetData.filter(row => 
-    keywords.some(kw => 
-      Object.values(row).some(value => 
-        String(value).toLowerCase().includes(kw)
-      )
-    )
-  );
+// Processar pergunta
+async function processQuestion(question) {
+  try {
+    if (cachedSheetData.length === 0) {
+      return '❌ Nenhum dado disponível na planilha.';
+    }
 
-  if (matches.length === 0) {
-    return '❌ Nenhum resultado encontrado.';
+    console.log('\n🤖 Processando sua pergunta...');
+    
+    // Usar query otimizada para planilhas grandes
+    const result = cachedSheetData.length > 100
+      ? await QueryService.querySheetOptimized(question, cachedSheetData, cachedHeaders)
+      : await QueryService.querySheet(question, cachedSheetData, cachedHeaders);
+
+    return result.answer;
+  } catch (error) {
+    console.error('Erro ao processar:', error.message);
+    return '❌ Erro ao processar sua pergunta. Tente novamente.';
   }
-
-  let answer = `✅ Encontrei *${matches.length}* resultado(s):\n\n`;
-  matches.slice(0, 10).forEach((match, idx) => {
-    answer += `${idx + 1}. `;
-    answer += Object.entries(match)
-      .filter(([_, value]) => value)
-      .map(([key, value]) => `${key}: ${value}`)
-      .join(' | ');
-    answer += '\n';
-  });
-  
-  if (matches.length > 10) {
-    answer += `\n... e mais ${matches.length - 10} resultado(s)`;
-  }
-
-  return answer;
 }
 
 // Loop de perguntas
 function askQuestion() {
-  rl.question('\n🔍 Digite uma palavra-chave para buscar (ou "sair"): ', async (input) => {
+  rl.question('\n💬 Digite sua pergunta (ou "sair" para encerrar): ', async (input) => {
     const question = input.trim();
     
     if (!question) {
@@ -123,43 +112,23 @@ function askQuestion() {
       return;
     }
     
-    if (question.toLowerCase() === 'all' || question.toLowerCase() === 'todos') {
-      console.log('\n📊 TODOS OS DADOS:');
-      console.log('─'.repeat(80));
-      cachedSheetData.forEach((row, idx) => {
-        console.log(`${idx + 1}. ${JSON.stringify(row)}`);
-      });
-      console.log('─'.repeat(80));
-      askQuestion();
-      return;
-    }
-    
-    if (question.toLowerCase() === 'count' || question.toLowerCase() === 'contar') {
-      console.log(`\n📊 Total de registros: ${cachedSheetData.length}`);
-      console.log(`📋 Colunas: ${cachedHeaders.join(', ')}`);
-      askQuestion();
-      return;
-    }
-    
     if (question.toLowerCase() === 'help' || question.toLowerCase() === 'ajuda') {
       console.log('\n📖 Comandos disponíveis:');
-      console.log('  • Digite qualquer palavra-chave para buscar');
-      console.log('  • "todos" ou "all" - Mostra todos os registros');
-      console.log('  • "count" ou "contar" - Mostra total de registros');
-      console.log('  • "reload" ou "atualizar" - Recarrega a planilha');
+      console.log('  • Digite qualquer pergunta para consultar a planilha');
+      console.log('  • "reload" ou "atualizar" - Recarrega os dados da planilha');
       console.log('  • "sair" ou "exit" - Encerra o teste\n');
       askQuestion();
       return;
     }
     
-    // Buscar
-    const answer = simpleSearch(question);
+    // Processar pergunta
+    const answer = await processQuestion(question);
     
     console.log('\n╔════════════════════════════════════════════╗');
-    console.log('║  📊 RESULTADO DA BUSCA:                   ║');
+    console.log('║  📊 RESPOSTA:                             ║');
     console.log('╚════════════════════════════════════════════╝');
-    console.log('\n' + answer);
-    console.log('─'.repeat(80));
+    console.log('\n' + answer + '\n');
+    console.log('─'.repeat(60));
     
     askQuestion();
   });
@@ -175,11 +144,13 @@ function askQuestion() {
   }
   
   console.log('\n╔════════════════════════════════════════════╗');
-  console.log('║  ✅ PRONTO PARA TESTAR! (Busca Simples)   ║');
+  console.log('║  ✅ PRONTO PARA TESTAR!                   ║');
   console.log('╚════════════════════════════════════════════╝');
-  console.log('\n💡 Este teste NÃO usa IA da OpenAI');
-  console.log('💡 Faz busca simples por palavra-chave');
-  console.log('\n📝 Digite "ajuda" para ver comandos disponíveis');
+  console.log('\n📝 Exemplos de perguntas:');
+  console.log('  • "Quantos registros temos?"');
+  console.log('  • "Mostre os dados da primeira linha"');
+  console.log('  • "Qual o total de [alguma coluna]?"');
+  console.log('\n💡 Digite "ajuda" para ver comandos disponíveis');
   
   askQuestion();
 })();

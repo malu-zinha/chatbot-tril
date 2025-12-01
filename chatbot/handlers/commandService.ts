@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { getGoogleSheetsService } from './googleSheetsService.ts';
+import { getGoogleSheetsService } from '../../integrations/sheets/googleSheetsService.ts';
 
 let openai: OpenAI;
 

@@ -1,10 +1,10 @@
 import qrcode from 'qrcode-terminal';
 import { Client } from 'whatsapp-web.js';
-import { getGoogleSheetsService } from '../services/googleSheetsService.ts';
-import { WhisperService } from '../services/whisperService.ts';
-import { QueryService } from '../services/queryService.ts';
-import { CommandService } from '../services/commandService.ts';
-import { SheetSyncService } from '../services/sheetSyncService.ts';
+import { getGoogleSheetsService } from '../../integrations/sheets/googleSheetsService.ts';
+import { WhisperService } from './whisperService.ts';
+import { QueryService } from './queryService.ts';
+import { CommandService } from './commandService.ts';
+import { SheetSyncService } from '../../integrations/sheets/sheetSyncService.ts';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

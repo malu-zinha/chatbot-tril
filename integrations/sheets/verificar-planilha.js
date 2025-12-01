@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { getGoogleSheetsService } from './src/services/googleSheetsService.ts';
+import { getGoogleSheetsService } from './googleSheetsService.ts';
 
 dotenv.config();
 
