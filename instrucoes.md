@@ -8,36 +8,15 @@ Este é um **sistema completo de gestão de projetos de engenharia via WhatsApp*
 
 ## 👥 Divisão de Responsabilidades
 
-### 🔵 **Malu Liaa - Backend, Banco de Dados e Integrações**
+### 🔵 **Malu Liaa - Integrações e Chatbot WhatsApp**
 
 **Responsabilidades:**
-- 🗄️ **Banco de Dados (Supabase/PostgreSQL)**
-  - Schema de tabelas (`db_schema.sql`)
-  - Políticas de segurança RLS (`policies.sql`)
-  - Views agregadas para dashboards (`views.sql`)
-  
-- ⚡ **Edge Functions (APIs Serverless)**
-  - `registrarExecucao` - API para registrar execução diária
-  - `registrarRetrabalho` - API para registrar retrabalhos
-  - `statusProjeto` - API para consultar status do projeto
-  
 - 🔗 **Integrações com Google Sheets**
   - `ceo_sync.ts` - Sincronização Supabase → Planilha CEO
   - `engineer_sync.ts` - Sincronização Planilhas → Supabase
   - `googleSheetsService.ts` - Serviço genérico de Sheets
   - `sheetSyncService.ts` - Sincronização entre abas
 
-**Habilidades Necessárias:**
-- SQL (PostgreSQL)
-- TypeScript/Deno (Edge Functions)
-- Google Sheets API
-- Arquitetura de APIs REST
-
----
-
-### 🟢 **Malu Log - Chatbot, Fluxos Conversacionais e Lógica de Negócio**
-
-**Responsabilidades:**
 - 💬 **Chatbot WhatsApp**
   - `sheetsBot.ts` - Bot principal com WhatsApp Web
   - `messageHandler.ts` - Orquestrador de fluxos
@@ -50,17 +29,39 @@ Este é um **sistema completo de gestão de projetos de engenharia via WhatsApp*
   - `registerRework.ts` - Fluxo para registrar retrabalho
   - `checkStatus.ts` - Fluxo para consultar status
 
-- 🧮 **Lógica de Negócio**
+**Habilidades Necessárias:**
+- TypeScript/Node.js
+- Google Sheets API
+- WhatsApp Web.js
+- OpenAI API
+- Máquinas de estado (fluxos conversacionais)
+
+---
+
+### 🟢 **Malu Log - Backend, Banco de Dados e Lógica de Negócio**
+
+**Responsabilidades:**
+- 🗄️ **Banco de Dados (Supabase/PostgreSQL)**
+  - Schema de tabelas (`db_schema.sql`)
+  - Políticas de segurança RLS (`policies.sql`)
+  - Views agregadas para dashboards (`views.sql`)
+  
+- ⚡ **Edge Functions (APIs Serverless)**
+  - `registrarExecucao` - API para registrar execução diária
+  - `registrarRetrabalho` - API para registrar retrabalhos
+  - `statusProjeto` - API para consultar status do projeto
+
+- 🧮 **Lógica de Negócio e Cálculos**
   - `calculateProgress.ts` - Cálculos de progresso e projeções
   - `calculateRework.ts` - Análise de retrabalhos
   - `validateInput.ts` - Validações de entrada
 
 **Habilidades Necessárias:**
-- TypeScript/Node.js
-- WhatsApp Web.js
-- OpenAI API
-- Máquinas de estado (fluxos conversacionais)
+- SQL (PostgreSQL)
+- TypeScript/Deno (Edge Functions)
+- Arquitetura de APIs REST
 - Lógica de negócio e validações
+- Matemática/Estatística (para cálculos)
 
 ---
 
@@ -68,10 +69,10 @@ Este é um **sistema completo de gestão de projetos de engenharia via WhatsApp*
 
 ```
 chatbot-tril/
-├── 📂 supabase/                    👤 ÁREA: malulia
-├── 📂 integrations/                👤 ÁREA: malulia
-├── 📂 chatbot/                     👤 ÁREA: malu log
-├── 📂 logic/                       👤 ÁREA: malulog
+├── 📂 supabase/                    👤 ÁREA: Malu Log
+├── 📂 integrations/                👤 ÁREA: Malu Liaa
+├── 📂 chatbot/                     👤 ÁREA: Malu Liaa
+├── 📂 logic/                       👤 ÁREA: Malu Log
 ├── 📂 docs/                        📚 Documentação (ambas)
 ├── 📂 tests/                       🧪 Testes (ambas)
 ├── 📂 src/                         🚀 Entry point
@@ -82,7 +83,7 @@ chatbot-tril/
 
 ## 📂 Detalhamento de Cada Pasta
 
-### 1. `supabase/` 👤 Maluliaa
+### 1. `supabase/` 👤 Malu Log
 
 #### 📄 `db_schema.sql` (229 linhas)
 **O que é:** Schema completo do banco de dados PostgreSQL
@@ -248,7 +249,7 @@ GET /statusProjeto?codigo=PRJ-001
 
 ---
 
-### 2. `integrations/sheets/` 👤 Maluliaa
+### 2. `integrations/sheets/` 👤 Malu Liaa
 
 #### 📄 `ceo_sync.ts` (426 linhas)
 **O que é:** Sincronização Supabase → Planilha do CEO
@@ -324,7 +325,7 @@ await iniciarSincronizacaoAutomatica('spreadsheet-id', 'Dashboard Geral', 30);
 
 ---
 
-### 3. `chatbot/` 👤 Malulog
+### 3. `chatbot/` 👤 Malu Liaa
 
 #### 📂 `handlers/`
 
@@ -508,7 +509,7 @@ POST /registrarExecucao
 
 ---
 
-### 4. `logic/` 👤 Malulog
+### 4. `logic/` 👤 Malu Log
 
 #### 📂 `execucao/`
 
@@ -825,7 +826,7 @@ GOOGLE_APPLICATION_CREDENTIALS=./credentials.json
 
 ## 🛠️ Como Começar
 
-### Para maluliaa (Backend):
+### Para Malu Log (Backend + Lógica):
 
 1. **Configurar Supabase:**
    ```bash
@@ -855,7 +856,7 @@ GOOGLE_APPLICATION_CREDENTIALS=./credentials.json
 
 ---
 
-### Para malulog (Chatbot):
+### Para Malu Liaa (Integrações + Chatbot):
 
 1. **Instalar dependências:**
    ```bash
@@ -926,17 +927,20 @@ GOOGLE_APPLICATION_CREDENTIALS=./credentials.json
 
 ## 🚨 Pontos de Atenção
 
-### Para maluliaa:
+### Para Malu Log:
 - ⚠️ Service Role Key é sensível - nunca commitar
 - ⚠️ Validar RLS antes de ir para produção
-- ⚠️ Monitorar quotas do Google Sheets API (100 req/100s)
 - ⚠️ Fazer backup do banco regularmente
+- ⚠️ Testar todas as validações de cálculos
+- ⚠️ Verificar constraints do banco (0-100%, etc)
 
-### Para malulog:
+### Para Malu Liaa:
 - ⚠️ Limpar sessões antigas para evitar memory leak
 - ⚠️ Tratar erros de rede (WhatsApp pode cair)
 - ⚠️ Validar inputs antes de enviar para API
 - ⚠️ Limpar arquivos de áudio temporários
+- ⚠️ Monitorar quotas do Google Sheets API (100 req/100s)
+- ⚠️ credentials.json nunca deve ser commitado
 
 ---
 
@@ -974,5 +978,5 @@ Para dúvidas sobre este projeto, consulte:
 
 **Última atualização:** Dezembro 2024
 **Versão:** 2.0.0
-**Desenvolvido por:** Iza (Backend) + Amiga (Chatbot)
+**Desenvolvido por:** Malu Log (Backend + Lógica) + Malu Liaa (Integrações + Chatbot)
 
