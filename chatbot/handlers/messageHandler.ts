@@ -7,9 +7,11 @@
 // e decide qual fluxo ativar baseado na mensagem do usuário
 // =====================================================
 
-import { RegisterProgressFlow } from '../flows/registerProgress.js';
-import { RegisterReworkFlow } from '../flows/registerRework.js';
-import { CheckStatusFlow } from '../flows/checkStatus.js';
+import { RegisterProgressFlow } from '../flows/registerProgress.ts';
+import { RegisterReworkFlow } from '../flows/registerRework.ts';
+import { CheckStatusFlow } from '../flows/checkStatus.ts';
+import { EngineerProjectFlow } from '../flows/engineerProjectFlow.ts';
+import { NotificacaoMatinalFlow, NotificacaoNoturnaFlow } from '../flows/notificationFlows.ts';
 
 // =====================================================
 // TIPOS E INTERFACES
@@ -17,8 +19,12 @@ import { CheckStatusFlow } from '../flows/checkStatus.js';
 
 export interface UserSession {
   whatsapp: string;
-  fluxo_ativo?: 'progress' | 'rework' | 'status' | null;
+  fluxo_ativo?: 'progress' | 'rework' | 'status' | 'engineer_project' | 'notif_matinal' | 'notif_noturna' | null;
   instancia_fluxo?: any;
+  notificacao_contexto?: {
+    projectCode: string;
+    tipo: 'matinal' | 'noturna';
+  };
   ultima_interacao: Date;
 }
 
@@ -72,6 +78,32 @@ export class MessageHandler {
         return { resposta: comandoGlobal };
       }
 
+      // Verificar se é resposta a notificação automática
+      if (sessao.notificacao_contexto && !sessao.fluxo_ativo) {
+        const { projectCode, tipo } = sessao.notificacao_contexto;
+
+        if (tipo === 'matinal') {
+          sessao.fluxo_ativo = 'notif_matinal';
+          sessao.instancia_fluxo = new NotificacaoMatinalFlow(whatsappNormalizado, projectCode);
+        } else if (tipo === 'noturna') {
+          sessao.fluxo_ativo = 'notif_noturna';
+          sessao.instancia_fluxo = new NotificacaoNoturnaFlow(whatsappNormalizado, projectCode);
+        }
+
+        // Limpar contexto de notificação após iniciar fluxo
+        sessao.notificacao_contexto = undefined;
+
+        // Processar primeira mensagem do fluxo
+        const resultado = await sessao.instancia_fluxo.processarMensagem(mensagem);
+
+        if (resultado.finalizado) {
+          sessao.fluxo_ativo = null;
+          sessao.instancia_fluxo = null;
+        }
+
+        return { resposta: resultado.mensagem, erro: resultado.erro };
+      }
+
       // Se há fluxo ativo, continuar nele
       if (sessao.fluxo_ativo && sessao.instancia_fluxo) {
         const resultado = await sessao.instancia_fluxo.processarMensagem(mensagem);
@@ -89,14 +121,12 @@ export class MessageHandler {
       const intencao = this.classificarIntencao(mensagem);
 
       switch (intencao) {
-        case 'registrar_execucao':
-          return await this.iniciarFluxoExecucao(sessao);
+        case 'gerenciar_projeto':
+          return await this.iniciarFluxoProjeto(sessao);
         
-        case 'registrar_retrabalho':
-          return await this.iniciarFluxoRetrabalho(sessao);
-        
-        case 'consultar_status':
-          return await this.iniciarFluxoStatus(sessao);
+        case 'consultar':
+          // Retorna "não entendida" para que o sheetsBot processe via IA
+          return { resposta: this.mensagemNaoEntendida() };
         
         case 'ajuda':
           return { resposta: this.mensagemAjuda() };
@@ -150,39 +180,39 @@ export class MessageHandler {
   private classificarIntencao(mensagem: string): string {
     const mensagemLower = mensagem.toLowerCase().trim();
 
-    // Palavras-chave para registrar execução
-    const keywordsExecucao = [
-      'registrar',
-      'executar',
-      'execução',
-      'progresso',
-      'avanço',
-      'percentual',
-      'realizado',
-      'hoje',
-      'diário',
+    // Atalhos numéricos do menu
+    if (mensagemLower === '1') {
+      return 'gerenciar_projeto'; // Opção 1 = Modificar projetos
+    }
+    if (mensagemLower === '2') {
+      return 'consultar'; // Opção 2 = Consultar
+    }
+
+    // Palavras-chave para MODIFICAR projetos (Engenheiros)
+    const keywordsModificar = [
+      'projeto',
+      'cadastrar',
+      'novo',
+      'atualizar',
+      'criar',
+      'modificar',
+      'editar',
+      'adicionar',
+      'registrar projeto',
     ];
 
-    // Palavras-chave para registrar retrabalho
-    const keywordsRetrabalho = [
-      'retrabalho',
-      'refazer',
-      'erro',
-      'problema',
-      'houve retrabalho',
-      'teve retrabalho',
-    ];
-
-    // Palavras-chave para consultar status
-    const keywordsStatus = [
-      'status',
+    // Palavras-chave para CONSULTAR (CEO/Gestores)
+    const keywordsConsultar = [
       'consultar',
       'ver',
-      'andamento',
-      'como está',
-      'quanto',
-      'percentual total',
-      'progresso total',
+      'mostrar',
+      'listar',
+      'quantos',
+      'qual',
+      'quais',
+      'status',
+      'informação',
+      'dados',
     ];
 
     // Palavras-chave para ajuda
@@ -203,8 +233,8 @@ export class MessageHandler {
       'inicio',
     ];
 
-    // Classificar
-    if (keywordsMenu.some(kw => mensagemLower.includes(kw))) {
+    // Classificar (prioridade: específico → genérico)
+    if (keywordsMenu.some(kw => mensagemLower === kw)) {
       return 'menu';
     }
 
@@ -212,19 +242,21 @@ export class MessageHandler {
       return 'ajuda';
     }
 
-    if (keywordsRetrabalho.some(kw => mensagemLower.includes(kw))) {
-      return 'registrar_retrabalho';
+    if (keywordsModificar.some(kw => mensagemLower.includes(kw))) {
+      return 'gerenciar_projeto';
     }
 
-    if (keywordsStatus.some(kw => mensagemLower.includes(kw))) {
-      return 'consultar_status';
+    if (keywordsConsultar.some(kw => mensagemLower.includes(kw))) {
+      return 'consultar';
     }
 
-    if (keywordsExecucao.some(kw => mensagemLower.includes(kw))) {
-      return 'registrar_execucao';
+    // Se parece uma pergunta (tem ?, tem palavras interrogativas), é consulta
+    if (mensagemLower.includes('?') || 
+        /^(qual|quais|quantos|quanto|onde|como|quando|quem)/i.test(mensagemLower)) {
+      return 'consultar';
     }
 
-    // Se não classificou, assumir menu
+    // Default: menu (para não deixar o usuário perdido)
     return 'menu';
   }
 
@@ -259,6 +291,15 @@ export class MessageHandler {
     return { resposta: resultado.mensagem };
   }
 
+  private async iniciarFluxoProjeto(sessao: UserSession): Promise<MessageResponse> {
+    const flow = new EngineerProjectFlow(sessao.whatsapp);
+    sessao.fluxo_ativo = 'engineer_project';
+    sessao.instancia_fluxo = flow;
+
+    const resultado = await flow.processarMensagem('iniciar');
+    return { resposta: resultado.mensagem };
+  }
+
   // =====================================================
   // MENSAGENS PADRÃO
   // =====================================================
@@ -266,42 +307,52 @@ export class MessageHandler {
   private mensagemMenu(): string {
     return `👋 *Olá! Bem-vindo ao Sistema de Gestão de Projetos*
 
-Escolha uma opção:
+Escolha o que você precisa:
 
-1️⃣ *Registrar Execução Diária*
-   Digite: _registrar execução_
+📊 *1️⃣ MODIFICAR PROJETOS* (Engenheiros)
+   Cadastrar novos ou atualizar diariamente
+   Digite: *1* ou _projeto_ ou _modificar_
+   
+   *Atualizações diárias:*
+   🌅 Manhã: Status + Previsão do dia
+   🌙 Noite: Feito + Retrabalho + Etapa + Obs
 
-2️⃣ *Registrar Retrabalho*
-   Digite: _registrar retrabalho_
+💬 *2️⃣ CONSULTAR INFORMAÇÕES* (CEO/Gestores)
+   Fazer perguntas sobre a planilha (texto ou áudio)
+   Digite: *2* ou _consultar_ ou faça sua pergunta diretamente
+   
+   Exemplos:
+   • "Quantos projetos em execução?"
+   • "Status do PRJ-001?"
+   • "Projetos atrasados?"
 
-3️⃣ *Consultar Status do Projeto*
-   Digite: _consultar status_
-
-4️⃣ *Ajuda*
-   Digite: _ajuda_
-
-_Digite a opção desejada ou envie uma mensagem descrevendo o que precisa._`;
+_Digite o número da opção ou a palavra-chave._`;
   }
 
   private mensagemAjuda(): string {
     return `ℹ️ *Ajuda - Como Usar o Sistema*
 
-*📊 Registrar Execução Diária*
-Use para registrar o progresso diário do seu projeto.
-Você informará: código do projeto, percentual previsto, percentual realizado e observações.
+*📊 MODIFICAR PROJETOS (Engenheiros)*
+Fluxo guiado com botões para:
+• Cadastrar novo projeto (todas as informações)
+• Atualizar diariamente em 2 períodos:
 
-*🔧 Registrar Retrabalho*
-Use quando houver retrabalho no projeto.
-Você informará: código do projeto, motivo, descrição e impacto.
+🌅 *Manhã:* Status + Previsão do dia
+🌙 *Noite:* Feito + Retrabalho + Etapa + Observações
 
-*📈 Consultar Status*
-Use para ver o progresso total do projeto.
-Mostra: percentual concluído, estatísticas, execuções recentes e retrabalhos.
+Digite: _projeto_, _modificar_, _cadastrar_ ou _atualizar_
+
+*💬 CONSULTAR INFORMAÇÕES (CEO/Gestores)*
+Faça perguntas em linguagem natural (texto ou áudio):
+• "Quantos projetos temos?"
+• "Status do PRJ-001?"
+• "Projetos em atraso?"
+• "Retrabalhos da semana?"
 
 *💡 Dicas*
-• Digite "cancelar" a qualquer momento para sair
-• Digite "menu" para voltar ao menu principal
-• Seja específico nas descrições e observações
+• Digite "cancelar" para sair de um fluxo
+• Digite "menu" para ver opções
+• Use áudio para consultas rápidas 🎤
 
 _Digite "menu" para voltar_`;
   }
@@ -346,6 +397,39 @@ Digite *ajuda* para ver como usar o sistema`;
     if (sessoesARemover.length > 0) {
       console.log(`${sessoesARemover.length} sessões antigas removidas`);
     }
+  }
+
+  // =====================================================
+  // NOTIFICAÇÕES - Gerenciamento de Contexto
+  // =====================================================
+
+  /**
+   * Define contexto de notificação para um usuário
+   * Usado pelo NotificationService quando envia notificação
+   */
+  setNotificationContext(
+    whatsapp: string,
+    context: { projectCode: string; tipo: 'matinal' | 'noturna' }
+  ): void {
+    const whatsappNormalizado = this.normalizarWhatsapp(whatsapp);
+
+    // Obter ou criar sessão
+    let sessao = this.sessoes.get(whatsappNormalizado);
+
+    if (!sessao) {
+      sessao = {
+        whatsapp: whatsappNormalizado,
+        fluxo_ativo: null,
+        ultima_interacao: new Date(),
+      };
+      this.sessoes.set(whatsappNormalizado, sessao);
+    }
+
+    // Definir contexto de notificação
+    sessao.notificacao_contexto = context;
+    sessao.ultima_interacao = new Date();
+
+    console.log(`📌 Contexto de notificação definido: ${whatsapp} → ${context.tipo} (${context.projectCode})`);
   }
 
   // =====================================================

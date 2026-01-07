@@ -7,8 +7,8 @@
 // coletar dados de execução diária do engenheiro
 // =====================================================
 
-import { validateExecution } from '../../logic/validation/validateInput.js';
-import { calculateDailyProgress } from '../../logic/execucao/calculateProgress.js';
+import { validateExecution } from '../../logic/validation/validateInput.ts';
+import { calculateDailyProgress } from '../../logic/execucao/calculateProgress.ts';
 import axios from 'axios';
 
 // =====================================================
