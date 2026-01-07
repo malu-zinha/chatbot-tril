@@ -7,8 +7,8 @@
 // coletar dados de retrabalho dos engenheiros
 // =====================================================
 
-import { validateRework } from '../../logic/validation/validateInput.js';
-import { classifyReworkReason } from '../../logic/retrabalho/calculateRework.js';
+import { validateRework } from '../../logic/validation/validateInput.ts';
+import { classifyReworkReason } from '../../logic/retrabalho/calculateRework.ts';
 import axios from 'axios';
 
 // =====================================================

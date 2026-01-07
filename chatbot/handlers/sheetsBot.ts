@@ -5,6 +5,7 @@ import { WhisperService } from './whisperService.ts';
 import { QueryService } from './queryService.ts';
 import { CommandService } from './commandService.ts';
 import { SheetSyncService } from '../../integrations/sheets/sheetSyncService.ts';
+import { messageHandler } from './messageHandler.ts';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -19,6 +20,11 @@ let SPREADSHEET_ID = '';
 let SHEET_RANGE = 'A1:Z1000';
 let ENGINEER_SHEET_NAME = 'Engenheiro';
 let EVANDRO_SHEET_NAME = 'Evandro';
+
+// Nova planilha de engenheiros (modelo completo)
+let ENGINEER_NEW_SPREADSHEET_ID = '';
+let ENGINEER_NEW_SHEET_NAME = 'Engenheiro(a)';
+let ENGINEER_NEW_RANGE = 'A1:AE1000';
 
 // Cache dos dados da planilha (atualizado periodicamente)
 let cachedSheetData: any[] = [];
@@ -406,14 +412,13 @@ client.on('message', async (msg) => {
       if (body.match(/(menu|ajuda|help|oi|olá|ola|início|inicio)/)) {
         const welcomeMsg = `Olá *${userName}*! 👋\n\n` +
           `Eu sou seu assistente de projetos.\n\n` +
-          `📊 *CONSULTAS:*\n` +
+          `📊 *GESTÃO DE PROJETOS:*\n` +
+          `• Digite "projeto" - Cadastrar/Atualizar projeto\n` +
+          `• Fluxo completo guiado com botões\n\n` +
+          `📈 *CONSULTAS E COMANDOS:*\n` +
           `• "Qual o status do PRJ-001?"\n` +
           `• "Quantos projetos em execução?"\n` +
-          `• "Mostre projetos da Alfa Ltda"\n\n` +
-          `✏️ *COMANDOS DE EDIÇÃO:*\n` +
-          `• "Mude o PRJ-001 para Em Execução"\n` +
-          `• "Adicione projeto: Cliente X, Obra Y"\n` +
-          `• "Atualize a data do PRJ-002"\n\n` +
+          `• "Mude o PRJ-001 para Em Execução"\n\n` +
           `🎤 *Áudio:* Grave sua mensagem!\n` +
           `🔄 *Sincronização:* Automática entre abas\n\n` +
           `_${cachedSheetData.length} projetos na aba ${ENGINEER_SHEET_NAME}_`;
@@ -431,7 +436,7 @@ client.on('message', async (msg) => {
         return;
       }
 
-      // Verificar se tem confirmação pendente
+      // Verificar se tem confirmação pendente (sistema antigo)
       if (pendingConfirmations.has(userId)) {
         if (body.match(/(sim|confirmar|confirma|ok|yes)/)) {
           await client.sendMessage(msg.from, '⏳ Executando comando...');
@@ -451,7 +456,19 @@ client.on('message', async (msg) => {
         return;
       }
 
-      // Classificar intent: consulta ou comando
+      // PRIORIDADE: Tentar processar via messageHandler (novo sistema de fluxos)
+      console.log('🔄 Tentando processar via messageHandler...');
+      const handlerResponse = await messageHandler.processarMensagem(userId, msg.body);
+      
+      // Se o messageHandler processou (não é mensagem "não entendida"), usar a resposta
+      if (handlerResponse.resposta && !handlerResponse.resposta.includes('não entendi')) {
+        console.log('✅ Processado via messageHandler');
+        await client.sendMessage(msg.from, handlerResponse.resposta);
+        return;
+      }
+
+      // Fallback: Sistema antigo de query/command via IA
+      console.log('⚠️ MessageHandler não processou, usando sistema antigo...');
       await client.sendMessage(msg.from, '🤖 Analisando mensagem...');
       const classification = await QueryService.classifyIntent(msg.body);
 
@@ -501,7 +518,19 @@ client.on('message', async (msg) => {
       // Mostrar transcrição
       await client.sendMessage(msg.from, `📝 Você disse: _"${transcription}"_`);
       
-      // Classificar intent: consulta ou comando
+      // PRIORIDADE: Tentar processar via messageHandler (novo sistema de fluxos)
+      console.log('🔄 Tentando processar áudio via messageHandler...');
+      const handlerResponse = await messageHandler.processarMensagem(userId, transcription);
+      
+      // Se o messageHandler processou (não é mensagem "não entendida"), usar a resposta
+      if (handlerResponse.resposta && !handlerResponse.resposta.includes('não entendi')) {
+        console.log('✅ Áudio processado via messageHandler');
+        await client.sendMessage(msg.from, handlerResponse.resposta);
+        return;
+      }
+
+      // Fallback: Sistema antigo de query/command via IA
+      console.log('⚠️ MessageHandler não processou áudio, usando sistema antigo...');
       await client.sendMessage(msg.from, '🤖 Analisando...');
       const classification = await QueryService.classifyIntent(transcription);
 
@@ -536,6 +565,11 @@ export async function startSheetsBot() {
   ENGINEER_SHEET_NAME = process.env.GOOGLE_SHEETS_ENGINEER_SHEET || 'Engenheiro';
   EVANDRO_SHEET_NAME = process.env.GOOGLE_SHEETS_EVANDRO_SHEET || 'Evandro';
   
+  // Nova planilha de engenheiros
+  ENGINEER_NEW_SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ENGINEER_ID || '';
+  ENGINEER_NEW_SHEET_NAME = process.env.GOOGLE_SHEETS_ENGINEER_NAME || 'Engenheiro(a)';
+  ENGINEER_NEW_RANGE = process.env.GOOGLE_SHEETS_ENGINEER_RANGE || 'A1:AE1000';
+  
   // Validar configuração
   if (!SPREADSHEET_ID) {
     console.error('❌ GOOGLE_SHEETS_ID não configurado no .env');
@@ -556,6 +590,16 @@ export async function startSheetsBot() {
   console.log(`   - Planilha: ${SPREADSHEET_ID}`);
   console.log(`   - Aba Engenheiro: ${ENGINEER_SHEET_NAME}`);
   console.log(`   - Aba Evandro: ${EVANDRO_SHEET_NAME}`);
+  
+  if (ENGINEER_NEW_SPREADSHEET_ID) {
+    console.log(`   - Nova Planilha Engenheiros: ${ENGINEER_NEW_SPREADSHEET_ID}`);
+    console.log(`   - Aba: ${ENGINEER_NEW_SHEET_NAME}`);
+  }
+
+  console.log(`\n🔄 Sistema de Fluxos Conversacionais:`);
+  console.log(`   ✅ MessageHandler integrado`);
+  console.log(`   ✅ Fluxos disponíveis: projeto, execução, retrabalho, status`);
+  console.log(`   ✅ Fallback: Sistema de query/command via IA`);
 
   await client.initialize();
 }
