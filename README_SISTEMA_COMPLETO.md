@@ -525,3 +525,6 @@ Próximos passos:
 3. Integrar com chatbot LLM (20 min)
 4. Criar layout visual (quando estiver pronto)
 
+
+
+

@@ -419,3 +419,6 @@ async function registrarRetrabalho(supabase: any, params: any) {
   }
 }
 
+
+
+

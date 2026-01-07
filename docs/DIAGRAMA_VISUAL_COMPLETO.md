@@ -882,3 +882,6 @@ Retorna: 3 ✅ (calculado automaticamente via COUNT!)
 
 **🎨 Diagrama completo do sistema pronto!**
 
+
+
+

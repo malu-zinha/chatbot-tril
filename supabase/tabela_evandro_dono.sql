@@ -445,3 +445,6 @@ INSERT INTO dono_empresa (nome, email) VALUES
     ('Evandro', 'evandro@empresa.com')
 ON CONFLICT (email) DO NOTHING;
 
+
+
+

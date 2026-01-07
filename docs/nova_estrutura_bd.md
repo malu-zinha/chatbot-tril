@@ -369,3 +369,6 @@ Aguardando instruções para:
 3. Edge Functions para APIs
 4. Sincronização com Google Sheets
 
+
+
+

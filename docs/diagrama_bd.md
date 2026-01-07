@@ -272,3 +272,6 @@ ORDER BY data_inicio;
 ✅ **Engenheiro atualiza apenas: data_inicio, data_prevista, status**  
 ✅ **Sistema calcula: tempo_trabalho, percentual_andamento**
 
+
+
+

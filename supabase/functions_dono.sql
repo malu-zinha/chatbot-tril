@@ -555,3 +555,6 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION marcar_notificacao_enviada IS 'Marca notificação como enviada ou registra erro';
 
+
+
+

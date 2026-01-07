@@ -676,3 +676,6 @@ Quando estiver pronto, vou criar:
 
 **🎯 Sistema completo para gestão inteligente de tarefas!**
 
+
+
+

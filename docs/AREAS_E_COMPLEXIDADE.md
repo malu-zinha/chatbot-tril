@@ -386,3 +386,6 @@ G2 ██ 10%
 
 **🎯 Sistema de áreas completo e automatizado!**
 
+
+
+

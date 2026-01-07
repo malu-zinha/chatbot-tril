@@ -555,3 +555,6 @@ SELECT * FROM pg_trigger WHERE tgname LIKE 'trg_calcular%';
 
 **Desenvolvido com ❤️ para facilitar a vida dos engenheiros**
 
+
+
+
