@@ -7,7 +7,7 @@
 // dos engenheiros para o banco de dados Supabase
 // =====================================================
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
 
 // =====================================================
@@ -40,7 +40,7 @@ interface SyncResult {
 // =====================================================
 
 class EngineerSyncService {
-  private supabase: SupabaseClient;
+  private supabase: ReturnType<typeof createClient>;
   private sheets: any;
 
   constructor() {

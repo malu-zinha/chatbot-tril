@@ -1,14 +1,16 @@
 import qrcode from 'qrcode-terminal';
 import { Client } from 'whatsapp-web.js';
-import { getGoogleSheetsService } from '../../integrations/sheets/googleSheetsService.ts';
 import { WhisperService } from './whisperService.ts';
-import { QueryService } from './queryService.ts';
-import { CommandService } from './commandService.ts';
-import { SheetSyncService } from '../../integrations/sheets/sheetSyncService.ts';
 import { messageHandler } from './messageHandler.ts';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// ARCHIVED: Componentes de IA (para reativar no futuro, descomente abaixo):
+// import { getGoogleSheetsService } from '../../integrations/sheets/googleSheetsService.ts';
+// import { QueryService } from './_archived/queryService.ts';
+// import { CommandService } from './_archived/commandService.ts';
+// import { SheetSyncService } from '../../integrations/sheets/sheetSyncService.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,14 +28,12 @@ let ENGINEER_NEW_SPREADSHEET_ID = '';
 let ENGINEER_NEW_SHEET_NAME = 'Engenheiro(a)';
 let ENGINEER_NEW_RANGE = 'A1:AE1000';
 
-// Cache dos dados da planilha (atualizado periodicamente)
-let cachedSheetData: any[] = [];
-let cachedHeaders: string[] = [];
-let lastUpdate = 0;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
-
-// Sistema de confirmação de comandos
-const pendingConfirmations = new Map<string, any>();
+// ARCHIVED: Cache e confirmações (para reativar QueryService/CommandService):
+// let cachedSheetData: any[] = [];
+// let cachedHeaders: string[] = [];
+// let lastUpdate = 0;
+// const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+// const pendingConfirmations = new Map<string, any>();
 
 // Diretório temporário para áudios
 const TEMP_DIR = path.join(__dirname, '../../temp');
@@ -41,14 +41,13 @@ if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
 }
 
-/**
- * Atualiza cache dos dados da planilha (aba Engenheiro)
- */
+// ARCHIVED: Função de cache (para reativar QueryService/CommandService):
+/*
 async function updateSheetCache() {
   try {
     const now = Date.now();
     if (now - lastUpdate < CACHE_TTL && cachedSheetData.length > 0) {
-      return; // Cache ainda válido
+      return;
     }
 
     const sheetsService = getGoogleSheetsService();
@@ -65,6 +64,7 @@ async function updateSheetCache() {
     console.error('❌ Erro ao atualizar cache da planilha:', error.message);
   }
 }
+*/
 
 /**
  * Processa áudio e retorna transcrição
@@ -93,9 +93,8 @@ async function processAudio(media: any, userId: string): Promise<string> {
   }
 }
 
-/**
- * Processa pergunta e retorna resposta da planilha
- */
+// ARCHIVED: Funções de processamento de IA (para reativar QueryService/CommandService):
+/*
 async function processQuestion(question: string): Promise<string> {
   try {
     // Atualizar cache se necessário
@@ -117,9 +116,6 @@ async function processQuestion(question: string): Promise<string> {
   }
 }
 
-/**
- * Processa comando de edição
- */
 async function processCommand(command: string, userId: string): Promise<string> {
   try {
     // Atualizar cache
@@ -370,6 +366,8 @@ function cancelPendingCommand(userId: string): string {
   pendingConfirmations.delete(userId);
   return '✅ Comando cancelado.';
 }
+*/
+// FIM DO BLOCO ARCHIVED
 
 // QR Code para autenticação
 client.on('qr', (qr: string) => {
@@ -380,11 +378,11 @@ client.on('qr', (qr: string) => {
 // Conexão estabelecida
 client.on('ready', async () => {
   console.log('✅ WhatsApp conectado!');
-  console.log('📊 Carregando dados da planilha...');
-  await updateSheetCache();
   
-  // Atualizar cache periodicamente
-  setInterval(updateSheetCache, CACHE_TTL);
+  // ARCHIVED: Cache periódico (reativar se usar QueryService/CommandService):
+  // console.log('📊 Carregando dados da planilha...');
+  // await updateSheetCache();
+  // setInterval(updateSheetCache, CACHE_TTL);
 });
 
 // Lógica principal do bot
@@ -413,33 +411,31 @@ client.on('message', async (msg) => {
         const welcomeMsg = `Olá *${userName}*! 👋\n\n` +
           `Eu sou seu assistente de projetos.\n\n` +
           `📊 *GESTÃO DE PROJETOS:*\n` +
-          `• Digite "projeto" - Cadastrar/Atualizar projeto\n` +
-          `• Fluxo completo guiado com botões\n\n` +
-          `📈 *CONSULTAS E COMANDOS:*\n` +
-          `• "Qual o status do PRJ-001?"\n` +
-          `• "Quantos projetos em execução?"\n` +
-          `• "Mude o PRJ-001 para Em Execução"\n\n` +
-          `🎤 *Áudio:* Grave sua mensagem!\n` +
-          `🔄 *Sincronização:* Automática entre abas\n\n` +
-          `_${cachedSheetData.length} projetos na aba ${ENGINEER_SHEET_NAME}_`;
+          `• Digite "projeto" para cadastrar/atualizar\n` +
+          `• Fluxo completo guiado com menus numerados\n\n` +
+          `🔔 *NOTIFICAÇÕES AUTOMÁTICAS:*\n` +
+          `• 🌅 Manhã: Status + Previsão do dia\n` +
+          `• 🌙 Noite: Feito + Retrabalho + Etapa + Obs\n\n` +
+          `🎤 *Áudio:* Grave sua mensagem para facilitar!\n\n` +
+          `_Digite "projeto" para começar_`;
         
         await client.sendMessage(msg.from, welcomeMsg);
         return;
       }
 
-      // Atualizar cache manualmente
+      // ARCHIVED: Comandos de cache e confirmação (reativar se usar IA):
+      /*
       if (body.match(/(atualizar|refresh|reload)/)) {
-        await client.sendMessage(msg.from, '🔄 Atualizando dados da planilha...');
-        lastUpdate = 0; // Forçar atualização
+        await client.sendMessage(msg.from, '🔄 Atualizando dados...');
+        lastUpdate = 0;
         await updateSheetCache();
-        await client.sendMessage(msg.from, `✅ Dados atualizados! ${cachedSheetData.length} registros carregados.`);
+        await client.sendMessage(msg.from, `✅ Dados atualizados! ${cachedSheetData.length} registros.`);
         return;
       }
 
-      // Verificar se tem confirmação pendente (sistema antigo)
       if (pendingConfirmations.has(userId)) {
         if (body.match(/(sim|confirmar|confirma|ok|yes)/)) {
-          await client.sendMessage(msg.from, '⏳ Executando comando...');
+          await client.sendMessage(msg.from, '⏳ Executando...');
           const result = await executeConfirmedCommand(userId);
           await client.sendMessage(msg.from, result);
           return;
@@ -451,99 +447,61 @@ client.on('message', async (msg) => {
           return;
         }
 
-        // Se não for sim/não, lembrar que tem comando pendente
-        await client.sendMessage(msg.from, '⚠️ Você tem um comando pendente.\n\nResponda "sim" para confirmar ou "não" para cancelar.');
+        await client.sendMessage(msg.from, '⚠️ Comando pendente. Responda "sim" ou "não".');
         return;
       }
+      */
 
-      // PRIORIDADE: Tentar processar via messageHandler (novo sistema de fluxos)
-      console.log('🔄 Tentando processar via messageHandler...');
+      // Processar via messageHandler (sistema de fluxos guiados)
+      console.log('🔄 Processando via messageHandler...');
       const handlerResponse = await messageHandler.processarMensagem(userId, msg.body);
+      await client.sendMessage(msg.from, handlerResponse.resposta);
+      return;
       
-      // Se o messageHandler processou (não é mensagem "não entendida"), usar a resposta
+      // ARCHIVED: Fallback de IA (reativar se quiser QueryService/CommandService):
+      /*
       if (handlerResponse.resposta && !handlerResponse.resposta.includes('não entendi')) {
         console.log('✅ Processado via messageHandler');
         await client.sendMessage(msg.from, handlerResponse.resposta);
         return;
       }
 
-      // Fallback: Sistema antigo de query/command via IA
-      console.log('⚠️ MessageHandler não processou, usando sistema antigo...');
-      await client.sendMessage(msg.from, '🤖 Analisando mensagem...');
+      console.log('⚠️ Usando fallback de IA...');
+      await client.sendMessage(msg.from, '🤖 Analisando...');
       const classification = await QueryService.classifyIntent(msg.body);
 
       if (classification.type === 'command') {
-        // Processar como comando de edição
         const result = await processCommand(msg.body, userId);
         await client.sendMessage(msg.from, result);
       } else {
-        // Processar como consulta
         const answer = await processQuestion(msg.body);
         await client.sendMessage(msg.from, answer);
       }
-      
       return;
+      */
     }
 
     // Processar áudio
     if (msg.type === 'ptt' || msg.type === 'audio') {
-      // Verificar se tem confirmação pendente
-      if (pendingConfirmations.has(userId)) {
-        await client.sendMessage(msg.from, '⚠️ Você tem um comando pendente.\n\nResponda com *texto* "sim" para confirmar ou "não" para cancelar.');
-        return;
-      }
-
       await client.sendMessage(msg.from, '🎤 Transcrevendo áudio...');
       
       const media = await msg.downloadMedia();
       if (!media) {
-        await client.sendMessage(msg.from, '❌ Não consegui baixar o áudio. Tente novamente.');
+        await client.sendMessage(msg.from, '❌ Não consegui baixar o áudio.');
         return;
       }
 
-      // Transcrever
       const transcription = await processAudio(media, userId);
       
-      if (!transcription || transcription.trim() === '') {
-        await client.sendMessage(msg.from, '❌ Não consegui entender o áudio. Pode repetir?');
+      if (!transcription || transcription.length < 5) {
+        await client.sendMessage(msg.from, '❌ Áudio muito curto ou não compreendido.');
         return;
       }
 
-      // Validar transcrição
-      if (transcription.length < 5) {
-        await client.sendMessage(msg.from, `📝 Você disse: _"${transcription}"_\n\n❌ Áudio muito curto. Pode repetir mais claramente?`);
-        return;
-      }
-
-      // Mostrar transcrição
       await client.sendMessage(msg.from, `📝 Você disse: _"${transcription}"_`);
       
-      // PRIORIDADE: Tentar processar via messageHandler (novo sistema de fluxos)
-      console.log('🔄 Tentando processar áudio via messageHandler...');
       const handlerResponse = await messageHandler.processarMensagem(userId, transcription);
-      
-      // Se o messageHandler processou (não é mensagem "não entendida"), usar a resposta
-      if (handlerResponse.resposta && !handlerResponse.resposta.includes('não entendi')) {
-        console.log('✅ Áudio processado via messageHandler');
         await client.sendMessage(msg.from, handlerResponse.resposta);
-        return;
-      }
-
-      // Fallback: Sistema antigo de query/command via IA
-      console.log('⚠️ MessageHandler não processou áudio, usando sistema antigo...');
-      await client.sendMessage(msg.from, '🤖 Analisando...');
-      const classification = await QueryService.classifyIntent(transcription);
-
-      if (classification.type === 'command') {
-        // Processar como comando de edição
-        const result = await processCommand(transcription, userId);
-        await client.sendMessage(msg.from, result);
-      } else {
-        // Processar como consulta
-        const answer = await processQuestion(transcription);
-        await client.sendMessage(msg.from, answer);
-      }
-      
       return;
     }
 
@@ -598,8 +556,8 @@ export async function startSheetsBot() {
 
   console.log(`\n🔄 Sistema de Fluxos Conversacionais:`);
   console.log(`   ✅ MessageHandler integrado`);
-  console.log(`   ✅ Fluxos disponíveis: projeto, execução, retrabalho, status`);
-  console.log(`   ✅ Fallback: Sistema de query/command via IA`);
+  console.log(`   ✅ Fluxo principal: EngineerProjectFlow`);
+  console.log(`   ✅ Notificações: Matinal e Noturna (via cron)`);
 
   await client.initialize();
 }

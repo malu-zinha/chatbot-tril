@@ -7,11 +7,14 @@
 // e decide qual fluxo ativar baseado na mensagem do usuário
 // =====================================================
 
-import { RegisterProgressFlow } from '../flows/registerProgress.ts';
-import { RegisterReworkFlow } from '../flows/registerRework.ts';
-import { CheckStatusFlow } from '../flows/checkStatus.ts';
+// Flows ativos
 import { EngineerProjectFlow } from '../flows/engineerProjectFlow.ts';
 import { NotificacaoMatinalFlow, NotificacaoNoturnaFlow } from '../flows/notificationFlows.ts';
+
+// Flows arquivados (não usados):
+// import { RegisterProgressFlow } from '../flows/_archived/registerProgress.ts';
+// import { RegisterReworkFlow } from '../flows/_archived/registerRework.ts';
+// import { CheckStatusFlow } from '../flows/_archived/checkStatus.ts';
 
 // =====================================================
 // TIPOS E INTERFACES
@@ -19,7 +22,7 @@ import { NotificacaoMatinalFlow, NotificacaoNoturnaFlow } from '../flows/notific
 
 export interface UserSession {
   whatsapp: string;
-  fluxo_ativo?: 'progress' | 'rework' | 'status' | 'engineer_project' | 'notif_matinal' | 'notif_noturna' | null;
+  fluxo_ativo?: 'engineer_project' | 'notif_matinal' | 'notif_noturna' | null;
   instancia_fluxo?: any;
   notificacao_contexto?: {
     projectCode: string;
@@ -124,10 +127,6 @@ export class MessageHandler {
         case 'gerenciar_projeto':
           return await this.iniciarFluxoProjeto(sessao);
         
-        case 'consultar':
-          // Retorna "não entendida" para que o sheetsBot processe via IA
-          return { resposta: this.mensagemNaoEntendida() };
-        
         case 'ajuda':
           return { resposta: this.mensagemAjuda() };
         
@@ -135,6 +134,7 @@ export class MessageHandler {
           return { resposta: this.mensagemMenu() };
         
         default:
+          // Não tenta mais processar via IA - força uso do menu
           return { resposta: this.mensagemNaoEntendida() };
       }
     } catch (error: any) {
@@ -184,9 +184,6 @@ export class MessageHandler {
     if (mensagemLower === '1') {
       return 'gerenciar_projeto'; // Opção 1 = Modificar projetos
     }
-    if (mensagemLower === '2') {
-      return 'consultar'; // Opção 2 = Consultar
-    }
 
     // Palavras-chave para MODIFICAR projetos (Engenheiros)
     const keywordsModificar = [
@@ -198,21 +195,7 @@ export class MessageHandler {
       'modificar',
       'editar',
       'adicionar',
-      'registrar projeto',
-    ];
-
-    // Palavras-chave para CONSULTAR (CEO/Gestores)
-    const keywordsConsultar = [
-      'consultar',
-      'ver',
-      'mostrar',
-      'listar',
-      'quantos',
-      'qual',
-      'quais',
-      'status',
-      'informação',
-      'dados',
+      'registrar',
     ];
 
     // Palavras-chave para ajuda
@@ -246,50 +229,13 @@ export class MessageHandler {
       return 'gerenciar_projeto';
     }
 
-    if (keywordsConsultar.some(kw => mensagemLower.includes(kw))) {
-      return 'consultar';
-    }
-
-    // Se parece uma pergunta (tem ?, tem palavras interrogativas), é consulta
-    if (mensagemLower.includes('?') || 
-        /^(qual|quais|quantos|quanto|onde|como|quando|quem)/i.test(mensagemLower)) {
-      return 'consultar';
-    }
-
-    // Default: menu (para não deixar o usuário perdido)
+    // Default: menu (força uso de comandos estruturados)
     return 'menu';
   }
 
   // =====================================================
   // FUNÇÕES: Iniciar Fluxos
   // =====================================================
-
-  private async iniciarFluxoExecucao(sessao: UserSession): Promise<MessageResponse> {
-    const flow = new RegisterProgressFlow(sessao.whatsapp);
-    sessao.fluxo_ativo = 'progress';
-    sessao.instancia_fluxo = flow;
-
-    const resultado = await flow.processarMensagem('iniciar');
-    return { resposta: resultado.mensagem };
-  }
-
-  private async iniciarFluxoRetrabalho(sessao: UserSession): Promise<MessageResponse> {
-    const flow = new RegisterReworkFlow(sessao.whatsapp);
-    sessao.fluxo_ativo = 'rework';
-    sessao.instancia_fluxo = flow;
-
-    const resultado = await flow.processarMensagem('iniciar');
-    return { resposta: resultado.mensagem };
-  }
-
-  private async iniciarFluxoStatus(sessao: UserSession): Promise<MessageResponse> {
-    const flow = new CheckStatusFlow(sessao.whatsapp);
-    sessao.fluxo_ativo = 'status';
-    sessao.instancia_fluxo = flow;
-
-    const resultado = await flow.processarMensagem('iniciar');
-    return { resposta: resultado.mensagem };
-  }
 
   private async iniciarFluxoProjeto(sessao: UserSession): Promise<MessageResponse> {
     const flow = new EngineerProjectFlow(sessao.whatsapp);
@@ -307,52 +253,44 @@ export class MessageHandler {
   private mensagemMenu(): string {
     return `👋 *Olá! Bem-vindo ao Sistema de Gestão de Projetos*
 
-Escolha o que você precisa:
-
-📊 *1️⃣ MODIFICAR PROJETOS* (Engenheiros)
+📊 *MODIFICAR PROJETOS* (Engenheiros)
    Cadastrar novos ou atualizar diariamente
-   Digite: *1* ou _projeto_ ou _modificar_
+   Digite: *1* ou *projeto*
    
    *Atualizações diárias:*
    🌅 Manhã: Status + Previsão do dia
    🌙 Noite: Feito + Retrabalho + Etapa + Obs
 
-💬 *2️⃣ CONSULTAR INFORMAÇÕES* (CEO/Gestores)
-   Fazer perguntas sobre a planilha (texto ou áudio)
-   Digite: *2* ou _consultar_ ou faça sua pergunta diretamente
-   
-   Exemplos:
-   • "Quantos projetos em execução?"
-   • "Status do PRJ-001?"
-   • "Projetos atrasados?"
+🔔 *NOTIFICAÇÕES AUTOMÁTICAS:*
+   Você receberá lembretes automáticos nos horários configurados
+   Basta responder seguindo os menus guiados
 
-_Digite o número da opção ou a palavra-chave._`;
+_Digite "projeto" para começar ou aguarde as notificações automáticas._`;
   }
 
   private mensagemAjuda(): string {
     return `ℹ️ *Ajuda - Como Usar o Sistema*
 
 *📊 MODIFICAR PROJETOS (Engenheiros)*
-Fluxo guiado com botões para:
+Fluxo guiado com menus numerados para:
 • Cadastrar novo projeto (todas as informações)
 • Atualizar diariamente em 2 períodos:
 
 🌅 *Manhã:* Status + Previsão do dia
 🌙 *Noite:* Feito + Retrabalho + Etapa + Observações
 
-Digite: _projeto_, _modificar_, _cadastrar_ ou _atualizar_
+Digite: *projeto* para iniciar
 
-*💬 CONSULTAR INFORMAÇÕES (CEO/Gestores)*
-Faça perguntas em linguagem natural (texto ou áudio):
-• "Quantos projetos temos?"
-• "Status do PRJ-001?"
-• "Projetos em atraso?"
-• "Retrabalhos da semana?"
+*🔔 NOTIFICAÇÕES AUTOMÁTICAS*
+Você receberá lembretes automáticos:
+• Manhã: Para informar status e previsão
+• Noite: Para registrar o que foi feito
 
 *💡 Dicas*
 • Digite "cancelar" para sair de um fluxo
 • Digite "menu" para ver opções
-• Use áudio para consultas rápidas 🎤
+• Use áudio para facilitar 🎤
+• Responda apenas com os números dos menus
 
 _Digite "menu" para voltar_`;
   }
@@ -360,9 +298,9 @@ _Digite "menu" para voltar_`;
   private mensagemNaoEntendida(): string {
     return `🤔 Desculpe, não entendi sua mensagem.
 
-Digite *menu* para ver as opções disponíveis
+Digite *menu* para ver as opções
 ou
-Digite *ajuda* para ver como usar o sistema`;
+Digite *projeto* para modificar projetos`;
   }
 
   // =====================================================

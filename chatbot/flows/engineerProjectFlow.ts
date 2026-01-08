@@ -15,6 +15,7 @@ import {
   MOTIVOS_REVISAO,
   ETAPAS_PROJETO
 } from '../../integrations/sheets/engineerSheetService.ts';
+import { getSupabaseService } from '../../integrations/supabase/supabaseService.ts';
 
 // =====================================================
 // TIPOS E INTERFACES
@@ -811,6 +812,8 @@ export class EngineerProjectFlow {
 
   private async salvar(): Promise<FlowResult> {
     try {
+      const supabase = getSupabaseService();
+      
       if (this.state.mode === 'create') {
         // CAMPOS AUTOMÁTICOS
         const dataInicio = new Date();
@@ -837,28 +840,75 @@ export class EngineerProjectFlow {
         
         // Descrição já foi preenchida no stepTipoProjeto
         
-        // Criar novo projeto
-        const result = await this.sheetService.createProject(this.state.projectData as ProjectData);
+        // ESTRATÉGIA: Salvar APENAS no Supabase (planilhas são atualizadas por sincronização)
         
-        if (result.success) {
-          let mensagem = `✅ *Projeto criado com sucesso!*\n\n`;
-          mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
-          mensagem += `👤 Cliente: ${this.state.projectData['Cliente']}\n`;
-          mensagem += `🏗️ Obra: ${this.state.projectData['Obra']}\n`;
-          mensagem += `📊 Tipo: ${this.state.projectData['Tipo de Projeto']}\n`;
-          mensagem += `📅 Data previsão interna: ${this.state.projectData['Data de Previsão de entrega (interna)']}\n`;
-          mensagem += `📅 Data final cliente: ${this.state.projectData['Data Final (acordado com o cliente)']}\n`;
-          mensagem += `⏱️ Prazo interno: ${prazoInterno} dias úteis\n`;
-          mensagem += `⏱️ Prazo cliente: ${prazoCliente} dias úteis\n\n`;
-          mensagem += `_Dados salvos na planilha de engenheiros_`;
+        // 1. Salvar no Supabase
+        if (supabase.isConnected()) {
+          console.log('💾 Salvando projeto no Supabase...');
+          
+          // Buscar ou criar engenheiro
+          const engenheiro = await supabase.criarOuBuscarEngenheiro(
+            this.whatsapp,
+            this.state.engineerName
+          );
+          
+          if (engenheiro) {
+            // Criar projeto no banco
+            const projetoSalvo = await supabase.criarProjeto(
+              this.state.projectData,
+              engenheiro.id
+            );
+            
+            if (projetoSalvo) {
+              console.log('✅ Projeto salvo no Supabase');
+              
+              let mensagem = `✅ *Projeto criado com sucesso!*\n\n`;
+              mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
+              mensagem += `👤 Cliente: ${this.state.projectData['Cliente']}\n`;
+              mensagem += `🏗️ Obra: ${this.state.projectData['Obra']}\n`;
+              mensagem += `📊 Tipo: ${this.state.projectData['Tipo de Projeto']}\n`;
+              mensagem += `📅 Data previsão interna: ${this.state.projectData['Data de Previsão de entrega (interna)']}\n`;
+              mensagem += `📅 Data final cliente: ${this.state.projectData['Data Final (acordado com o cliente)']}\n`;
+              mensagem += `⏱️ Prazo interno: ${prazoInterno} dias úteis\n`;
+              mensagem += `⏱️ Prazo cliente: ${prazoCliente} dias úteis\n\n`;
+              mensagem += `_✅ Dados salvos no banco de dados_\n`;
+              mensagem += `_🔄 Planilhas serão atualizadas automaticamente (até 5min)_`;
 
-          return { mensagem, finalizado: true };
-        } else {
+              return { mensagem, finalizado: true };
+            }
+          }
+          
           return {
-            mensagem: `❌ Erro ao criar projeto: ${result.error}`,
+            mensagem: `❌ Erro ao salvar projeto no banco de dados`,
             finalizado: true,
-            erro: result.error
+            erro: 'Erro ao criar projeto no Supabase'
           };
+        } else {
+          // Fallback: salvar na planilha se Supabase não configurado
+          console.log('⚠️ Supabase não configurado, salvando apenas na planilha...');
+          const result = await this.sheetService.createProject(this.state.projectData as ProjectData);
+          
+          if (result.success) {
+            let mensagem = `✅ *Projeto criado com sucesso!*\n\n`;
+            mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
+            mensagem += `👤 Cliente: ${this.state.projectData['Cliente']}\n`;
+            mensagem += `🏗️ Obra: ${this.state.projectData['Obra']}\n`;
+            mensagem += `📊 Tipo: ${this.state.projectData['Tipo de Projeto']}\n`;
+            mensagem += `📅 Data previsão interna: ${this.state.projectData['Data de Previsão de entrega (interna)']}\n`;
+            mensagem += `📅 Data final cliente: ${this.state.projectData['Data Final (acordado com o cliente)']}\n`;
+            mensagem += `⏱️ Prazo interno: ${prazoInterno} dias úteis\n`;
+            mensagem += `⏱️ Prazo cliente: ${prazoCliente} dias úteis\n\n`;
+            mensagem += `_✅ Dados salvos na planilha_\n`;
+            mensagem += `_⚠️ Configure Supabase para usar o banco de dados_`;
+
+            return { mensagem, finalizado: true };
+          } else {
+            return {
+              mensagem: `❌ Erro ao criar projeto: ${result.error || 'Erro desconhecido'}`,
+              finalizado: true,
+              erro: result.error
+            };
+          }
         }
       } else {
         // Atualizar projeto existente
@@ -875,6 +925,8 @@ export class EngineerProjectFlow {
         // Decidir qual método chamar baseado no modo
         let result;
         let mensagem = '';
+        let salvouSupabase = false;
+        let salvouPlanilha = false;
 
         if (this.state.mode === 'update_morning') {
           // Atualização da manhã
@@ -883,17 +935,40 @@ export class EngineerProjectFlow {
             'Previsão para o dia': dailyData['Previsão para o dia']
           };
 
-          result = await this.sheetService.updateMorningData(
-            this.state.projectCode!,
-            morningData
-          );
-
-          if (result.success) {
-            mensagem = `✅ *Atualização matinal salva com sucesso!*\n\n`;
-            mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
-            mensagem += `📊 Status: ${morningData['Status do projeto']}\n`;
-            mensagem += `📝 Previsão: ${morningData['Previsão para o dia']}\n\n`;
-            mensagem += `_Dados salvos na planilha de engenheiros_`;
+          // Salvar APENAS no Supabase
+          if (supabase.isConnected()) {
+            const projeto = await supabase.buscarProjetoPorCodigo(this.state.projectCode!);
+            
+            if (projeto) {
+              const atualizacao = await supabase.registrarAtualizacaoManha(projeto.id, {
+                status: morningData['Status do projeto'],
+                previsao: morningData['Previsão para o dia']
+              });
+              
+              if (atualizacao) {
+                salvouSupabase = true;
+                mensagem = `✅ *Atualização matinal salva com sucesso!*\n\n`;
+                mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
+                mensagem += `📊 Status: ${morningData['Status do projeto']}\n`;
+                mensagem += `📝 Previsão: ${morningData['Previsão para o dia']}\n\n`;
+                mensagem += `_✅ Salvo no banco de dados_\n`;
+                mensagem += `_🔄 Planilhas serão atualizadas automaticamente_`;
+              } else {
+                mensagem = `❌ Erro ao salvar atualização matinal`;
+              }
+            } else {
+              mensagem = `❌ Projeto não encontrado: ${this.state.projectCode}`;
+            }
+          } else {
+            // Fallback: planilha
+            result = await this.sheetService.updateMorningData(this.state.projectCode!, morningData);
+            if (result.success) {
+              salvouPlanilha = true;
+              mensagem = `✅ *Atualização matinal salva!*\n\n`;
+              mensagem += `_⚠️ Configure Supabase para usar o banco de dados_`;
+            } else {
+              mensagem = `❌ Erro ao salvar atualização`;
+            }
           }
         } else if (this.state.mode === 'update_night') {
           // Atualização da noite
@@ -906,21 +981,52 @@ export class EngineerProjectFlow {
             'Observações': this.state.projectData['Observações']
           };
 
-          result = await this.sheetService.updateNightData(
-            this.state.projectCode!,
-            nightData
-          );
-
-          if (result.success) {
-            mensagem = `✅ *Atualização noturna salva com sucesso!*\n\n`;
-            mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
-            mensagem += `✔️ Feito: ${nightData['Feito ao final do dia']}\n`;
-            mensagem += `🔄 Retrabalho: ${nightData['Necessitou de retrabalho?']}\n`;
-            mensagem += `📍 Etapa: ${nightData['Etapa']}\n`;
-            if (nightData['Observações']) {
-              mensagem += `📝 Observações: ${nightData['Observações']}\n`;
+          // Salvar APENAS no Supabase
+          if (supabase.isConnected()) {
+            const projeto = await supabase.buscarProjetoPorCodigo(this.state.projectCode!);
+            
+            if (projeto) {
+              // Obter percentual da etapa
+              const etapaInfo = ETAPAS_PROJETO.find(e => e.nome === nightData['Etapa']);
+              const percentual = etapaInfo?.percentual || 0;
+              
+              const atualizacao = await supabase.registrarAtualizacaoNoite(projeto.id, {
+                feito: nightData['Feito ao final do dia'],
+                retrabalho: nightData['Necessitou de retrabalho?'] === 'sim',
+                motivoRetrabalho: nightData['motivo da revisão'],
+                etapa: nightData['Etapa'],
+                percentual: percentual,
+                observacoes: nightData['Observações'] || ''
+              });
+              
+              if (atualizacao) {
+                salvouSupabase = true;
+                mensagem = `✅ *Atualização noturna salva com sucesso!*\n\n`;
+                mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
+                mensagem += `✔️ Feito: ${nightData['Feito ao final do dia']}\n`;
+                mensagem += `🔄 Retrabalho: ${nightData['Necessitou de retrabalho?']}\n`;
+                mensagem += `📍 Etapa: ${nightData['Etapa']}\n`;
+                if (nightData['Observações']) {
+                  mensagem += `📝 Observações: ${nightData['Observações']}\n`;
+                }
+                mensagem += `\n_✅ Salvo no banco de dados_\n`;
+                mensagem += `_🔄 Planilhas serão atualizadas automaticamente_`;
+              } else {
+                mensagem = `❌ Erro ao salvar atualização noturna`;
+              }
+            } else {
+              mensagem = `❌ Projeto não encontrado: ${this.state.projectCode}`;
             }
-            mensagem += `\n_Dados salvos na planilha de engenheiros_`;
+          } else {
+            // Fallback: planilha
+            result = await this.sheetService.updateNightData(this.state.projectCode!, nightData);
+            if (result.success) {
+              salvouPlanilha = true;
+              mensagem = `✅ *Atualização noturna salva!*\n\n`;
+              mensagem += `_⚠️ Configure Supabase para usar o banco de dados_`;
+            } else {
+              mensagem = `❌ Erro ao salvar atualização`;
+            }
           }
         } else {
           // Fallback: atualização completa (modo antigo)
@@ -943,13 +1049,13 @@ export class EngineerProjectFlow {
           }
         }
 
-        if (result.success) {
+        if (salvouSupabase || salvouPlanilha || (result && result.success)) {
           return { mensagem, finalizado: true };
         } else {
           return {
-            mensagem: `❌ Erro ao atualizar projeto: ${result.error}`,
+            mensagem: `❌ Erro ao atualizar projeto: ${result?.error || 'Erro desconhecido'}`,
             finalizado: true,
-            erro: result.error
+            erro: result?.error
           };
         }
       }
