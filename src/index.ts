@@ -10,6 +10,7 @@
 import dotenv from 'dotenv';
 import { startSheetsBot } from '../chatbot/handlers/sheetsBot.ts';
 import { getCronJobManager } from '../integrations/cron/cronJobs.ts';
+import { iniciarSincronizacaoAutomatica } from '../integrations/cron/syncDatabaseToSheets.ts';
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -53,9 +54,17 @@ if (missingOptional.length > 0) {
     
     console.log('\n⏰ Iniciando sistema de notificações automáticas...\n');
     
-    // Iniciar Cron Jobs
+    // Iniciar Cron Jobs (notificações)
     const cronManager = getCronJobManager();
     cronManager.start();
+    
+    // Iniciar sincronização automática Supabase → Google Sheets
+    if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.log('\n🔄 Iniciando sincronização automática (Supabase → Sheets)...\n');
+      iniciarSincronizacaoAutomatica();
+    } else {
+      console.log('\n⚠️  Sincronização automática desabilitada (Supabase não configurado)\n');
+    }
     
     console.log('\n✅ Sistema completo iniciado com sucesso!\n');
   } catch (error: any) {

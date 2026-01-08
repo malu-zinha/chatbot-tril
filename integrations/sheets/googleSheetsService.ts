@@ -62,10 +62,80 @@ export class GoogleSheetsService {
   }
 
   /**
+   * Lê dados com headers de um range separado
+   * Útil quando headers estão em linhas diferentes dos dados
+   * @param spreadsheetId - ID da planilha
+   * @param dataRange - Range dos dados (ex: 'Sheet1!A3:Z1000')
+   * @param headerRange - Range dos headers (ex: 'Sheet1!A2:Z2')
+   */
+  async readSheetWithSeparateHeaders(
+    spreadsheetId: string,
+    dataRange: string,
+    headerRange: string
+  ): Promise<SheetData> {
+    try {
+      // Ler headers
+      const headerResponse = await this.sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: headerRange,
+      });
+      const headerRows = headerResponse.data.values || [];
+      const headers = headerRows.length > 0 ? headerRows[0] : [];
+
+      // Ler dados
+      const dataResponse = await this.sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: dataRange,
+      });
+      const rows = dataResponse.data.values || [];
+
+      return { headers, rows };
+    } catch (error: any) {
+      console.error('Erro ao ler Google Sheets:', error.message);
+      throw new Error(`Falha ao ler planilha: ${error.message}`);
+    }
+  }
+
+  /**
    * Lê dados e converte em array de objetos
    */
   async readSheetAsObjects(spreadsheetId: string, range: string = 'A1:Z1000'): Promise<any[]> {
     const { headers, rows } = await this.readSheet(spreadsheetId, range);
+    
+    return rows.map(row => {
+      const obj: any = {};
+      headers.forEach((header, index) => {
+        // Normalizar headers para padronizar entre abas
+        let normalizedHeader = header;
+        
+        // "." vira "Nº"
+        if (header === '.') {
+          normalizedHeader = 'Nº';
+        }
+        // "Data de início" vira "Data De Início"
+        else if (header.toLowerCase() === 'data de início') {
+          normalizedHeader = 'Data De Início';
+        }
+        
+        obj[normalizedHeader] = row[index] || '';
+      });
+      return obj;
+    });
+  }
+
+  /**
+   * Lê dados com headers separados e converte em array de objetos
+   */
+  async readSheetAsObjectsWithSeparateHeaders(
+    spreadsheetId: string,
+    dataRange: string,
+    headerRange: string
+  ): Promise<any[]> {
+    const { headers, rows } = await this.readSheetWithSeparateHeaders(
+      spreadsheetId,
+      dataRange,
+      headerRange
+    );
     
     return rows.map(row => {
       const obj: any = {};
@@ -141,11 +211,25 @@ export class GoogleSheetsService {
     sheetName: string,
     projectId: string,
     range: string = 'A1:Z1000',
-    idColumnName: string = 'Nº'
+    idColumnName: string = 'Nº',
+    headerRange?: string
   ): Promise<{ rowIndex: number; actualRowNumber: number; data: any } | null> {
     try {
       const fullRange = `${sheetName}!${range}`;
-      const data = await this.readSheetAsObjects(spreadsheetId, fullRange);
+      let data: any[];
+
+      if (headerRange) {
+        // Usar headers separados se fornecido
+        const fullHeaderRange = `${sheetName}!${headerRange}`;
+        data = await this.readSheetAsObjectsWithSeparateHeaders(
+          spreadsheetId,
+          fullRange,
+          fullHeaderRange
+        );
+      } else {
+        // Método tradicional: primeira linha do range é o header
+        data = await this.readSheetAsObjects(spreadsheetId, fullRange);
+      }
       
       // Procurar pela coluna de ID especificada
       const rowIndex = data.findIndex(row => row[idColumnName] === projectId);
@@ -155,16 +239,17 @@ export class GoogleSheetsService {
         return null;
       }
       
-      // Extrair o número da linha inicial do range (ex: A2:H1000 → linha inicial = 2)
+      // Extrair o número da linha inicial do range (ex: A2:H1000 → linha inicial = 2, A3:H1000 → 3)
       const rangeMatch = range.match(/^[A-Z]+(\d+):/);
       const startRow = rangeMatch ? parseInt(rangeMatch[1], 10) : 1;
       
-      // actualRowNumber = linha inicial + rowIndex (0-based) + 1 (header já está na startRow)
-      // Se range é A2:H1000, startRow=2 (que é o header), então dados começam em 3
-      // rowIndex=0 → linha 3, rowIndex=1 → linha 4, etc.
+      // Se usamos headers separados, startRow já é a primeira linha de dados
+      // rowIndex=0 → startRow, rowIndex=1 → startRow+1, etc.
+      const actualRowNumber = headerRange ? startRow + rowIndex : startRow + rowIndex + 1;
+      
       return { 
         rowIndex, 
-        actualRowNumber: startRow + rowIndex + 1,
+        actualRowNumber,
         data: data[rowIndex] 
       };
     } catch (error: any) {
@@ -289,20 +374,36 @@ export class GoogleSheetsService {
     projectId: string,
     updates: Record<string, any>,
     range: string = 'A1:Z1000',
-    idColumnName: string = 'Nº'
+    idColumnName: string = 'Nº',
+    headerRange?: string
   ): Promise<boolean> {
     try {
-      // Buscar a linha (passando o nome da coluna de ID)
-      const result = await this.findRowByID(spreadsheetId, sheetName, projectId, range, idColumnName);
+      // Buscar a linha (passando o nome da coluna de ID e headerRange se fornecido)
+      const result = await this.findRowByID(
+        spreadsheetId, 
+        sheetName, 
+        projectId, 
+        range, 
+        idColumnName,
+        headerRange
+      );
       
       if (!result) {
         console.error(`Projeto ${projectId} não encontrado na aba ${sheetName}`);
         return false;
       }
       
-      // IMPORTANTE: Obter headers DA ABA QUE ESTAMOS ATUALIZANDO
-      const fullRange = `${sheetName}!${range}`;
-      const { headers } = await this.readSheet(spreadsheetId, fullRange);
+      // Obter headers (do headerRange se fornecido, senão do range de dados)
+      let headers: string[];
+      if (headerRange) {
+        const fullHeaderRange = `${sheetName}!${headerRange}`;
+        const headerData = await this.readSheet(spreadsheetId, fullHeaderRange);
+        headers = headerData.headers;
+      } else {
+        const fullRange = `${sheetName}!${range}`;
+        const rangeData = await this.readSheet(spreadsheetId, fullRange);
+        headers = rangeData.headers;
+      }
       
       // Mesclar dados existentes com updates
       const updatedData = { ...result.data, ...updates };
@@ -383,6 +484,63 @@ export class GoogleSheetsService {
     } catch (error: any) {
       console.error('Erro ao obter headers:', error.message);
       return [];
+    }
+  }
+
+  // =====================================================
+  // MÉTODOS PARA SINCRONIZAÇÃO (Supabase → Sheets)
+  // =====================================================
+
+  /**
+   * Limpar dados de um range (mantém headers se começar em A2)
+   */
+  async clearSheet(spreadsheetId: string, range: string): Promise<void> {
+    try {
+      await this.sheets.spreadsheets.values.clear({
+        spreadsheetId,
+        range,
+      });
+    } catch (error: any) {
+      console.error('Erro ao limpar planilha:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Escrever múltiplas linhas de uma vez
+   */
+  async writeSheet(spreadsheetId: string, range: string, values: any[][]): Promise<void> {
+    try {
+      await this.sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values,
+        },
+      });
+    } catch (error: any) {
+      console.error('Erro ao escrever na planilha:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Escrever múltiplas linhas (append mode)
+   */
+  async appendSheet(spreadsheetId: string, range: string, values: any[][]): Promise<void> {
+    try {
+      await this.sheets.spreadsheets.values.append({
+        spreadsheetId,
+        range,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values,
+        },
+      });
+    } catch (error: any) {
+      console.error('Erro ao adicionar linhas na planilha:', error.message);
+      throw error;
     }
   }
 }

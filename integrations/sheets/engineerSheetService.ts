@@ -131,6 +131,7 @@ export const TIPOS_OBRA = [
 
 // STATUS_PROJETO - atualizado com novos status
 export const STATUS_PROJETO = [
+  'em planejamento',
   'aguardando início',
   'aguardando inf. cliente',
   'em execução',
@@ -204,6 +205,14 @@ export const DESCRICOES_POR_TIPO: Record<string, string> = {
 
 // PREVISAO_DIA_POR_STATUS - menus dinâmicos de previsão conforme status
 export const PREVISAO_DIA_POR_STATUS: Record<string, string[]> = {
+  'em planejamento': [
+    'Definir escopo detalhado do projeto',
+    'Alinhar expectativas com o cliente',
+    'Mapear riscos e dependências',
+    'Estimar recursos necessários',
+    'Preparar cronograma inicial',
+    'Validar requisitos técnicos com a equipe'
+  ],
   'aguardando início': [
     'Revisar documentação enviada pelo cliente',
     'Solicitar planta baixa/arquitetônico',
@@ -259,6 +268,14 @@ export const PREVISAO_DIA_POR_STATUS: Record<string, string[]> = {
 
 // FEITO_DIA_POR_STATUS - menus dinâmicos de feito conforme status
 export const FEITO_DIA_POR_STATUS: Record<string, string[]> = {
+  'em planejamento': [
+    'Análise inicial do escopo',
+    'Reunião de kickoff realizada',
+    'Cronograma preliminar criado',
+    'Documentação inicial organizada',
+    'Levantamento de requisitos técnicos',
+    'Definição de equipe e recursos'
+  ],
   'aguardando início': [
     'Checklist inicial concluído',
     'Documentação solicitada ao cliente',
@@ -318,14 +335,45 @@ export class EngineerSheetService {
     this.sheetsService = getGoogleSheetsService();
   }
 
+  /**
+   * Calcula o range de headers baseado no range de dados
+   * Ex: "A3:AE1000" -> "A2:AE2"
+   */
+  private getHeaderRange(): string {
+    // Extrair o número da linha inicial do range de dados
+    const match = this.range.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/);
+    if (!match) {
+      // Se não conseguir parsear, assume que há header na primeira linha
+      return this.range.replace(/\d+$/, '1');
+    }
+
+    const startCol = match[1]; // Ex: "A"
+    const startRow = parseInt(match[2], 10); // Ex: 3
+    const endCol = match[3]; // Ex: "AE"
+
+    // Header está uma linha acima dos dados
+    const headerRow = startRow - 1;
+
+    return `${startCol}${headerRow}:${endCol}${headerRow}`;
+  }
+
   // =====================================================
   // LISTAR TODOS OS PROJETOS
   // =====================================================
 
   async listAllProjects(): Promise<Project[]> {
     try {
-      const fullRange = `${this.sheetName}!${this.range}`;
-      const data = await this.sheetsService.readSheetAsObjects(this.spreadsheetId, fullRange);
+      const dataRange = `${this.sheetName}!${this.range}`;
+      const headerRange = `${this.sheetName}!${this.getHeaderRange()}`;
+      
+      console.log(`🔍 DEBUG - Header range: ${headerRange}`);
+      console.log(`🔍 DEBUG - Data range: ${dataRange}`);
+
+      const data = await this.sheetsService.readSheetAsObjectsWithSeparateHeaders(
+        this.spreadsheetId,
+        dataRange,
+        headerRange
+      );
 
       console.log(`🔍 DEBUG - Total de linhas lidas: ${data.length}`);
 
@@ -358,13 +406,13 @@ export class EngineerSheetService {
 
   async getProject(projectCode: string): Promise<ProjectData | null> {
     try {
-      const fullRange = `${this.sheetName}!${this.range}`;
       const result = await this.sheetsService.findRowByID(
         this.spreadsheetId,
         this.sheetName,
         projectCode,
         this.range,
-        'Código do Projeto' // Nova planilha usa este nome
+        'Código do Projeto', // Nova planilha usa este nome
+        this.getHeaderRange() // Passar header range separado
       );
 
       if (!result) {
@@ -395,9 +443,9 @@ export class EngineerSheetService {
         return { success: false, error: 'Projeto com este código já existe' };
       }
 
-      // Obter headers do range configurado (que já começa na linha correta)
-      const fullRange = `${this.sheetName}!${this.range}`;
-      const { headers } = await this.sheetsService.readSheet(this.spreadsheetId, fullRange);
+      // Obter headers do range de headers separado
+      const headerRange = `${this.sheetName}!${this.getHeaderRange()}`;
+      const { headers } = await this.sheetsService.readSheet(this.spreadsheetId, headerRange);
 
       console.log('🔍 DEBUG - Headers obtidos:', headers.length);
       console.log('🔍 DEBUG - Primeiros headers:', headers.slice(0, 5));
@@ -461,7 +509,8 @@ export class EngineerSheetService {
         projectCode,
         updates,
         this.range,
-        'Código do Projeto' // Nova planilha usa este nome
+        'Código do Projeto', // Nova planilha usa este nome
+        this.getHeaderRange() // Passar header range separado
       );
 
       if (success) {
@@ -503,7 +552,8 @@ export class EngineerSheetService {
         projectCode,
         updates,
         this.range,
-        'Código do Projeto'
+        'Código do Projeto',
+        this.getHeaderRange() // Passar header range separado
       );
 
       if (success) {
@@ -562,7 +612,8 @@ export class EngineerSheetService {
         projectCode,
         updates,
         this.range,
-        'Código do Projeto'
+        'Código do Projeto',
+        this.getHeaderRange() // Passar header range separado
       );
 
       if (success) {
@@ -606,7 +657,8 @@ export class EngineerSheetService {
         projectCode,
         updates,
         this.range,
-        'Código do Projeto' // Nova planilha usa este nome
+        'Código do Projeto', // Nova planilha usa este nome
+        this.getHeaderRange() // Passar header range separado
       );
 
       if (success) {
