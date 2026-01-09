@@ -23,6 +23,7 @@
     "debug:dotenv": "node tests/debug-dotenv.cjs",
     "check:sheet-info": "node tests/check-sheet-info.cjs",
     "show:sheet-var": "node tests/show-sheet-var.cjs",
+    "test:3-modos": "ts-node --esm tests/test-3-modos.ts",
     "check:env-format": "ts-node tests/check-env-format.ts",
     "check:sheet": "ts-node --esm tests/check-sheet-tabs.ts",
     "read:env": "ts-node tests/read-env-raw.ts",

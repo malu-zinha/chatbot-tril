@@ -225,6 +225,77 @@ export class SupabaseService {
   }
 
   /**
+   * Atualiza um campo específico de um projeto
+   */
+  async atualizarCampoProjeto(
+    codigoProjeto: string,
+    campo: string,
+    valor: any
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) {
+      return { success: false, error: 'Supabase não conectado' };
+    }
+
+    try {
+      // Mapear nome do campo da planilha para nome da coluna do BD
+      const mapeamentoCampos: Record<string, string> = {
+        'Cliente': 'cliente',
+        'Contato': 'contato_cliente',
+        'Obra': 'tipo_obra',
+        'Área': 'area',
+        'Tipo de Projeto': 'tipo_projeto',
+        'Descrição do projeto': 'descricao_projeto',
+        'Dias estimados (interno)': 'prazo_interno_dias',
+        'Data de Previsão de entrega (interna)': 'data_previsao_termino',
+        'Data Final (acordado com o cliente)': 'data_final_cliente',
+        'Status do projeto': 'status',
+        'Etapa': 'etapa_atual',
+        '% executado': 'percentual_total',
+        'Observações': 'observacoes'
+      };
+
+      const colunaBD = mapeamentoCampos[campo];
+      
+      if (!colunaBD) {
+        return { success: false, error: `Campo "${campo}" não mapeado no BD` };
+      }
+
+      // Preparar valor baseado no tipo de campo
+      let valorFormatado = valor;
+      
+      if (campo.includes('Data')) {
+        valorFormatado = this.formatarDataParaDB(valor);
+      } else if (campo === '% executado') {
+        valorFormatado = parseFloat(valor);
+      } else if (campo === 'Dias estimados (interno)') {
+        valorFormatado = parseInt(valor, 10);
+      }
+
+      // Atualizar no Supabase
+      const { data, error } = await this.supabase
+        .from('projetos')
+        .update({ 
+          [colunaBD]: valorFormatado,
+          updated_at: new Date().toISOString()
+        })
+        .eq('codigo', codigoProjeto)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Erro ao atualizar campo:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log(`✅ Campo "${campo}" atualizado no Supabase: ${codigoProjeto}`);
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar campo:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
    * Busca projeto por código (ex: PRJ-001)
    */
   async buscarProjetoPorCodigo(codigo: string): Promise<Projeto | null> {

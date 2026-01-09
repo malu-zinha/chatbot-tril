@@ -125,7 +125,24 @@ export class MessageHandler {
 
       switch (intencao) {
         case 'gerenciar_projeto':
-          return await this.iniciarFluxoProjeto(sessao);
+          // Se for comando direto de menu (1, 2, 3), processar diretamente
+          const mensagemNorm = mensagem.trim();
+          if (mensagemNorm === '1' || mensagemNorm === '2' || mensagemNorm === '3') {
+            // Iniciar fluxo e processar a escolha imediatamente
+            const flow = new EngineerProjectFlow(sessao.whatsapp);
+            sessao.fluxo_ativo = 'engineer_project';
+            sessao.instancia_fluxo = flow;
+            
+            // Processar "iniciar" primeiro (vai para stepInicio → escolher_acao)
+            await flow.processarMensagem('iniciar');
+            
+            // Depois processar a escolha (1, 2 ou 3)
+            const resultado = await flow.processarMensagem(mensagemNorm);
+            return { resposta: resultado.mensagem };
+          } else {
+            // Palavra-chave genérica (projeto, cadastrar, etc) - mostrar menu
+            return await this.iniciarFluxoProjeto(sessao);
+          }
         
         case 'ajuda':
           return { resposta: this.mensagemAjuda() };
@@ -181,8 +198,8 @@ export class MessageHandler {
     const mensagemLower = mensagem.toLowerCase().trim();
 
     // Atalhos numéricos do menu
-    if (mensagemLower === '1') {
-      return 'gerenciar_projeto'; // Opção 1 = Modificar projetos
+    if (mensagemLower === '1' || mensagemLower === '2' || mensagemLower === '3') {
+      return 'gerenciar_projeto'; // Opções 1, 2, 3 = Gestão de projetos
     }
 
     // Palavras-chave para MODIFICAR projetos (Engenheiros)
@@ -242,6 +259,7 @@ export class MessageHandler {
     sessao.fluxo_ativo = 'engineer_project';
     sessao.instancia_fluxo = flow;
 
+    // Iniciar fluxo (mostra menu de 3 opções)
     const resultado = await flow.processarMensagem('iniciar');
     return { resposta: resultado.mensagem };
   }
@@ -251,21 +269,17 @@ export class MessageHandler {
   // =====================================================
 
   private mensagemMenu(): string {
-    return `👋 *Olá! Bem-vindo ao Sistema de Gestão de Projetos*
+    return `🤖 *Menu Principal*
 
-📊 *MODIFICAR PROJETOS* (Engenheiros)
-   Cadastrar novos ou atualizar diariamente
-   Digite: *1* ou *projeto*
-   
-   *Atualizações diárias:*
-   🌅 Manhã: Status + Previsão do dia
-   🌙 Noite: Feito + Retrabalho + Etapa + Obs
+📋 *Gestão de Projetos*
+1️⃣ Criar novo projeto
+2️⃣ Editar projeto existente
+3️⃣ Notificações diárias (Manhã/Noite)
 
-🔔 *NOTIFICAÇÕES AUTOMÁTICAS:*
-   Você receberá lembretes automáticos nos horários configurados
-   Basta responder seguindo os menus guiados
+❓ *Ajuda*
+Digite "ajuda" para instruções
 
-_Digite "projeto" para começar ou aguarde as notificações automáticas._`;
+_Digite o número da opção desejada_`;
   }
 
   private mensagemAjuda(): string {
@@ -298,9 +312,7 @@ _Digite "menu" para voltar_`;
   private mensagemNaoEntendida(): string {
     return `🤔 Desculpe, não entendi sua mensagem.
 
-Digite *menu* para ver as opções
-ou
-Digite *projeto* para modificar projetos`;
+Digite *menu* para ver as opções disponíveis`;
   }
 
   // =====================================================
