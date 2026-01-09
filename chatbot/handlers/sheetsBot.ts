@@ -151,9 +151,7 @@ async function processCommand(command: string, userId: string): Promise<string> 
   }
 }
 
-/**
- * Processa comando de atualização
- */
+// Processa comando de atualização
 async function handleUpdateCommand(intent: any, userId: string): Promise<string> {
   try {
     // Gerar preview
@@ -189,9 +187,7 @@ async function handleUpdateCommand(intent: any, userId: string): Promise<string>
   }
 }
 
-/**
- * Processa comando de adição de projeto
- */
+// Processa comando de adição de projeto
 async function handleAddCommand(intent: any, userId: string): Promise<string> {
   try {
     // Gerar próximo ID
@@ -234,9 +230,7 @@ async function handleAddCommand(intent: any, userId: string): Promise<string> {
   }
 }
 
-/**
- * Executa comando após confirmação
- */
+// Executa comando após confirmação
 async function executeConfirmedCommand(userId: string): Promise<string> {
   try {
     const pending = pendingConfirmations.get(userId);
@@ -263,9 +257,7 @@ async function executeConfirmedCommand(userId: string): Promise<string> {
   }
 }
 
-/**
- * Executa atualização confirmada
- */
+// Executa atualização confirmada
 async function executeUpdate(pending: any): Promise<string> {
   try {
     const { intent, preview } = pending;
@@ -318,9 +310,7 @@ async function executeUpdate(pending: any): Promise<string> {
   }
 }
 
-/**
- * Executa adição confirmada
- */
+// Executa adição confirmada
 async function executeAdd(pending: any): Promise<string> {
   try {
     const { projectData } = pending;
@@ -353,9 +343,7 @@ async function executeAdd(pending: any): Promise<string> {
   }
 }
 
-/**
- * Cancela comando pendente
- */
+// Cancela comando pendente
 function cancelPendingCommand(userId: string): string {
   const pending = pendingConfirmations.get(userId);
   
@@ -367,6 +355,7 @@ function cancelPendingCommand(userId: string): string {
   return '✅ Comando cancelado.';
 }
 */
+
 // FIM DO BLOCO ARCHIVED
 
 // QR Code para autenticação
@@ -404,27 +393,13 @@ client.on('message', async (msg) => {
   try {
     // Comandos de texto
     if (msg.type === 'chat') {
-      const body = msg.body.toLowerCase();
-
-      // Menu / Ajuda
-      if (body.match(/(menu|ajuda|help|oi|olá|ola|início|inicio)/)) {
-        const welcomeMsg = `Olá *${userName}*! 👋\n\n` +
-          `Eu sou seu assistente de projetos.\n\n` +
-          `📊 *GESTÃO DE PROJETOS:*\n` +
-          `• Digite "projeto" para cadastrar/atualizar\n` +
-          `• Fluxo completo guiado com menus numerados\n\n` +
-          `🔔 *NOTIFICAÇÕES AUTOMÁTICAS:*\n` +
-          `• 🌅 Manhã: Status + Previsão do dia\n` +
-          `• 🌙 Noite: Feito + Retrabalho + Etapa + Obs\n\n` +
-          `🎤 *Áudio:* Grave sua mensagem para facilitar!\n\n` +
-          `_Digite "projeto" para começar_`;
-        
-        await client.sendMessage(msg.from, welcomeMsg);
-        return;
-      }
-
+      // TODAS as mensagens passam pelo messageHandler (garantir consistência)
+      console.log(`📨 Mensagem de ${userName}: "${msg.body}"`);
+      
       // ARCHIVED: Comandos de cache e confirmação (reativar se usar IA):
       /*
+      const body = msg.body.toLowerCase();
+      
       if (body.match(/(atualizar|refresh|reload)/)) {
         await client.sendMessage(msg.from, '🔄 Atualizando dados...');
         lastUpdate = 0;
@@ -452,7 +427,7 @@ client.on('message', async (msg) => {
       }
       */
 
-      // Processar via messageHandler (sistema de fluxos guiados)
+      // Processar via messageHandler (TODAS as mensagens)
       console.log('🔄 Processando via messageHandler...');
       const handlerResponse = await messageHandler.processarMensagem(userId, msg.body);
       await client.sendMessage(msg.from, handlerResponse.resposta);
@@ -528,26 +503,22 @@ export async function startSheetsBot() {
   ENGINEER_NEW_SHEET_NAME = process.env.GOOGLE_SHEETS_ENGINEER_NAME || 'Engenheiro(a)';
   ENGINEER_NEW_RANGE = process.env.GOOGLE_SHEETS_ENGINEER_RANGE || 'A1:AE1000';
   
-  // Validar configuração
-  if (!SPREADSHEET_ID) {
-    console.error('❌ GOOGLE_SHEETS_ID não configurado no .env');
-    process.exit(1);
-  }
-
-  if (!process.env.OPENAI_API_KEY) {
-    console.error('❌ OPENAI_API_KEY não configurado no .env');
+  // Validar configuração essencial (apenas para novo sistema)
+  if (!ENGINEER_NEW_SPREADSHEET_ID) {
+    console.error('❌ GOOGLE_SHEETS_ENGINEER_ID não configurado no .env');
+    console.error('   Configure a planilha de engenheiros para usar o bot');
     process.exit(1);
   }
 
   if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     console.error('❌ GOOGLE_APPLICATION_CREDENTIALS não configurado no .env');
+    console.error('   Configure as credenciais do Google Sheets API');
     process.exit(1);
   }
 
   console.log(`📊 Configuração:`);
-  console.log(`   - Planilha: ${SPREADSHEET_ID}`);
-  console.log(`   - Aba Engenheiro: ${ENGINEER_SHEET_NAME}`);
-  console.log(`   - Aba Evandro: ${EVANDRO_SHEET_NAME}`);
+  console.log(`   - Planilha Engenheiros: ${ENGINEER_NEW_SPREADSHEET_ID}`);
+  console.log(`   - Aba: ${ENGINEER_NEW_SHEET_NAME}`);
   
   if (ENGINEER_NEW_SPREADSHEET_ID) {
     console.log(`   - Nova Planilha Engenheiros: ${ENGINEER_NEW_SPREADSHEET_ID}`);
