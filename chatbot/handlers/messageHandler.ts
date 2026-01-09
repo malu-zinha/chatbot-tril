@@ -170,6 +170,11 @@ export class MessageHandler {
   private async processarComandoGlobal(mensagem: string, sessao: UserSession): Promise<string | null> {
     const mensagemLower = mensagem.toLowerCase().trim();
 
+    // Comando: Sincronizar manualmente
+    if (mensagemLower === 'sync' || mensagemLower === 'sincronizar') {
+      return await this.executarSincronizacaoManual();
+    }
+
     // Comando: Cancelar fluxo atual
     if (mensagemLower === 'cancelar' || mensagemLower === 'sair') {
       if (sessao.fluxo_ativo) {
@@ -300,9 +305,12 @@ Você receberá lembretes automáticos:
 • Manhã: Para informar status e previsão
 • Noite: Para registrar o que foi feito
 
+*🔄 COMANDOS ÚTEIS*
+• *sync* - Força sincronização Supabase → Sheets
+• *cancelar* - Sai do fluxo atual
+• *menu* - Volta ao menu principal
+
 *💡 Dicas*
-• Digite "cancelar" para sair de um fluxo
-• Digite "menu" para ver opções
 • Use áudio para facilitar 🎤
 • Responda apenas com os números dos menus
 
@@ -313,6 +321,31 @@ _Digite "menu" para voltar_`;
     return `🤔 Desculpe, não entendi sua mensagem.
 
 Digite *menu* para ver as opções disponíveis`;
+  }
+
+  // =====================================================
+  // FUNÇÃO: Sincronização Manual
+  // =====================================================
+
+  private async executarSincronizacaoManual(): Promise<string> {
+    try {
+      const { executarSincronizacao } = await import('../../integrations/cron/syncDatabaseToSheets.ts');
+      
+      // Executar sincronização em background
+      executarSincronizacao().catch(error => {
+        console.error('❌ Erro na sincronização manual:', error);
+      });
+      
+      return `🔄 *Sincronização iniciada!*\n\n` +
+             `Os dados do Supabase estão sendo sincronizados\n` +
+             `para o Google Sheets agora.\n\n` +
+             `⏱️ Aguarde alguns segundos e verifique a planilha.\n\n` +
+             `_A sincronização automática continua a cada 5 minutos_`;
+    } catch (error: any) {
+      console.error('Erro ao executar sincronização manual:', error);
+      return `❌ Erro ao iniciar sincronização.\n\n` +
+             `Verifique se o Supabase está configurado corretamente.`;
+    }
   }
 
   // =====================================================
