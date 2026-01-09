@@ -764,6 +764,26 @@ export class EngineerSheetService {
   }
 
   /**
+   * Adiciona dias úteis a uma data
+   */
+  addBusinessDays(startDate: Date, businessDaysToAdd: number): Date {
+    const result = new Date(startDate);
+    let daysAdded = 0;
+    
+    while (daysAdded < businessDaysToAdd) {
+      result.setDate(result.getDate() + 1);
+      const dayOfWeek = result.getDay();
+      
+      // Se não for sábado (6) ou domingo (0), conta como dia útil
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        daysAdded++;
+      }
+    }
+    
+    return result;
+  }
+
+  /**
    * Retorna descrição automática conforme tipo
    */
   getDescricaoPorTipo(tipo: string): string {
@@ -813,6 +833,115 @@ export class EngineerSheetService {
     return allProjects.filter(p => 
       p.status && p.status.toLowerCase() !== 'concluído'
     );
+  }
+
+  // =====================================================
+  // GERAÇÃO DE CÓDIGO DE PROJETO
+  // =====================================================
+
+  /**
+   * Busca o último código de projeto no formato PRJ-XXX
+   */
+  async getUltimoCodigoProjeto(): Promise<string | null> {
+    try {
+      const allProjects = await this.listAllProjects();
+      
+      if (allProjects.length === 0) {
+        return null;
+      }
+
+      // Filtrar apenas códigos no formato PRJ-XXX
+      const codigosValidos = allProjects
+        .map(p => p.codigo)
+        .filter(codigo => /^PRJ-\d{3}$/.test(codigo))
+        .sort((a, b) => {
+          const numA = parseInt(a.split('-')[1], 10);
+          const numB = parseInt(b.split('-')[1], 10);
+          return numB - numA; // Ordem decrescente
+        });
+
+      return codigosValidos.length > 0 ? codigosValidos[0] : null;
+    } catch (error: any) {
+      console.error('Erro ao buscar último código:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Gera o próximo código de projeto sequencial (PRJ-001, PRJ-002, ...)
+   */
+  async generateNextProjectCode(): Promise<string> {
+    try {
+      const ultimoCodigo = await this.getUltimoCodigoProjeto();
+      
+      if (!ultimoCodigo) {
+        // Primeiro projeto
+        return 'PRJ-001';
+      }
+
+      // Extrair número do último código
+      const match = ultimoCodigo.match(/^PRJ-(\d{3})$/);
+      if (!match) {
+        // Fallback: se formato inválido, começar de 001
+        return 'PRJ-001';
+      }
+
+      const ultimoNumero = parseInt(match[1], 10);
+      const proximoNumero = ultimoNumero + 1;
+
+      // Formatar com 3 dígitos (001, 002, ...)
+      const codigoFormatado = proximoNumero.toString().padStart(3, '0');
+      
+      return `PRJ-${codigoFormatado}`;
+    } catch (error: any) {
+      console.error('Erro ao gerar código:', error.message);
+      // Em caso de erro, usar timestamp como fallback
+      const timestamp = Date.now().toString().slice(-6);
+      return `PRJ-${timestamp}`;
+    }
+  }
+
+  /**
+   * Atualiza um campo específico de um projeto
+   */
+  async updateProjectField(
+    projectCode: string,
+    fieldName: string,
+    newValue: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Verificar se projeto existe
+      const project = await this.getProject(projectCode);
+      if (!project) {
+        return { success: false, error: 'Projeto não encontrado' };
+      }
+
+      // Preparar update
+      const updates: Record<string, any> = {
+        [fieldName]: newValue
+      };
+
+      // Atualizar na planilha
+      const success = await this.sheetsService.updateRowByID(
+        this.spreadsheetId,
+        this.sheetName,
+        projectCode,
+        updates,
+        this.range,
+        'Código do Projeto',
+        this.getHeaderRange()
+      );
+
+      if (success) {
+        console.log(`✅ Campo "${fieldName}" atualizado para: ${newValue}`);
+        return { success: true };
+      } else {
+        return { success: false, error: 'Erro ao atualizar campo na planilha' };
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar campo:', error.message);
+      return { success: false, error: error.message };
+    }
   }
 
   // =====================================================
