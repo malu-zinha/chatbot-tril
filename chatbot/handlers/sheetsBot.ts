@@ -374,27 +374,156 @@ client.on('ready', async () => {
   // setInterval(updateSheetCache, CACHE_TTL);
 });
 
-// Lógica principal do bot
-client.on('message', async (msg) => {
-  // Ignorar grupos e status
-  if (!msg.from.endsWith('@c.us')) return;
+// =====================================================
+// LISTENERS ADICIONAIS PARA DEBUG
+// =====================================================
 
-  const userId = msg.from;
+// Listener para mensagens criadas (pode capturar antes do 'message')
+client.on('message_create', async (msg) => {
+  const numeroProblema = '5583988990772';
+  const numeroProblema2 = '98899';
+  const isNumeroProblema = msg.from.includes(numeroProblema) || msg.from.includes(numeroProblema2);
   
-  // Tentar obter nome do contato (pode falhar em algumas versões)
+  if (isNumeroProblema) {
+    console.log(`\n${'🟢'.repeat(30)}`);
+    console.log(`🟢🟢🟢 MESSAGE_CREATE DO NÚMERO PROBLEMÁTICO! 🟢🟢🟢`);
+    console.log(`   De: ${msg.from}`);
+    console.log(`   Body: "${msg.body || '(sem texto)'}"`);
+    console.log(`${'🟢'.repeat(30)}\n`);
+  }
+});
+
+// Listener para mensagens recebidas (evento alternativo)
+client.on('message_received', async (msg) => {
+  const numeroProblema = '5583988990772';
+  const numeroProblema2 = '98899';
+  const isNumeroProblema = msg.from.includes(numeroProblema) || msg.from.includes(numeroProblema2);
+  
+  if (isNumeroProblema) {
+    console.log(`\n${'🟡'.repeat(30)}`);
+    console.log(`🟡🟡🟡 MESSAGE_RECEIVED DO NÚMERO PROBLEMÁTICO! 🟡🟡🟡`);
+    console.log(`   De: ${msg.from}`);
+    console.log(`   Body: "${msg.body || '(sem texto)'}"`);
+    console.log(`${'🟡'.repeat(30)}\n`);
+  }
+});
+
+// Listener para erros de autenticação
+client.on('auth_failure', (msg) => {
+  console.error('\n❌❌❌ FALHA DE AUTENTICAÇÃO DO WHATSAPP! ❌❌❌');
+  console.error(`   Mensagem: ${msg}\n`);
+});
+
+// Listener para desconexão
+client.on('disconnected', (reason) => {
+  console.error('\n❌❌❌ WHATSAPP DESCONECTADO! ❌❌❌');
+  console.error(`   Motivo: ${reason}\n`);
+});
+
+// Listener para mudanças de estado
+client.on('change_state', (state) => {
+  console.log(`\n📊 Mudança de estado do WhatsApp: ${state}\n`);
+});
+
+// LISTENER UNIVERSAL: Captura TODAS as mensagens (antes de qualquer filtro)
+client.on('message', async (msg) => {
+  // LOG ABSOLUTAMENTE TODAS AS MENSAGENS - SEM FILTROS
+  const numeroProblema = '5583988990772';
+  const numeroProblema2 = '98899';
+  const isNumeroProblema = msg.from.includes(numeroProblema) || msg.from.includes(numeroProblema2);
+  
+  if (isNumeroProblema) {
+    console.log(`\n${'🔴'.repeat(30)}`);
+    console.log(`🔴🔴🔴 MENSAGEM DO NÚMERO PROBLEMÁTICO DETECTADA! 🔴🔴🔴`);
+    console.log(`${'🔴'.repeat(30)}\n`);
+  }
+  
+  console.log(`\n${'─'.repeat(60)}`);
+  console.log(`📨 MENSAGEM RECEBIDA (LISTENER UNIVERSAL)`);
+  console.log(`   De: ${msg.from}`);
+  console.log(`   Tipo: ${msg.type}`);
+  console.log(`   FromMe: ${msg.fromMe}`);
+  console.log(`   Body: "${msg.body || '(sem texto)'}"`);
+  console.log(`   Timestamp: ${msg.timestamp}`);
+  console.log(`   ID: ${msg.id}`);
+  
+  if (isNumeroProblema) {
+    console.log(`\n   🔴 DETALHES DO NÚMERO PROBLEMÁTICO:`);
+    console.log(`   Formato completo: ${msg.from}`);
+    console.log(`   Contém 98899: ${msg.from.includes('98899')}`);
+    console.log(`   Contém 5583988990772: ${msg.from.includes('5583988990772')}`);
+    console.log(`   Termina com @c.us: ${msg.from.endsWith('@c.us')}`);
+    console.log(`   Termina com @g.us: ${msg.from.endsWith('@g.us')}`);
+    console.log(`   É mensagem própria: ${msg.fromMe}`);
+    console.log(`   Tipo de mensagem: ${msg.type}`);
+    console.log(`   Conteúdo: "${msg.body || '(vazio)'}"`);
+  }
+  
+  console.log(`${'─'.repeat(60)}`);
+  
+  // Ignorar mensagens do próprio bot
+  if (msg.fromMe) {
+    console.log('⏭️ Ignorando: mensagem enviada pelo próprio bot\n');
+    return;
+  }
+  
+  // Ignorar grupos e status
+  // WhatsApp Web pode usar @c.us (contato) ou @lid (Linked Device ID) para mensagens individuais
+  const isMensagemIndividual = msg.from.endsWith('@c.us') || msg.from.endsWith('@lid');
+  const isMensagemGrupo = msg.from.endsWith('@g.us');
+  
+  if (!isMensagemIndividual) {
+    if (isMensagemGrupo) {
+      console.log('⏭️ Ignorando: mensagem de grupo\n');
+    } else {
+      console.log(`⏭️ Ignorando: formato desconhecido (${msg.from})\n`);
+    }
+    return;
+  }
+  
+  // Log para @lid (formato especial)
+  if (msg.from.endsWith('@lid')) {
+    console.log('   ℹ️ Mensagem individual com formato @lid (Linked Device ID)');
+    console.log('   ℹ️ Tentando obter número real do contato...');
+  }
+  
+  // Para mensagens com @lid, precisamos obter o número real do contato
+  let userId = msg.from;
   let userName = 'usuário';
+  
+  // Tentar obter nome e número do contato
   try {
     const contact = await msg.getContact();
     userName = contact.pushname || contact.name || 'usuário';
-  } catch (error) {
-    console.log('⚠️ Não foi possível obter nome do contato, usando fallback');
+    
+    // Se for @lid, usar o número real do contato
+    if (msg.from.endsWith('@lid') && contact.number) {
+      const numeroLimpo = contact.number.replace(/[^\d]/g, '');
+      userId = `${numeroLimpo}@c.us`;
+      console.log(`   ✅ Número real obtido: ${userId}`);
+      console.log(`   Nome do contato: ${userName}`);
+    } else {
+      console.log(`👤 Contato: ${userName} (${contact.number || 'sem número'})`);
+    }
+  } catch (error: any) {
+    console.log('⚠️ Não foi possível obter contato, usando ID original');
+    if (msg.from.endsWith('@lid')) {
+      console.log('   ⚠️ ATENÇÃO: Mensagem @lid sem número do contato pode não funcionar corretamente');
+    }
+  }
+  
+  // DEBUG ESPECÍFICO: Verificar se passou pelos filtros
+  if (userId.includes(numeroProblema) || userId.includes('98899') || msg.from.includes(numeroProblema) || msg.from.includes('98899')) {
+    console.log(`   ✅✅✅ NÚMERO PROBLEMÁTICO PASSOU PELOS FILTROS! ✅✅✅`);
+    console.log(`   userId final: ${userId}`);
+    console.log(`   Prosseguindo com processamento...`);
   }
 
   try {
     // Comandos de texto
     if (msg.type === 'chat') {
       // TODAS as mensagens passam pelo messageHandler (garantir consistência)
-      console.log(`📨 Mensagem de ${userName}: "${msg.body}"`);
+      console.log(`💬 Mensagem de texto: "${msg.body}"`);
       
       // ARCHIVED: Comandos de cache e confirmação (reativar se usar IA):
       /*
@@ -429,9 +558,45 @@ client.on('message', async (msg) => {
 
       // Processar via messageHandler (TODAS as mensagens)
       console.log('🔄 Processando via messageHandler...');
-      const handlerResponse = await messageHandler.processarMensagem(userId, msg.body);
-      await client.sendMessage(msg.from, handlerResponse.resposta);
-      return;
+      
+      // DEBUG ESPECÍFICO: Número problemático
+      const numeroProblema = '5583988990772';
+      const isNumeroProblema = userId.includes(numeroProblema) || userId.includes('98899');
+      
+      if (isNumeroProblema) {
+        console.log(`   🔴🔴🔴 PROCESSANDO NÚMERO PROBLEMÁTICO! 🔴🔴🔴`);
+        console.log(`   userId original: ${userId}`);
+        console.log(`   msg.body: "${msg.body}"`);
+      }
+      
+      try {
+        const handlerResponse = await messageHandler.processarMensagem(userId, msg.body);
+        
+        if (isNumeroProblema) {
+          console.log(`   ✅ Resposta gerada para número problemático!`);
+          console.log(`   Tamanho da resposta: ${handlerResponse.resposta.length} chars`);
+          console.log(`   Primeiros 100 chars: ${handlerResponse.resposta.substring(0, 100)}...`);
+        }
+        
+        console.log(`✅ Resposta gerada (${handlerResponse.resposta.length} chars)`);
+        console.log(`📤 Enviando resposta para ${userId}...`);
+        
+        await client.sendMessage(msg.from, handlerResponse.resposta);
+        
+        if (isNumeroProblema) {
+          console.log(`   ✅✅✅ RESPOSTA ENVIADA COM SUCESSO PARA NÚMERO PROBLEMÁTICO! ✅✅✅`);
+        }
+        
+        console.log(`✅ Resposta enviada com sucesso!\n`);
+        return;
+      } catch (error: any) {
+        if (isNumeroProblema) {
+          console.error(`   🔴🔴🔴 ERRO AO PROCESSAR NÚMERO PROBLEMÁTICO! 🔴🔴🔴`);
+          console.error(`   Erro: ${error.message}`);
+          console.error(`   Stack: ${error.stack}`);
+        }
+        throw error; // Re-throw para ser capturado pelo catch externo
+      }
       
       // ARCHIVED: Fallback de IA (reativar se quiser QueryService/CommandService):
       /*
@@ -484,8 +649,40 @@ client.on('message', async (msg) => {
     await client.sendMessage(msg.from, '❌ Só consigo processar texto ou áudio. Digite "menu" para ajuda.');
 
   } catch (error: any) {
-    console.error('❌ Erro no bot:', error);
-    await client.sendMessage(msg.from, '❌ Desculpe, ocorreu um erro. Tente novamente ou digite "menu" para ajuda.');
+    // DEBUG ESPECÍFICO: Número problemático
+    const numeroProblema = '5583988990772';
+    const isNumeroProblema = userId.includes(numeroProblema) || userId.includes('98899');
+    
+    if (isNumeroProblema) {
+      console.error('\n🔴🔴🔴 ERRO NO PROCESSAMENTO DO NÚMERO PROBLEMÁTICO! 🔴🔴🔴');
+    }
+    
+    console.error('\n❌ ERRO NO PROCESSAMENTO:');
+    console.error(`   Usuário: ${userId}`);
+    console.error(`   Mensagem: "${msg.body}"`);
+    console.error(`   Erro: ${error.message}`);
+    console.error(`   Stack: ${error.stack}\n`);
+    
+    if (isNumeroProblema) {
+      console.error(`   🔴 Tentando enviar mensagem de erro para número problemático...`);
+    }
+    
+    try {
+      await client.sendMessage(msg.from, '❌ Desculpe, ocorreu um erro. Tente novamente ou digite "menu" para ajuda.');
+      
+      if (isNumeroProblema) {
+        console.error(`   ✅✅✅ MENSAGEM DE ERRO ENVIADA PARA NÚMERO PROBLEMÁTICO! ✅✅✅`);
+      }
+      
+      console.log('✅ Mensagem de erro enviada ao usuário\n');
+    } catch (sendError: any) {
+      if (isNumeroProblema) {
+        console.error(`   🔴🔴🔴 FALHA AO ENVIAR MENSAGEM DE ERRO PARA NÚMERO PROBLEMÁTICO! 🔴🔴🔴`);
+        console.error(`   Erro de envio: ${sendError.message}`);
+        console.error(`   Stack: ${sendError.stack}`);
+      }
+      console.error('❌ Falha ao enviar mensagem de erro:', sendError.message, '\n');
+    }
   }
 });
 

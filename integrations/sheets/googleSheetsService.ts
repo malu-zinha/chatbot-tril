@@ -400,7 +400,7 @@ export class GoogleSheetsService {
         const headerData = await this.readSheet(spreadsheetId, fullHeaderRange);
         headers = headerData.headers;
       } else {
-        const fullRange = `${sheetName}!${range}`;
+      const fullRange = `${sheetName}!${range}`;
         const rangeData = await this.readSheet(spreadsheetId, fullRange);
         headers = rangeData.headers;
       }
