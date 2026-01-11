@@ -57,27 +57,49 @@ export class MessageHandler {
 
   async processarMensagem(whatsapp: string, mensagem: string): Promise<MessageResponse> {
     try {
+      // DEBUG ESPECÍFICO: Número problemático
+      const numeroProblema = '5583988990772';
+      const isNumeroProblema = whatsapp.includes(numeroProblema) || whatsapp.includes('98899');
+      
+      console.log(`\n🔵 MessageHandler.processarMensagem()`);
+      console.log(`   WhatsApp: ${whatsapp}`);
+      console.log(`   Mensagem: "${mensagem}"`);
+      
+      if (isNumeroProblema) {
+        console.log(`   🔴🔴🔴 NÚMERO PROBLEMÁTICO CHEGOU NO MESSAGEHANDLER! 🔴🔴🔴`);
+      }
+      
       // Normalizar WhatsApp
       const whatsappNormalizado = this.normalizarWhatsapp(whatsapp);
+      
+      if (isNumeroProblema) {
+        console.log(`   🔴 WhatsApp normalizado: ${whatsappNormalizado}`);
+      }
 
       // Obter ou criar sessão
       let sessao = this.sessoes.get(whatsappNormalizado);
       
       if (!sessao) {
+        console.log(`   📝 Criando nova sessão para ${whatsappNormalizado}`);
         sessao = {
           whatsapp: whatsappNormalizado,
           fluxo_ativo: null,
           ultima_interacao: new Date(),
         };
         this.sessoes.set(whatsappNormalizado, sessao);
+      } else {
+        console.log(`   ✅ Sessão existente encontrada`);
+        console.log(`   Fluxo ativo: ${sessao.fluxo_ativo || 'nenhum'}`);
       }
 
       // Atualizar timestamp da última interação
       sessao.ultima_interacao = new Date();
 
       // Verificar comandos globais
+      console.log(`   🔍 Verificando comandos globais...`);
       const comandoGlobal = await this.processarComandoGlobal(mensagem, sessao);
       if (comandoGlobal) {
+        console.log(`   ✅ Comando global processado\n`);
         return { resposta: comandoGlobal };
       }
 
@@ -125,9 +147,11 @@ export class MessageHandler {
 
       switch (intencao) {
         case 'gerenciar_projeto':
+          console.log(`   🔄 Processando fluxo de gerenciamento de projeto`);
           // Se for comando direto de menu (1, 2, 3), processar diretamente
           const mensagemNorm = mensagem.trim();
           if (mensagemNorm === '1' || mensagemNorm === '2' || mensagemNorm === '3') {
+            console.log(`   ✅ Opção do menu detectada: ${mensagemNorm}`);
             // Iniciar fluxo e processar a escolha imediatamente
             const flow = new EngineerProjectFlow(sessao.whatsapp);
             sessao.fluxo_ativo = 'engineer_project';
@@ -138,24 +162,33 @@ export class MessageHandler {
             
             // Depois processar a escolha (1, 2 ou 3)
             const resultado = await flow.processarMensagem(mensagemNorm);
+            console.log(`   ✅ Fluxo processado, retornando resposta\n`);
             return { resposta: resultado.mensagem };
           } else {
+            console.log(`   ✅ Iniciando fluxo de projeto\n`);
             // Palavra-chave genérica (projeto, cadastrar, etc) - mostrar menu
             return await this.iniciarFluxoProjeto(sessao);
           }
         
         case 'ajuda':
+          console.log(`   ✅ Retornando mensagem de ajuda\n`);
           return { resposta: this.mensagemAjuda() };
         
         case 'menu':
+          console.log(`   ✅ Retornando menu principal\n`);
           return { resposta: this.mensagemMenu() };
         
         default:
           // Não tenta mais processar via IA - força uso do menu
+          console.log(`   ⚠️ Intenção não reconhecida\n`);
           return { resposta: this.mensagemNaoEntendida() };
       }
     } catch (error: any) {
-      console.error('Erro ao processar mensagem:', error);
+      console.error('\n❌ ERRO no MessageHandler:');
+      console.error(`   WhatsApp: ${whatsapp}`);
+      console.error(`   Mensagem: "${mensagem}"`);
+      console.error(`   Erro: ${error.message}`);
+      console.error(`   Stack: ${error.stack}\n`);
       return {
         resposta: '❌ Desculpe, ocorreu um erro. Tente novamente.',
         erro: error.message,
@@ -353,12 +386,42 @@ Digite *menu* para ver as opções disponíveis`;
   // =====================================================
 
   private normalizarWhatsapp(whatsapp: string): string {
-    // Remove caracteres especiais e garante formato +55XXXXXXXXXXX
-    const cleaned = whatsapp.replace(/[^\d+]/g, '');
-    if (!cleaned.startsWith('+')) {
-      return '+55' + cleaned;
+    try {
+      // Se já tem @c.us ou @g.us, remover primeiro
+      let numero = whatsapp;
+      if (whatsapp.includes('@')) {
+        numero = whatsapp.split('@')[0];
+      }
+      
+      // Remove caracteres especiais e garante formato +55XXXXXXXXXXX
+      const cleaned = numero.replace(/[^\d+]/g, '');
+      
+      // DEBUG: Número problemático
+      if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
+        console.log(`   🔍 Normalizando número problemático:`);
+        console.log(`   Original: ${whatsapp}`);
+        console.log(`   Após remover @: ${numero}`);
+        console.log(`   Após limpar: ${cleaned}`);
+      }
+      
+      if (!cleaned.startsWith('+')) {
+        const resultado = '+55' + cleaned;
+        if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
+          console.log(`   Resultado final: ${resultado}`);
+        }
+        return resultado;
+      }
+      
+      if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
+        console.log(`   Resultado final: ${cleaned}`);
+      }
+      
+      return cleaned;
+    } catch (error: any) {
+      console.error(`❌ Erro ao normalizar WhatsApp "${whatsapp}":`, error);
+      // Retornar o original se houver erro
+      return whatsapp.replace(/[^\d+]/g, '').replace(/^(\d+)$/, '+55$1');
     }
-    return cleaned;
   }
 
   private limparSessoesAntigas(): void {
