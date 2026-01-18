@@ -5,11 +5,25 @@
 //
 // Este módulo orquestra todos os fluxos conversacionais
 // e decide qual fluxo ativar baseado na mensagem do usuário
+// E TAMBÉM faz autenticação por número de WhatsApp
 // =====================================================
 
 // Flows ativos
 import { EngineerProjectFlow } from '../flows/engineerProjectFlow.ts';
 import { NotificacaoMatinalFlow, NotificacaoNoturnaFlow } from '../flows/notificationFlows.ts';
+import { OwnerFlow } from '../flows/ownerFlow.ts';
+
+// Supabase para autenticação (lazy loading para evitar problemas com dotenv)
+import { getSupabaseService, SupabaseService } from '../../integrations/supabase/supabaseService.ts';
+
+// Lazy loading: criar instância apenas quando necessário
+let supabaseServiceInstance: SupabaseService | null = null;
+function getSupabase(): SupabaseService {
+  if (!supabaseServiceInstance) {
+    supabaseServiceInstance = getSupabaseService();
+  }
+  return supabaseServiceInstance;
+}
 
 // Flows arquivados (não usados):
 // import { RegisterProgressFlow } from '../flows/_archived/registerProgress.ts';
@@ -20,9 +34,13 @@ import { NotificacaoMatinalFlow, NotificacaoNoturnaFlow } from '../flows/notific
 // TIPOS E INTERFACES
 // =====================================================
 
+export type TipoUsuario = 'engenheiro' | 'dono' | 'nao_cadastrado';
+
 export interface UserSession {
   whatsapp: string;
-  fluxo_ativo?: 'engineer_project' | 'notif_matinal' | 'notif_noturna' | null;
+  tipo_usuario?: TipoUsuario;
+  user_id?: string; // eng_id ou dono_id
+  fluxo_ativo?: 'engineer_project' | 'notif_matinal' | 'notif_noturna' | 'owner' | null;
   instancia_fluxo?: any;
   notificacao_contexto?: {
     projectCode: string;
@@ -70,7 +88,9 @@ export class MessageHandler {
       }
       
       // Normalizar WhatsApp
+      console.log(`   🔍 [DEBUG] Normalizando WhatsApp...`);
       const whatsappNormalizado = this.normalizarWhatsapp(whatsapp);
+      console.log(`   🔍 [DEBUG] WhatsApp normalizado: ${whatsappNormalizado}`);
       
       if (isNumeroProblema) {
         console.log(`   🔴 WhatsApp normalizado: ${whatsappNormalizado}`);
@@ -81,19 +101,37 @@ export class MessageHandler {
       
       if (!sessao) {
         console.log(`   📝 Criando nova sessão para ${whatsappNormalizado}`);
+        
+        // AUTENTICAÇÃO: Verificar se é engenheiro ou dono
+        console.log(`   🔍 [DEBUG] Iniciando autenticação...`);
+        const tipoUsuario = await this.autenticarUsuario(whatsappNormalizado);
+        console.log(`   🔍 [DEBUG] Autenticação concluída: ${tipoUsuario.tipo}`);
+        
         sessao = {
           whatsapp: whatsappNormalizado,
+          tipo_usuario: tipoUsuario.tipo,
+          user_id: tipoUsuario.user_id,
           fluxo_ativo: null,
           ultima_interacao: new Date(),
         };
         this.sessoes.set(whatsappNormalizado, sessao);
+        
+        console.log(`   ✅ Sessão criada - Tipo: ${tipoUsuario.tipo}`);
       } else {
         console.log(`   ✅ Sessão existente encontrada`);
+        console.log(`   Tipo de usuário: ${sessao.tipo_usuario || 'não autenticado'}`);
         console.log(`   Fluxo ativo: ${sessao.fluxo_ativo || 'nenhum'}`);
       }
 
       // Atualizar timestamp da última interação
       sessao.ultima_interacao = new Date();
+
+      // VERIFICAR SE É NÚMERO NÃO CADASTRADO
+      if (sessao.tipo_usuario === 'nao_cadastrado') {
+        return {
+          resposta: this.mensagemNaoCadastrado(),
+        };
+      }
 
       // Verificar comandos globais
       console.log(`   🔍 Verificando comandos globais...`);
@@ -103,8 +141,8 @@ export class MessageHandler {
         return { resposta: comandoGlobal };
       }
 
-      // Verificar se é resposta a notificação automática
-      if (sessao.notificacao_contexto && !sessao.fluxo_ativo) {
+      // Verificar se é resposta a notificação automática (apenas para engenheiros)
+      if (sessao.tipo_usuario === 'engenheiro' && sessao.notificacao_contexto && !sessao.fluxo_ativo) {
         const { projectCode, tipo } = sessao.notificacao_contexto;
 
         if (tipo === 'matinal') {
@@ -148,6 +186,12 @@ export class MessageHandler {
       switch (intencao) {
         case 'gerenciar_projeto':
           console.log(`   🔄 Processando fluxo de gerenciamento de projeto`);
+          
+          // DECISÃO: Fluxo de engenheiro OU fluxo de dono
+          if (sessao.tipo_usuario === 'dono') {
+            return await this.iniciarFluxoDono(sessao);
+          }
+          
           // Se for comando direto de menu (1, 2, 3), processar diretamente
           const mensagemNorm = mensagem.trim();
           if (mensagemNorm === '1' || mensagemNorm === '2' || mensagemNorm === '3') {
@@ -172,11 +216,11 @@ export class MessageHandler {
         
         case 'ajuda':
           console.log(`   ✅ Retornando mensagem de ajuda\n`);
-          return { resposta: this.mensagemAjuda() };
+          return { resposta: this.mensagemAjuda(sessao.tipo_usuario) };
         
         case 'menu':
           console.log(`   ✅ Retornando menu principal\n`);
-          return { resposta: this.mensagemMenu() };
+          return { resposta: this.mensagemMenu(sessao.tipo_usuario) };
         
         default:
           // Não tenta mais processar via IA - força uso do menu
@@ -194,6 +238,36 @@ export class MessageHandler {
         erro: error.message,
       };
     }
+  }
+
+  // =====================================================
+  // FUNÇÃO: Autenticar Usuário
+  // =====================================================
+
+  private async autenticarUsuario(whatsapp: string): Promise<{ tipo: TipoUsuario; user_id?: string }> {
+    console.log(`   🔐 Autenticando usuário: ${whatsapp}`);
+    
+    // Verificar se é engenheiro
+    console.log(`   🔍 [DEBUG] Buscando engenheiro por telefone...`);
+    const engenheiro = await getSupabase().buscarEngenheiroPorTelefone(whatsapp);
+    console.log(`   🔍 [DEBUG] Resultado busca engenheiro: ${engenheiro ? 'ENCONTRADO' : 'NÃO encontrado'}`);
+    if (engenheiro) {
+      console.log(`   ✅ Engenheiro identificado: ${engenheiro.nome} (${engenheiro.eng_id})`);
+      return { tipo: 'engenheiro', user_id: engenheiro.eng_id };
+    }
+
+    // Verificar se é dono
+    console.log(`   🔍 [DEBUG] Buscando dono por telefone...`);
+    const dono = await getSupabase().buscarDonoPorTelefone(whatsapp);
+    console.log(`   🔍 [DEBUG] Resultado busca dono: ${dono ? 'ENCONTRADO' : 'NÃO encontrado'}`);
+    if (dono) {
+      console.log(`   ✅ Dono identificado: ${dono.nome} (${dono.dono_id})`);
+      return { tipo: 'dono', user_id: dono.dono_id };
+    }
+
+    // Não cadastrado
+    console.log(`   ⚠️ Número não cadastrado no sistema`);
+    return { tipo: 'nao_cadastrado' };
   }
 
   // =====================================================
@@ -302,12 +376,51 @@ export class MessageHandler {
     return { resposta: resultado.mensagem };
   }
 
+  private async iniciarFluxoDono(sessao: UserSession): Promise<MessageResponse> {
+    if (!sessao.user_id) {
+      return {
+        resposta: '❌ Erro de autenticação. Digite "menu" para recomeçar.',
+      };
+    }
+
+    // Se já existe um fluxo ativo do dono, NÃO criar um novo!
+    if (sessao.fluxo_ativo === 'owner' && sessao.instancia_fluxo) {
+      console.log('   ⚠️ [DEBUG] Fluxo do dono já ativo, não criando novo');
+      const resultado = await sessao.instancia_fluxo.processarMensagem('iniciar');
+      return { resposta: resultado.mensagem };
+    }
+
+    console.log('   ✅ [DEBUG] Criando nova instância do OwnerFlow');
+    const flow = new OwnerFlow(sessao.whatsapp, sessao.user_id);
+    sessao.fluxo_ativo = 'owner';
+    sessao.instancia_fluxo = flow;
+
+    // Iniciar fluxo (mostra menu do dono)
+    const resultado = await flow.processarMensagem('iniciar');
+    return { resposta: resultado.mensagem };
+  }
+
   // =====================================================
   // MENSAGENS PADRÃO
   // =====================================================
 
-  private mensagemMenu(): string {
-    return `🤖 *Menu Principal*
+  private mensagemMenu(tipoUsuario?: TipoUsuario): string {
+    if (tipoUsuario === 'dono') {
+      return `👔 *Menu do Dono*
+
+📊 *Gestão da Empresa*
+1️⃣ Distribuir tarefa para engenheiro
+2️⃣ Verificar status dos projetos
+3️⃣ Consultar histórico e relatórios
+
+❓ *Ajuda*
+Digite "ajuda" para instruções
+
+_Digite o número da opção desejada_`;
+    }
+
+    // Menu de engenheiro (padrão)
+    return `🤖 *Menu do Engenheiro*
 
 📋 *Gestão de Projetos*
 1️⃣ Criar novo projeto
@@ -320,23 +433,61 @@ Digite "ajuda" para instruções
 _Digite o número da opção desejada_`;
   }
 
-  private mensagemAjuda(): string {
-    return `ℹ️ *Ajuda - Como Usar o Sistema*
+  private mensagemAjuda(tipoUsuario?: TipoUsuario): string {
+    if (tipoUsuario === 'dono') {
+      return `ℹ️ *Ajuda - Dono da Empresa*
 
-*📊 MODIFICAR PROJETOS (Engenheiros)*
+*📊 DISTRIBUIR TAREFAS*
+Fluxo guiado para atribuir projetos aos engenheiros:
+• Escolher engenheiro
+• Definir área e tipo de projeto
+• Configurar prazos e complexidade
+• Adicionar observações
+
+Digite: *1* no menu principal
+
+*📈 VERIFICAR PROJETOS*
+Acompanhe o status de todos os projetos:
+• Ver projetos em andamento
+• Consultar deadlines
+• Analisar performance da equipe
+
+Digite: *2* no menu principal
+
+*📋 RELATÓRIOS*
+Acesse históricos e indicadores:
+• Projetos concluídos
+• Tempo médio por área
+• Taxa de retrabalho
+
+Digite: *3* no menu principal
+
+*🔄 COMANDOS ÚTEIS*
+• *sync* - Força sincronização Supabase → Sheets
+• *cancelar* - Sai do fluxo atual
+• *menu* - Volta ao menu principal
+
+_Digite "menu" para voltar_`;
+    }
+
+    // Ajuda de engenheiro (padrão)
+    return `ℹ️ *Ajuda - Engenheiro*
+
+*📊 GERENCIAR PROJETOS*
 Fluxo guiado com menus numerados para:
 • Cadastrar novo projeto (todas as informações)
+• Editar projeto existente
 • Atualizar diariamente em 2 períodos:
 
 🌅 *Manhã:* Status + Previsão do dia
-🌙 *Noite:* Feito + Retrabalho + Etapa + Observações
+🌙 *Noite:* Feito + Retrabalho + Observações
 
-Digite: *projeto* para iniciar
+Digite: *projeto* ou *menu* para iniciar
 
 *🔔 NOTIFICAÇÕES AUTOMÁTICAS*
 Você receberá lembretes automáticos:
-• Manhã: Para informar status e previsão
-• Noite: Para registrar o que foi feito
+• Manhã (09:00): Para informar status e previsão
+• Noite (17:00): Para registrar o que foi feito
 
 *🔄 COMANDOS ÚTEIS*
 • *sync* - Força sincronização Supabase → Sheets
@@ -348,6 +499,21 @@ Você receberá lembretes automáticos:
 • Responda apenas com os números dos menus
 
 _Digite "menu" para voltar_`;
+  }
+
+  private mensagemNaoCadastrado(): string {
+    return `🚫 *Número não cadastrado*
+
+Seu número de WhatsApp não está cadastrado no sistema.
+
+Para obter acesso, entre em contato com o administrador da TecPred.
+
+📞 *Informações necessárias:*
+• Seu nome completo
+• Cargo/função (Engenheiro ou Dono)
+• Número de WhatsApp (este número)
+
+_Após o cadastro, você receberá acesso automático ao sistema._`;
   }
 
   private mensagemNaoEntendida(): string {

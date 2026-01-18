@@ -98,6 +98,15 @@ interface FlowState {
   projectCode?: string;
   projectData: Partial<ProjectData>;
   availableProjects?: Project[];
+  availableAtribuicoes?: Array<{  // NOVO: atribuições do Supabase
+    id: string;  // eng_projeto_id
+    codigo: string;
+    cliente: string;
+    area: string;
+    status: string;
+    projeto_id: string;  // UUID do projeto
+  }>;
+  selectedAtribuicaoId?: string;  // NOVO: eng_projeto_id selecionado
   engineerName?: string;
   editCategory?: string;      // NOVO: categoria selecionada na edição
   editField?: string;          // NOVO: campo sendo editado
@@ -118,6 +127,7 @@ export class EngineerProjectFlow {
   private whatsapp: string;
   private state: FlowState;
   private sheetService;
+  private supabase;
 
   constructor(whatsapp: string, engineerName?: string) {
     this.whatsapp = whatsapp;
@@ -128,6 +138,94 @@ export class EngineerProjectFlow {
       engineerName: engineerName || 'Engenheiro' // Nome padrão (não usado mais, mantido por compatibilidade)
     };
     this.sheetService = getEngineerSheetService();
+    this.supabase = getSupabaseService();
+  }
+
+  // =====================================================
+  // MÉTODOS AUXILIARES: Buscar Atribuições
+  // =====================================================
+
+  /**
+   * Busca atribuições do engenheiro (do Supabase ou planilha)
+   */
+  private async buscarAtribuicoesEngenheiro(): Promise<Array<{
+    id: string;
+    codigo: string;
+    cliente: string;
+    area: string;
+    status: string;
+    projeto_id: string;
+  }>> {
+    // Tentar buscar do Supabase primeiro
+    if (this.supabase.isConnected()) {
+      try {
+        const engenheiro = await this.supabase.buscarEngenheiroPorWhatsapp(this.whatsapp);
+        if (engenheiro) {
+          const atribuicoes = await this.supabase.listarAtribuicoesEngenheiro(engenheiro.eng_id);
+          
+          // Enriquecer com dados de projeto, área e status
+          const atribuicoesEnriquecidas = [];
+          for (const atrib of atribuicoes) {
+            const projeto = await this.supabase.buscarProjetoPorId(atrib.projeto_id);
+            const area = await this.supabase.buscarAreaPorId(atrib.area_id);
+            const status = atrib.status_id ? await this.supabase.buscarStatusPorId(atrib.status_id) : null;
+            
+            atribuicoesEnriquecidas.push({
+              id: atrib.id,  // eng_projeto_id
+              codigo: projeto?.codigo_projeto || '',
+              cliente: projeto?.cliente || '',
+              area: area?.descricao || '',
+              status: status?.descricao || '',
+              projeto_id: atrib.projeto_id
+            });
+          }
+          
+          return atribuicoesEnriquecidas;
+        }
+      } catch (error: any) {
+        console.error('Erro ao buscar atribuições do Supabase:', error);
+        // Fallback para planilha
+      }
+    }
+    
+    // Fallback: buscar da planilha
+    const projects = await this.sheetService.listAllProjects();
+    return projects.map(proj => ({
+      id: '',  // Não temos eng_projeto_id da planilha
+      codigo: proj.codigo,
+      cliente: proj.cliente,
+      area: proj.area || '',
+      status: proj.status || '',
+      projeto_id: ''  // Não temos projeto_id da planilha
+    }));
+  }
+
+  /**
+   * Agrupa atribuições por código de projeto (para mostrar projetos únicos)
+   */
+  private agruparAtribuicoesPorProjeto(atribuicoes: Array<{codigo: string, area: string, [key: string]: any}>): Array<{
+    codigo: string;
+    cliente: string;
+    areas: string[];
+    status: string;
+    atribuicoes: typeof atribuicoes;
+  }> {
+    const grupos = new Map<string, typeof atribuicoes>();
+    
+    atribuicoes.forEach(atrib => {
+      if (!grupos.has(atrib.codigo)) {
+        grupos.set(atrib.codigo, []);
+      }
+      grupos.get(atrib.codigo)!.push(atrib);
+    });
+    
+    return Array.from(grupos.entries()).map(([codigo, atribs]) => ({
+      codigo,
+      cliente: atribs[0]?.cliente || '',
+      areas: atribs.map(a => a.area).filter(Boolean),
+      status: atribs[0]?.status || '',
+      atribuicoes: atribs
+    }));
   }
 
   // =====================================================
@@ -195,6 +293,12 @@ export class EngineerProjectFlow {
 
         case 'data_final_cliente':
           return await this.stepDataFinalCliente(msg);
+
+        case 'escolher_areas':
+          return await this.stepEscolherAreas(msg);
+
+        case 'dados_area':
+          return await this.stepDadosArea(msg);
 
         case 'status_projeto':
           return await this.stepStatusProjeto(msg);
@@ -279,23 +383,29 @@ export class EngineerProjectFlow {
       this.state.mode = 'edit';
       this.state.step = 'escolher_projeto_edicao';
 
-      // Buscar TODOS os projetos da planilha
-      const projects = await this.sheetService.listAllProjects();
-      this.state.availableProjects = projects;
-
-      if (projects.length === 0) {
+      // Buscar atribuições do engenheiro (Supabase ou planilha)
+      const atribuicoes = await this.buscarAtribuicoesEngenheiro();
+      
+      if (atribuicoes.length === 0) {
         return {
-          mensagem: '❌ Nenhum projeto encontrado na planilha.\n\nCadastre um novo projeto primeiro.',
+          mensagem: '❌ Nenhum projeto encontrado.\n\nCadastre um novo projeto primeiro.',
           finalizado: true
         };
       }
 
+      // Agrupar por projeto (mesmo código pode ter múltiplas áreas)
+      const projetosAgrupados = this.agruparAtribuicoesPorProjeto(atribuicoes);
+      this.state.availableAtribuicoes = atribuicoes;
+
       let mensagem = `✏️ *Editar Projeto Existente*\n\n`;
       mensagem += `📋 Escolha o projeto que deseja editar:\n\n`;
       
-      projects.forEach((proj, index) => {
+      projetosAgrupados.forEach((proj, index) => {
         mensagem += `${index + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
-        mensagem += `   ${proj.obra || 'Sem descrição'}\n\n`;
+        if (proj.areas.length > 0) {
+          mensagem += `   Áreas: ${proj.areas.join(', ')}\n`;
+        }
+        mensagem += `   Status: ${proj.status || 'N/A'}\n\n`;
       });
 
       mensagem += `_Digite o número do projeto_`;
@@ -628,27 +738,65 @@ export class EngineerProjectFlow {
   private async stepEscolherProjetoEdicao(msg: string): Promise<FlowResult> {
     const numero = parseInt(msg.trim(), 10);
 
-    if (isNaN(numero) || numero < 1 || numero > (this.state.availableProjects?.length || 0)) {
+    // Buscar projetos agrupados novamente
+    const atribuicoes = this.state.availableAtribuicoes || await this.buscarAtribuicoesEngenheiro();
+    const projetosAgrupados = this.agruparAtribuicoesPorProjeto(atribuicoes);
+
+    if (isNaN(numero) || numero < 1 || numero > projetosAgrupados.length) {
       return {
-        mensagem: `❌ Número inválido. Digite um número entre 1 e ${this.state.availableProjects?.length || 0}.`,
+        mensagem: `❌ Número inválido. Digite um número entre 1 e ${projetosAgrupados.length}.`,
         finalizado: false
       };
     }
 
-    const selectedProject = this.state.availableProjects![numero - 1];
-    this.state.projectCode = selectedProject.codigo;
+    const selectedProjeto = projetosAgrupados[numero - 1];
+    this.state.projectCode = selectedProjeto.codigo;
 
-    // Buscar dados completos do projeto
-    const projectData = await this.sheetService.getProject(selectedProject.codigo);
+    // Se houver múltiplas áreas, escolher qual editar
+    if (selectedProjeto.areas.length > 1) {
+      // Armazenar atribuições deste projeto
+      const atribsDoProjeto = atribuicoes.filter(a => a.codigo === selectedProjeto.codigo);
+      this.state.availableAtribuicoes = atribsDoProjeto;
+      
+      // Por enquanto, editar a primeira atribuição
+      // TODO: Permitir escolher qual área editar
+      this.state.selectedAtribuicaoId = atribsDoProjeto[0]?.id || '';
+      
+      let mensagem = `✅ Projeto *${selectedProjeto.codigo}* selecionado\n\n`;
+      mensagem += `📊 Cliente: ${selectedProjeto.cliente}\n`;
+      mensagem += `🏢 Áreas: ${selectedProjeto.areas.join(', ')}\n\n`;
+      mensagem += `ℹ️ Este projeto tem ${selectedProjeto.areas.length} área(s).\n`;
+      mensagem += `Editando a primeira área: *${selectedProjeto.areas[0]}*\n\n`;
+      mensagem += `📁 *Qual categoria deseja editar?*\n\n`;
+      mensagem += `1️⃣ *Dados Cadastrais*\n`;
+      mensagem += `   Cliente, Contato, Obra, Área, Tipo\n\n`;
+      mensagem += `2️⃣ *Datas e Prazos*\n`;
+      mensagem += `   Dias estimados, Previsão interna, Data final cliente\n\n`;
+      mensagem += `3️⃣ *Status e Execução*\n`;
+      mensagem += `   Status do projeto, Etapa, % executado\n\n`;
+      mensagem += `_Digite o número da categoria_`;
+      
+      this.state.step = 'escolher_categoria';
+      return { mensagem, finalizado: false };
+    }
+
+    // Uma única área - buscar dados
+    const atribuicao = atribuicoes.find(a => a.codigo === selectedProjeto.codigo);
+    if (atribuicao) {
+      this.state.selectedAtribuicaoId = atribuicao.id;
+    }
+
+    // Buscar dados completos (da planilha como fallback)
+    const projectData = await this.sheetService.getProject(selectedProjeto.codigo, selectedProjeto.areas[0]);
     if (projectData) {
       this.state.projectData = projectData;
     }
 
     this.state.step = 'escolher_categoria';
 
-    let mensagem = `✅ Projeto *${selectedProject.codigo}* selecionado\n\n`;
-    mensagem += `📊 Cliente: ${selectedProject.cliente}\n`;
-    mensagem += `🏗️ Obra: ${selectedProject.obra}\n\n`;
+    let mensagem = `✅ Projeto *${selectedProjeto.codigo}* selecionado\n\n`;
+    mensagem += `📊 Cliente: ${selectedProjeto.cliente}\n`;
+    mensagem += `🏢 Área: ${selectedProjeto.areas[0]}\n\n`;
     mensagem += `📁 *Qual categoria deseja editar?*\n\n`;
     mensagem += `1️⃣ *Dados Cadastrais*\n`;
     mensagem += `   Cliente, Contato, Obra, Área, Tipo\n\n`;
@@ -861,27 +1009,32 @@ export class EngineerProjectFlow {
 
     if (opcao === '1') {
       // Notificação da manhã
-      this.state.mode = 'update_morning';  // CORREÇÃO: setar mode correto
+      this.state.mode = 'update_morning';
       this.state.periodo = 'manha';
       this.state.step = 'escolher_projeto_notif';
 
-      // Buscar TODOS os projetos da planilha
-      const projects = await this.sheetService.listAllProjects();
-      this.state.availableProjects = projects;
+      // Buscar atribuições do engenheiro
+      const atribuicoes = await this.buscarAtribuicoesEngenheiro();
+      this.state.availableAtribuicoes = atribuicoes;
 
-      if (projects.length === 0) {
+      if (atribuicoes.length === 0) {
         return {
-          mensagem: '❌ Nenhum projeto encontrado na planilha.\n\nCadastre um novo projeto primeiro.',
+          mensagem: '❌ Nenhum projeto encontrado.\n\nCadastre um novo projeto primeiro.',
           finalizado: true
         };
       }
 
+      // Agrupar por projeto para mostrar
+      const projetosAgrupados = this.agruparAtribuicoesPorProjeto(atribuicoes);
+
       let mensagem = `🌅 *Notificação Matinal*\n\n`;
       mensagem += `📋 Escolha o projeto:\n\n`;
       
-      projects.forEach((proj, index) => {
+      projetosAgrupados.forEach((proj, index) => {
         mensagem += `${index + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
-        mensagem += `   ${proj.obra || 'Sem descrição'}\n`;
+        if (proj.areas.length > 0) {
+          mensagem += `   Áreas: ${proj.areas.join(', ')}\n`;
+        }
         mensagem += `   Status: ${proj.status || 'N/A'}\n\n`;
       });
 
@@ -890,27 +1043,32 @@ export class EngineerProjectFlow {
 
     } else if (opcao === '2') {
       // Notificação da noite
-      this.state.mode = 'update_night';  // CORREÇÃO: setar mode correto
+      this.state.mode = 'update_night';
       this.state.periodo = 'noite';
       this.state.step = 'escolher_projeto_notif';
 
-      // Buscar TODOS os projetos da planilha
-      const projects = await this.sheetService.listAllProjects();
-      this.state.availableProjects = projects;
+      // Buscar atribuições do engenheiro
+      const atribuicoes = await this.buscarAtribuicoesEngenheiro();
+      this.state.availableAtribuicoes = atribuicoes;
 
-      if (projects.length === 0) {
+      if (atribuicoes.length === 0) {
         return {
-          mensagem: '❌ Nenhum projeto encontrado na planilha.\n\nCadastre um novo projeto primeiro.',
+          mensagem: '❌ Nenhum projeto encontrado.\n\nCadastre um novo projeto primeiro.',
           finalizado: true
         };
       }
 
+      // Agrupar por projeto para mostrar
+      const projetosAgrupados = this.agruparAtribuicoesPorProjeto(atribuicoes);
+
       let mensagem = `🌙 *Notificação Noturna*\n\n`;
       mensagem += `📋 Escolha o projeto:\n\n`;
       
-      projects.forEach((proj, index) => {
+      projetosAgrupados.forEach((proj, index) => {
         mensagem += `${index + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
-        mensagem += `   ${proj.obra || 'Sem descrição'}\n`;
+        if (proj.areas.length > 0) {
+          mensagem += `   Áreas: ${proj.areas.join(', ')}\n`;
+        }
         mensagem += `   Status: ${proj.status || 'N/A'}\n\n`;
       });
 
@@ -927,25 +1085,47 @@ export class EngineerProjectFlow {
   private async stepEscolherProjetoNotif(msg: string): Promise<FlowResult> {
     const numero = parseInt(msg.trim(), 10);
 
-    if (isNaN(numero) || numero < 1 || numero > (this.state.availableProjects?.length || 0)) {
+    // Buscar projetos agrupados
+    const atribuicoes = this.state.availableAtribuicoes || await this.buscarAtribuicoesEngenheiro();
+    const projetosAgrupados = this.agruparAtribuicoesPorProjeto(atribuicoes);
+
+    if (isNaN(numero) || numero < 1 || numero > projetosAgrupados.length) {
       return {
-        mensagem: `❌ Número inválido. Digite um número entre 1 e ${this.state.availableProjects?.length || 0}.`,
+        mensagem: `❌ Número inválido. Digite um número entre 1 e ${projetosAgrupados.length}.`,
         finalizado: false
       };
     }
 
-    const selectedProject = this.state.availableProjects![numero - 1];
-    this.state.projectCode = selectedProject.codigo;
+    const selectedProjeto = projetosAgrupados[numero - 1];
+    this.state.projectCode = selectedProjeto.codigo;
 
-    // Buscar dados completos do projeto
-    const projectData = await this.sheetService.getProject(selectedProject.codigo);
+    // Se houver múltiplas áreas, usar a primeira (ou permitir escolher depois)
+    const atribsDoProjeto = atribuicoes.filter(a => a.codigo === selectedProjeto.codigo);
+    if (atribsDoProjeto.length > 0) {
+      // Usar primeira atribuição (ou permitir escolher depois)
+      this.state.selectedAtribuicaoId = atribsDoProjeto[0].id;
+      
+      if (atribsDoProjeto.length > 1) {
+        // Múltiplas áreas - por enquanto usar primeira
+        // TODO: Permitir escolher qual área atualizar
+      }
+    }
+
+    // Buscar dados completos (fallback para planilha)
+    const projectData = await this.sheetService.getProject(selectedProjeto.codigo, selectedProjeto.areas[0]);
     if (projectData) {
       this.state.projectData = projectData;
     }
 
-    let mensagem = `✅ Projeto *${selectedProject.codigo}* selecionado\n\n`;
-    mensagem += `📊 Cliente: ${selectedProject.cliente}\n`;
-    mensagem += `🏗️ Obra: ${selectedProject.obra}\n\n`;
+    let mensagem = `✅ Projeto *${selectedProjeto.codigo}* selecionado\n\n`;
+    mensagem += `📊 Cliente: ${selectedProjeto.cliente}\n`;
+    if (selectedProjeto.areas.length > 0) {
+      mensagem += `🏢 Área: ${selectedProjeto.areas[0]}\n`;
+      if (selectedProjeto.areas.length > 1) {
+        mensagem += `   (Este projeto tem ${selectedProjeto.areas.length} áreas - atualizando a primeira)\n`;
+      }
+    }
+    mensagem += `\n`;
 
     // Ambos os períodos começam perguntando o STATUS
     // (a etapa será definida automaticamente baseada no status)
@@ -997,12 +1177,161 @@ export class EngineerProjectFlow {
 
     this.state.projectData['Data Final (acordado com o cliente)'] = dateStr;
     
-    // Prazos serão calculados automaticamente no método salvar()
-    // baseados nas diferenças entre as datas (em dias úteis)
-    
-    this.state.step = 'confirmacao';
+    // NOVO FLUXO: Após preencher todas as datas, perguntar áreas que vai trabalhar
+    // (pode ser múltiplas áreas)
+    this.state.step = 'escolher_areas';
 
     let mensagem = `✅ Data final cliente: *${dateStr}*\n\n`;
+    mensagem += `🏢 *Quais ÁREAS você vai trabalhar neste projeto?*\n\n`;
+    mensagem += `Você pode escolher múltiplas áreas.\n`;
+    mensagem += `Digite os números separados por vírgula (ex: 1,3,5)\n\n`;
+    mensagem += this.formatOptions(AREAS_PROJETO);
+    mensagem += `\n_Digite os números das áreas (ex: 1 ou 1,3,5)_`;
+
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepEscolherAreas(msg: string): Promise<FlowResult> {
+    // Processar entrada: pode ser um número ou múltiplos números separados por vírgula
+    const partes = msg.split(',').map(p => p.trim());
+    const numeros: number[] = [];
+    
+    for (const parte of partes) {
+      const num = parseInt(parte, 10);
+      if (isNaN(num) || num < 1 || num > AREAS_PROJETO.length) {
+        return {
+          mensagem: `❌ Número inválido: ${parte}. Digite números entre 1 e ${AREAS_PROJETO.length}.`,
+          finalizado: false
+        };
+      }
+      numeros.push(num);
+    }
+
+    // Armazenar áreas selecionadas no state
+    const areasSelecionadas = numeros.map(n => AREAS_PROJETO[n - 1]);
+    (this.state as any).areasSelecionadas = areasSelecionadas;
+    (this.state as any).areaIndex = 0; // Índice da área atual sendo processada
+
+    // Se só uma área, ir direto para dados da área
+    if (areasSelecionadas.length === 1) {
+      (this.state as any).areaAtual = areasSelecionadas[0];
+      this.state.step = 'dados_area';
+      
+      let mensagem = `✅ Área selecionada: *${areasSelecionadas[0]}*\n\n`;
+      mensagem += `📅 *Digite a DATA DE INÍCIO para esta área*\n\n`;
+      mensagem += `Formato: DD/MM/AAAA\n`;
+      mensagem += `Exemplo: 15/01/2025\n\n`;
+      mensagem += `_Digite a data de início_`;
+      
+      return { mensagem, finalizado: false };
+    }
+
+    // Múltiplas áreas: processar primeira área
+    (this.state as any).areaAtual = areasSelecionadas[0];
+    this.state.step = 'dados_area';
+    
+    let mensagem = `✅ Áreas selecionadas: ${areasSelecionadas.length}\n\n`;
+    mensagem += `📋 Vamos preencher os dados de cada área:\n\n`;
+    mensagem += `🏢 *Área 1 de ${areasSelecionadas.length}: ${areasSelecionadas[0]}*\n\n`;
+    mensagem += `📅 *Digite a DATA DE INÍCIO para esta área*\n\n`;
+    mensagem += `Formato: DD/MM/AAAA\n`;
+    mensagem += `_Digite a data de início_`;
+    
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepDadosArea(msg: string): Promise<FlowResult> {
+    // Este step será chamado múltiplas vezes (uma por área)
+    const areasSelecionadas = (this.state as any).areasSelecionadas || [];
+    const areaIndex = (this.state as any).areaIndex || 0;
+    const areaAtual = (this.state as any).areaAtual || areasSelecionadas[areaIndex];
+    
+    // Estado interno para rastrear qual dado está sendo preenchido
+    const dadosAreaKey = `dados_area_${areaIndex}`;
+    if (!(this.state as any)[dadosAreaKey]) {
+      (this.state as any)[dadosAreaKey] = { area: areaAtual };
+    }
+    const dadosArea = (this.state as any)[dadosAreaKey];
+    
+    // Verificar qual campo está sendo preenchido
+    if (!dadosArea.data_inicio) {
+      // Preenchendo data de início
+      const dateStr = msg.trim();
+      if (!this.sheetService.validateDateFormat(dateStr)) {
+        return {
+          mensagem: '❌ Formato inválido. Use DD/MM/AAAA.',
+          finalizado: false
+        };
+      }
+      const date = this.sheetService.parseDate(dateStr);
+      if (!date) {
+        return {
+          mensagem: '❌ Data inválida.',
+          finalizado: false
+        };
+      }
+      dadosArea.data_inicio = dateStr;
+      
+      let mensagem = `✅ Data de início: *${dateStr}*\n\n`;
+      mensagem += `📅 *Digite a DATA PREVISTA para esta área*\n\n`;
+      mensagem += `Formato: DD/MM/AAAA\n`;
+      mensagem += `_Digite a data prevista_`;
+      
+      return { mensagem, finalizado: false };
+    } else if (!dadosArea.data_prevista) {
+      // Preenchendo data prevista
+      const dateStr = msg.trim();
+      if (!this.sheetService.validateDateFormat(dateStr)) {
+        return {
+          mensagem: '❌ Formato inválido. Use DD/MM/AAAA.',
+          finalizado: false
+        };
+      }
+      const date = this.sheetService.parseDate(dateStr);
+      if (!date) {
+        return {
+          mensagem: '❌ Data inválida.',
+          finalizado: false
+        };
+      }
+      dadosArea.data_prevista = dateStr;
+      
+      let mensagem = `✅ Data prevista: *${dateStr}*\n\n`;
+      mensagem += `📊 *Qual o STATUS inicial desta área?*\n\n`;
+      mensagem += this.formatOptions(STATUS_PROJETO);
+      mensagem += `\n_Digite o número da opção_`;
+      
+      return { mensagem, finalizado: false };
+    } else if (!dadosArea.status) {
+      // Preenchendo status
+      const numero = parseInt(msg.trim(), 10);
+      if (isNaN(numero) || numero < 1 || numero > STATUS_PROJETO.length) {
+        return {
+          mensagem: `❌ Número inválido. Digite um número entre 1 e ${STATUS_PROJETO.length}.`,
+          finalizado: false
+        };
+      }
+      dadosArea.status = STATUS_PROJETO[numero - 1];
+      
+      // Verificar se há mais áreas para processar
+      const nextIndex = areaIndex + 1;
+      if (nextIndex < areasSelecionadas.length) {
+        // Próxima área
+        (this.state as any).areaIndex = nextIndex;
+        (this.state as any).areaAtual = areasSelecionadas[nextIndex];
+        
+        let mensagem = `✅ Área ${areaIndex + 1} completa!\n\n`;
+        mensagem += `🏢 *Área ${nextIndex + 1} de ${areasSelecionadas.length}: ${areasSelecionadas[nextIndex]}*\n\n`;
+        mensagem += `📅 *Digite a DATA DE INÍCIO para esta área*\n\n`;
+        mensagem += `Formato: DD/MM/AAAA\n`;
+        mensagem += `_Digite a data de início_`;
+        
+        return { mensagem, finalizado: false };
+      } else {
+        // Todas as áreas processadas, ir para confirmação
+    this.state.step = 'confirmacao';
+
+        let mensagem = `✅ Todas as áreas preenchidas!\n\n`;
     mensagem += `📋 *CONFIRMAÇÃO DO CADASTRO*\n\n`;
     mensagem += this.generateSummary();
     mensagem += `\n\n*Confirma os dados?*\n\n`;
@@ -1011,6 +1340,14 @@ export class EngineerProjectFlow {
     mensagem += `_Digite o número da opção_`;
 
     return { mensagem, finalizado: false };
+      }
+    }
+    
+    return {
+      mensagem: '❌ Erro no fluxo de áreas.',
+      finalizado: true,
+      erro: 'Estado inválido'
+    };
   }
 
   private async stepStatusProjeto(msg: string): Promise<FlowResult> {
@@ -1036,15 +1373,15 @@ export class EngineerProjectFlow {
     // Decidir próximo passo baseado no período
     if (this.state.periodo === 'manha') {
       // Período manhã: vai para previsão do dia
-      this.state.step = 'previsao_dia';
-      
-      // Buscar opções de previsão conforme status (menu dinâmico)
-      const opcoes = this.sheetService.getPrevisoesPorStatus(status);
-      
-      mensagem += `📝 *PREVISÃO PARA O DIA*\n\n`;
-      mensagem += `O que você planeja realizar hoje?\n\n`;
-      mensagem += this.formatOptions(opcoes);
-      mensagem += `\n_Digite o número da opção_`;
+    this.state.step = 'previsao_dia';
+
+    // Buscar opções de previsão conforme status (menu dinâmico)
+    const opcoes = this.sheetService.getPrevisoesPorStatus(status);
+
+    mensagem += `📝 *PREVISÃO PARA O DIA*\n\n`;
+    mensagem += `O que você planeja realizar hoje?\n\n`;
+    mensagem += this.formatOptions(opcoes);
+    mensagem += `\n_Digite o número da opção_`;
     } else if (this.state.periodo === 'noite') {
       // Período noite: vai para feito do dia
       this.state.step = 'feito_dia';
@@ -1357,7 +1694,7 @@ export class EngineerProjectFlow {
             erro: 'Data inválida'
           };
         }
-
+        
         // Calcular prazos em dias úteis (diferença entre as datas)
         const prazoInterno = this.sheetService.calculateBusinessDays(dataInicio, dataPrevisaoInterna);
         const prazoCliente = this.sheetService.calculateBusinessDays(dataInicio, dataFinalCliente);
@@ -1379,43 +1716,146 @@ export class EngineerProjectFlow {
           // Buscar ou criar engenheiro
           const engenheiro = await supabase.criarOuBuscarEngenheiro(
             this.whatsapp,
-            this.state.engineerName
+            this.state.engineerName || 'Engenheiro'
           );
           
-          if (engenheiro) {
-            // Criar projeto no banco
-            const projetoSalvo = await supabase.criarProjeto(
-              this.state.projectData,
-              engenheiro.id
-            );
-            
-            if (projetoSalvo) {
-              console.log('✅ Projeto salvo no Supabase');
-              
-              let mensagem = `✅ *Projeto criado com sucesso!*\n\n`;
-              mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
-              mensagem += `👤 Cliente: ${this.state.projectData['Cliente']}\n`;
-              mensagem += `🏗️ Obra: ${this.state.projectData['Obra']}\n`;
-              mensagem += `📊 Tipo: ${this.state.projectData['Tipo de Projeto']}\n\n`;
-              mensagem += `📅 *Datas:*\n`;
-              mensagem += `  • Início: ${this.state.projectData['Data de Início']}\n`;
-              mensagem += `  • Previsão interna: ${this.state.projectData['Data de Previsão de entrega (interna)']}\n`;
-              mensagem += `  • Final cliente: ${this.state.projectData['Data Final (acordado com o cliente)']}\n\n`;
-              mensagem += `⏱️ *Prazos (calculados):*\n`;
-              mensagem += `  • Prazo interno: ${prazoInterno} dias úteis\n`;
-              mensagem += `  • Prazo cliente: ${prazoCliente} dias úteis\n\n`;
-              mensagem += `_✅ Dados salvos no banco de dados_\n`;
-              mensagem += `_🔄 Planilhas serão atualizadas automaticamente (até 5min)_`;
+          if (!engenheiro) {
+            return {
+              mensagem: `❌ Erro ao buscar/criar engenheiro`,
+              finalizado: true,
+              erro: 'Engenheiro não encontrado'
+            };
+          }
 
-              return { mensagem, finalizado: true };
+          // Criar projeto básico (sem engenheiro_id - novo schema)
+          const projetoSalvo = await supabase.criarProjeto(
+            this.state.projectCode!,
+            this.state.projectData['Cliente']!,
+            this.state.projectData['Descrição do projeto']
+          );
+          
+          if (!projetoSalvo) {
+            return {
+              mensagem: `❌ Erro ao criar projeto no banco de dados`,
+              finalizado: true,
+              erro: 'Erro ao criar projeto no Supabase'
+            };
+          }
+
+          console.log('✅ Projeto básico criado, criando atribuições...');
+
+          // Criar atribuições para cada área selecionada
+          const areasSelecionadas = (this.state as any).areasSelecionadas || [];
+          const atribuicoesCriadas: string[] = [];
+          const erros: string[] = [];
+
+          for (let i = 0; i < areasSelecionadas.length; i++) {
+            const dadosArea = (this.state as any)[`dados_area_${i}`];
+            if (!dadosArea) {
+              erros.push(`Área ${i + 1}: dados não encontrados`);
+              continue;
+            }
+
+            // Mapear nome da área da planilha para código do banco
+            // A lista AREAS_PROJETO tem nomes como "elétrica", "hidrossanitário"
+            // O banco tem códigos como "E1", "H1", "CL1", etc.
+            // Por enquanto, vamos buscar área por descrição ou criar mapeamento
+            const areaNome = dadosArea.area.toLowerCase();
+            
+            // Mapeamento nome planilha → código banco
+            // (Este mapeamento precisa ser ajustado conforme as áreas reais do banco)
+            const areaMap: Record<string, string> = {
+              'elétrica': 'E1',
+              'hidrossanitário': 'H1',
+              'climatização': 'CL1',
+              'telecom': 'T1',
+              'gás': 'G1',
+              'drenagem': 'H1', // Pode ser H ou outra categoria
+              'rede de água': 'H1',
+              'esgoto': 'H1',
+              'solar fotovoltaico': 'E1',
+              'hidráulico piscina': 'H1',
+            };
+            
+            let areaCodigo = areaMap[areaNome] || 'E1'; // Fallback para E1
+            
+            // Tentar buscar área no banco para validar
+            const supabase = getSupabaseService();
+            const areaBD = await supabase.buscarAreaPorCodigo(areaCodigo);
+            if (!areaBD) {
+              console.warn(`⚠️ Área ${areaCodigo} não encontrada no banco, usando fallback`);
+              // Tentar buscar por descrição (se método existir)
+              // Por enquanto, usar o código mapeado mesmo
+            }
+
+            // Mapear status para código
+            const statusNome = dadosArea.status.toLowerCase();
+            const statusMap: Record<string, string> = {
+              'em execução': 'EM_EXECUCAO',
+              'em aprovação': 'EM_APROVACAO',
+              'parado cliente': 'PARADO_CLIENTE',
+              'parado tecpred': 'PARADO_TECPRED',
+              'concluído': 'CONCLUIDO',
+              'aguardando início': 'AGUARDANDO_INICIO',
+              'aguardando inf. cliente': 'AGUARDANDO_INF_CLIENTE',
+            };
+            const statusCodigo = statusMap[statusNome] || 'AGUARDANDO_INICIO';
+
+            const atribuicao = await supabase.atribuirAreaProjeto(
+              engenheiro.eng_id,
+              projetoSalvo.projeto_id,
+              areaCodigo,
+              dadosArea.data_inicio,
+              dadosArea.data_prevista,
+              statusCodigo
+            );
+
+            if (atribuicao) {
+              atribuicoesCriadas.push(dadosArea.area);
+              console.log(`✅ Atribuição criada: ${dadosArea.area}`);
+            } else {
+              erros.push(`Área ${dadosArea.area}: erro ao criar atribuição`);
             }
           }
+
+          if (atribuicoesCriadas.length === 0) {
+            return {
+              mensagem: `❌ Erro ao criar atribuições: ${erros.join(', ')}`,
+              finalizado: true,
+              erro: 'Erro ao criar atribuições'
+            };
+          }
+
+          console.log(`✅ ${atribuicoesCriadas.length} atribuição(ões) criada(s)`);
           
-          return {
-            mensagem: `❌ Erro ao salvar projeto no banco de dados`,
-            finalizado: true,
-            erro: 'Erro ao criar projeto no Supabase'
-          };
+          let mensagem = `✅ *Projeto criado com sucesso!*\n\n`;
+          mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
+          mensagem += `👤 Cliente: ${this.state.projectData['Cliente']}\n`;
+          mensagem += `🏗️ Obra: ${this.state.projectData['Obra']}\n`;
+          mensagem += `📊 Tipo: ${this.state.projectData['Tipo de Projeto']}\n\n`;
+          mensagem += `🏢 *Áreas atribuídas:*\n`;
+          atribuicoesCriadas.forEach((area, idx) => {
+            const dadosArea = (this.state as any)[`dados_area_${idx}`];
+            mensagem += `  • ${area}: Início ${dadosArea.data_inicio}, Previsão ${dadosArea.data_prevista}\n`;
+          });
+          mensagem += `\n📅 *Datas do projeto:*\n`;
+          mensagem += `  • Início: ${this.state.projectData['Data de Início']}\n`;
+          mensagem += `  • Previsão interna: ${this.state.projectData['Data de Previsão de entrega (interna)']}\n`;
+          mensagem += `  • Final cliente: ${this.state.projectData['Data Final (acordado com o cliente)']}\n\n`;
+          mensagem += `⏱️ *Prazos (calculados):*\n`;
+          mensagem += `  • Prazo interno: ${prazoInterno} dias úteis\n`;
+          mensagem += `  • Prazo cliente: ${prazoCliente} dias úteis\n\n`;
+          
+          if (erros.length > 0) {
+            mensagem += `⚠️ *Avisos:*\n`;
+            erros.forEach(erro => mensagem += `  • ${erro}\n`);
+            mensagem += `\n`;
+          }
+          
+          mensagem += `_✅ Dados salvos no banco de dados_\n`;
+          mensagem += `_🔄 Planilhas serão atualizadas automaticamente (até 5min)_`;
+
+          return { mensagem, finalizado: true };
         } else {
           // Fallback: salvar na planilha se Supabase não configurado
           console.log('⚠️ Supabase não configurado, salvando apenas na planilha...');
@@ -1471,31 +1911,39 @@ export class EngineerProjectFlow {
             'Previsão para o dia': dailyData['Previsão para o dia']
           };
 
-          // Salvar APENAS no Supabase
-          if (supabase.isConnected()) {
-            const projeto = await supabase.buscarProjetoPorCodigo(this.state.projectCode!);
-            
-            if (projeto) {
-              const atualizacao = await supabase.registrarAtualizacaoManha(projeto.id, {
-                status: morningData['Status do projeto'],
-                previsao: morningData['Previsão para o dia']
-              });
+          // Salvar APENAS no Supabase usando eng_projeto_id
+          if (supabase.isConnected() && this.state.selectedAtribuicaoId) {
+            // Mapear status para código
+            const statusNome = morningData['Status do projeto'].toLowerCase();
+            const statusMap: Record<string, string> = {
+              'em execução': 'EM_EXECUCAO',
+              'em aprovação': 'EM_APROVACAO',
+              'parado cliente': 'PARADO_CLIENTE',
+              'parado tecpred': 'PARADO_TECPRED',
+              'concluído': 'CONCLUIDO',
+              'aguardando início': 'AGUARDANDO_INICIO',
+              'aguardando inf. cliente': 'AGUARDANDO_INF_CLIENTE',
+            };
+            const statusCodigo = statusMap[statusNome] || 'EM_EXECUCAO';
+
+            const previsao = await supabase.registrarPrevisaoDia(
+              this.state.selectedAtribuicaoId,
+              morningData['Previsão para o dia'],
+              statusCodigo
+            );
               
-              if (atualizacao) {
-                salvouSupabase = true;
+            if (previsao) {
+              salvouSupabase = true;
             mensagem = `✅ *Atualização matinal salva com sucesso!*\n\n`;
             mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
             mensagem += `📊 Status: ${morningData['Status do projeto']}\n`;
             mensagem += `📝 Previsão: ${morningData['Previsão para o dia']}\n\n`;
-                mensagem += `_✅ Salvo no banco de dados_\n`;
-                mensagem += `_🔄 Planilhas serão atualizadas automaticamente_`;
-              } else {
-                mensagem = `❌ Erro ao salvar atualização matinal`;
-              }
+              mensagem += `_✅ Salvo no banco de dados_\n`;
+              mensagem += `_🔄 Planilhas serão atualizadas automaticamente_`;
             } else {
-              mensagem = `❌ Projeto não encontrado: ${this.state.projectCode}`;
+              mensagem = `❌ Erro ao salvar atualização matinal`;
             }
-          } else {
+          } else if (!supabase.isConnected()) {
             // Fallback: planilha
             result = await this.sheetService.updateMorningData(this.state.projectCode!, morningData);
             if (result.success) {
@@ -1505,6 +1953,8 @@ export class EngineerProjectFlow {
             } else {
               mensagem = `❌ Erro ao salvar atualização`;
             }
+          } else {
+            mensagem = `❌ Atribuição não encontrada. Tente novamente.`;
           }
         } else if (this.state.mode === 'update_night') {
           // Atualização da noite
@@ -1517,43 +1967,30 @@ export class EngineerProjectFlow {
             'Observações': this.state.projectData['Observações']
           };
 
-          // Salvar APENAS no Supabase
-          if (supabase.isConnected()) {
-            const projeto = await supabase.buscarProjetoPorCodigo(this.state.projectCode!);
-            
-            if (projeto) {
-              // Obter percentual da etapa
-              const etapaInfo = ETAPAS_PROJETO.find(e => e.nome === nightData['Etapa']);
-              const percentual = etapaInfo?.percentual || 0;
+          // Salvar APENAS no Supabase usando eng_projeto_id
+          if (supabase.isConnected() && this.state.selectedAtribuicaoId) {
+            const feito = await supabase.registrarFeitoDia(
+              this.state.selectedAtribuicaoId,
+              nightData['Feito ao final do dia'],
+              nightData['Necessitou de retrabalho?'] === 'sim',
+              nightData['motivo da revisão']
+            );
               
-              const atualizacao = await supabase.registrarAtualizacaoNoite(projeto.id, {
-                feito: nightData['Feito ao final do dia'],
-                retrabalho: nightData['Necessitou de retrabalho?'] === 'sim',
-                motivoRetrabalho: nightData['motivo da revisão'],
-                etapa: nightData['Etapa'],
-                percentual: percentual,
-                observacoes: nightData['Observações'] || ''
-              });
-              
-              if (atualizacao) {
-                salvouSupabase = true;
-            mensagem = `✅ *Atualização noturna salva com sucesso!*\n\n`;
-            mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
-            mensagem += `✔️ Feito: ${nightData['Feito ao final do dia']}\n`;
-            mensagem += `🔄 Retrabalho: ${nightData['Necessitou de retrabalho?']}\n`;
-            mensagem += `📍 Etapa: ${nightData['Etapa']}\n`;
-            if (nightData['Observações']) {
-              mensagem += `📝 Observações: ${nightData['Observações']}\n`;
-            }
-                mensagem += `\n_✅ Salvo no banco de dados_\n`;
-                mensagem += `_🔄 Planilhas serão atualizadas automaticamente_`;
-              } else {
-                mensagem = `❌ Erro ao salvar atualização noturna`;
+            if (feito) {
+              salvouSupabase = true;
+              mensagem = `✅ *Atualização noturna salva com sucesso!*\n\n`;
+              mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
+              mensagem += `✔️ Feito: ${nightData['Feito ao final do dia']}\n`;
+              mensagem += `🔄 Retrabalho: ${nightData['Necessitou de retrabalho?']}\n`;
+              if (nightData['Observações']) {
+                mensagem += `📝 Observações: ${nightData['Observações']}\n`;
               }
+              mensagem += `\n_✅ Salvo no banco de dados_\n`;
+              mensagem += `_🔄 Planilhas serão atualizadas automaticamente_`;
             } else {
-              mensagem = `❌ Projeto não encontrado: ${this.state.projectCode}`;
+              mensagem = `❌ Erro ao salvar atualização noturna`;
             }
-          } else {
+          } else if (!supabase.isConnected()) {
             // Fallback: planilha
             result = await this.sheetService.updateNightData(this.state.projectCode!, nightData);
             if (result.success) {
@@ -1563,6 +2000,8 @@ export class EngineerProjectFlow {
             } else {
               mensagem = `❌ Erro ao salvar atualização`;
             }
+          } else {
+            mensagem = `❌ Atribuição não encontrada. Tente novamente.`;
           }
         } else {
           // Fallback: atualização completa (modo antigo)
@@ -1703,14 +2142,29 @@ export class EngineerProjectFlow {
     let summary = '';
 
     if (this.state.mode === 'create') {
-      summary += `🆔 *Código:* ${this.state.projectData['Código do Projeto']}\n`;
+      summary += `🆔 *Código:* ${this.state.projectData['Código do Projeto'] || this.state.projectCode}\n`;
       summary += `👤 *Cliente:* ${this.state.projectData['Cliente']}\n`;
       summary += `📞 *Contato:* ${this.state.projectData['Contato']}\n`;
       summary += `🏗️ *Obra:* ${this.state.projectData['Obra']}\n`;
-      summary += `🏢 *Área:* ${this.state.projectData['Área']}\n`;
+      
+      // Mostrar áreas selecionadas
+      const areasSelecionadas = (this.state as any).areasSelecionadas || [];
+      if (areasSelecionadas.length > 0) {
+        summary += `🏢 *Áreas:* ${areasSelecionadas.join(', ')}\n`;
+        // Mostrar dados de cada área
+        areasSelecionadas.forEach((area: string, idx: number) => {
+          const dadosArea = (this.state as any)[`dados_area_${idx}`];
+          if (dadosArea) {
+            summary += `   • ${area}: Início ${dadosArea.data_inicio || 'N/A'}, Previsão ${dadosArea.data_prevista || 'N/A'}, Status ${dadosArea.status || 'N/A'}\n`;
+          }
+        });
+      } else {
+        summary += `🏢 *Área:* ${this.state.projectData['Área'] || 'N/A'}\n`;
+      }
+      
       summary += `📊 *Tipo:* ${this.state.projectData['Tipo de Projeto']}\n`;
       summary += `📝 *Descrição:* ${this.state.projectData['Descrição do projeto']}\n`;
-      summary += `📅 *Data início:* ${this.state.projectData['Data de Início']}\n`;
+      summary += `📅 *Data início projeto:* ${this.state.projectData['Data de Início']}\n`;
       summary += `📅 *Data previsão interna:* ${this.state.projectData['Data de Previsão de entrega (interna)']}\n`;
       summary += `📅 *Data final cliente:* ${this.state.projectData['Data Final (acordado com o cliente)']}\n`;
     } else if (this.state.mode === 'update_morning') {

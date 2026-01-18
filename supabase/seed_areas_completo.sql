@@ -1,13 +1,8 @@
 -- =====================================================
--- SEED COMPLETO - ÁREAS DE TRABALHO
+-- SEED COMPLETO - ÁREAS DE TRABALHO (TIPOS DE PROJETO)
 -- Baseado na tabela "TIPO DE PROJETO" fornecida
+-- Usa ON CONFLICT para atualizar sem apagar dados existentes
 -- =====================================================
-
--- Remove áreas antigas (exemplo)
-DELETE FROM areas WHERE codigo IN (
-    'ELETRICO', 'HIDRAULICO', 'ESTRUTURAL', 'CLIMATIZACAO',
-    'PREVENCAO_INCENDIO', 'GAS', 'TELEFONIA', 'SPDA', 'AUTOMACAO'
-);
 
 -- =====================================================
 -- HIDRÁULICO (H1-H6)
