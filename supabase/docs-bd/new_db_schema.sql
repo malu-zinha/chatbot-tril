@@ -298,17 +298,17 @@ CREATE TABLE IF NOT EXISTS prazos (
     
     -- Cálculos automáticos (dias)
     prazo_interno_dias INTEGER GENERATED ALWAYS AS (
-        EXTRACT(DAY FROM (prazo_final_eng - data_inicio_projeto))
+        (prazo_final_eng - data_inicio_projeto)::INTEGER
     ) STORED,
     
     prazo_cliente_dias INTEGER GENERATED ALWAYS AS (
-        EXTRACT(DAY FROM (prazo_final_cliente - data_inicio_projeto))
+        (prazo_final_cliente - data_inicio_projeto)::INTEGER
     ) STORED,
     
     dias_atraso_inicio INTEGER GENERATED ALWAYS AS (
         CASE 
             WHEN data_inicio_esperada_cliente IS NOT NULL THEN
-                EXTRACT(DAY FROM (data_inicio_projeto - data_inicio_esperada_cliente))
+                (data_inicio_projeto - data_inicio_esperada_cliente)::INTEGER
             ELSE NULL
         END
     ) STORED,
@@ -668,7 +668,7 @@ SELECT
     -- Cálculo de dias de atraso
     CASE 
         WHEN ep.data_prevista < CURRENT_DATE AND ep.data_conclusao IS NULL 
-        THEN EXTRACT(DAY FROM (CURRENT_DATE - ep.data_prevista))::INTEGER
+        THEN (CURRENT_DATE - ep.data_prevista)::INTEGER
         ELSE 0
     END AS dias_atraso
     

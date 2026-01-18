@@ -12,12 +12,12 @@
 CREATE OR REPLACE FUNCTION dono_distribuir_tarefa(
     p_dono_id UUID,
     p_eng_id UUID,
+    p_area_codigo TEXT,
+    p_descricao_task TEXT,
     p_projeto_id UUID DEFAULT NULL,
     p_codigo_projeto TEXT DEFAULT NULL,
     p_cliente TEXT DEFAULT NULL,
-    p_area_codigo TEXT,
     p_complexidade_codigo TEXT DEFAULT 'MEDIA',
-    p_descricao_task TEXT,
     p_data_inicio_prevista DATE DEFAULT NULL,
     p_data_conclusao_prevista DATE DEFAULT NULL,
     p_observacoes_dono TEXT DEFAULT NULL
@@ -25,7 +25,7 @@ CREATE OR REPLACE FUNCTION dono_distribuir_tarefa(
 RETURNS JSON AS $$
 DECLARE
     v_task_id UUID;
-    v_area_id INTEGER;
+    v_area_id UUID;
     v_complexidade_id INTEGER;
     v_eng_nome TEXT;
     v_area_descricao TEXT;

@@ -377,21 +377,45 @@ export class EngineerSheetService {
 
       console.log(`🔍 DEBUG - Total de linhas lidas: ${data.length}`);
 
-      // Mapear para formato simplificado
-      const projects = data
+      // NOVO SCHEMA: Múltiplas linhas podem ter o mesmo código (diferentes áreas)
+      // Agrupar por código e criar uma entrada por projeto+área
+      const projectsMap = new Map<string, Project[]>();
+      
+      data
         .filter(row => row['Código do Projeto']) // Só projetos com código
-        .map(row => ({
-          codigo: row['Código do Projeto'] || '',
+        .forEach(row => {
+          const codigo = row['Código do Projeto'] || '';
+          const area = row['Área'] || '';
+          
+          // Criar chave única: código + área (para diferenciar múltiplas áreas do mesmo projeto)
+          const key = `${codigo}::${area}`;
+          
+          if (!projectsMap.has(key)) {
+            projectsMap.set(key, []);
+          }
+          
+          projectsMap.get(key)!.push({
+            codigo,
           cliente: row['Cliente'] || '',
           obra: row['Obra'] || '',
-          area: row['Área'] || '',
+            area,
           tipo: row['Tipo de Projeto'] || '',
           descricao: row['Descrição do projeto'] || '',
           status: row['Status do projeto'] || '',
           etapa: row['Etapa'] || ''
-        }));
+          });
+        });
 
-      console.log(`🔍 DEBUG - Projetos com código válido: ${projects.length}`);
+      // Converter map para array (uma entrada por projeto+área)
+      const projects: Project[] = [];
+      projectsMap.forEach((projs) => {
+        // Se houver múltiplas linhas com mesmo código+área, pegar a primeira
+        if (projs.length > 0) {
+          projects.push(projs[0]);
+        }
+      });
+
+      console.log(`🔍 DEBUG - Projetos únicos (código+área): ${projects.length}`);
       
       return projects;
     } catch (error: any) {
@@ -404,15 +428,39 @@ export class EngineerSheetService {
   // BUSCAR PROJETO POR CÓDIGO
   // =====================================================
 
-  async getProject(projectCode: string): Promise<ProjectData | null> {
+  async getProject(projectCode: string, area?: string): Promise<ProjectData | null> {
     try {
+      // NOVO SCHEMA: Se área fornecida, buscar linha específica (projeto + área)
+      // Se não, buscar primeira linha com o código
+      if (area) {
+        // Buscar todas as linhas com o código e filtrar por área
+        const dataRange = `${this.sheetName}!${this.range}`;
+        const headerRange = `${this.sheetName}!${this.getHeaderRange()}`;
+        
+        const data = await this.sheetsService.readSheetAsObjectsWithSeparateHeaders(
+          this.spreadsheetId,
+          dataRange,
+          headerRange
+        );
+        
+        const linha = data.find(row => 
+          row['Código do Projeto'] === projectCode && 
+          row['Área'] === area
+        );
+        
+        if (linha) {
+          return linha as ProjectData;
+        }
+      }
+      
+      // Fallback: buscar primeira linha com o código (compatibilidade)
       const result = await this.sheetsService.findRowByID(
         this.spreadsheetId,
         this.sheetName,
         projectCode,
         this.range,
-        'Código do Projeto', // Nova planilha usa este nome
-        this.getHeaderRange() // Passar header range separado
+        'Código do Projeto',
+        this.getHeaderRange()
       );
 
       if (!result) {

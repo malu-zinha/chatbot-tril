@@ -88,141 +88,160 @@ async function syncProjetosParaPlanilha(config: SheetConfig): Promise<void> {
       return;
     }
 
-    // 1. Buscar dados do Supabase
-    let query = `
-      SELECT 
-        p.*,
-        e.nome as engenheiro_nome,
-        e.whatsapp as engenheiro_whatsapp,
-        (
-          SELECT previsao_dia 
-          FROM atualizacoes_diarias 
-          WHERE projeto_id = p.id 
-          ORDER BY data DESC 
-          LIMIT 1
-        ) as ultima_previsao,
-        (
-          SELECT feito_dia 
-          FROM atualizacoes_diarias 
-          WHERE projeto_id = p.id 
-          ORDER BY data DESC 
-          LIMIT 1
-        ) as ultimo_feito,
-        (
-          SELECT necessitou_retrabalho 
-          FROM atualizacoes_diarias 
-          WHERE projeto_id = p.id 
-          ORDER BY data DESC 
-          LIMIT 1
-        ) as ultimo_retrabalho,
-        (
-          SELECT motivo_revisao 
-          FROM atualizacoes_diarias 
-          WHERE projeto_id = p.id 
-          ORDER BY data DESC 
-          LIMIT 1
-        ) as ultimo_motivo_retrabalho,
-        (
-          SELECT data 
-          FROM atualizacoes_diarias 
-          WHERE projeto_id = p.id AND necessitou_retrabalho = true
-          ORDER BY data DESC 
-          LIMIT 1
-        ) as ultima_data_retrabalho,
-        (
-          SELECT observacoes 
-          FROM atualizacoes_diarias 
-          WHERE projeto_id = p.id 
-          ORDER BY data DESC 
-          LIMIT 1
-        ) as ultimas_observacoes
-      FROM projetos p
-      LEFT JOIN engenheiros e ON p.engenheiro_id = e.id
-      WHERE p.ativo = true
-    `;
-
-    // Filtrar por engenheiro se especificado
+    // NOVO SCHEMA: Buscar atribuições (engenheiros_projetos) via view consolidada
+    // Cada atribuição = uma linha na planilha (mesmo projeto pode ter múltiplas linhas se tiver múltiplas áreas)
+    
+    // 1. Buscar engenheiro por WhatsApp se filtro especificado
+    let eng_id: string | null = null;
     if (config.engenheiroWhatsapp) {
-      query += ` AND e.whatsapp = '${config.engenheiroWhatsapp}'`;
+      const engenheiro = await supabase.buscarEngenheiroPorWhatsapp(config.engenheiroWhatsapp);
+      if (engenheiro) {
+        eng_id = engenheiro.eng_id;
+      } else {
+        console.log(`   ⚠️  Engenheiro não encontrado: ${config.engenheiroWhatsapp}`);
+        return;
+      }
     }
 
-    query += ` ORDER BY p.created_at DESC`;
-
-    // Executar query (usando método nativo do Supabase)
-    const { data: projetos, error } = await supabase['supabase']
-      .from('projetos')
-      .select(`
-        *,
-        engenheiro:engenheiros(nome, whatsapp)
-      `)
-      .eq('ativo', true)
-      .order('created_at', { ascending: false });
+    // 2. Buscar atribuições usando métodos do supabaseService
+    let atribuicoes: any[] = [];
+    
+    if (eng_id) {
+      // Buscar atribuições do engenheiro específico
+      const atribs = await supabase.listarAtribuicoesEngenheiro(eng_id);
+      
+      // Buscar nome do engenheiro uma vez
+      const engenheiro = await supabase.buscarEngenheiroPorId(eng_id);
+      const engenheiroNome = engenheiro?.nome || '';
+      
+      // Enriquecer com dados de projeto, área e status
+      for (const atrib of atribs) {
+        // Buscar projeto por ID (UUID)
+        const projetoData = await supabase.buscarProjetoPorId(atrib.projeto_id);
+        
+        const area = await supabase.buscarAreaPorId(atrib.area_id);
+        const status = atrib.status_id ? await supabase.buscarStatusPorId(atrib.status_id) : null;
+        
+        atribuicoes.push({
+          id: atrib.id,
+          eng_id: atrib.eng_id,
+          projeto_id: atrib.projeto_id,
+          area_id: atrib.area_id,
+          codigo_projeto: projetoData?.codigo_projeto || '',
+          cliente: projetoData?.cliente || '',
+          engenheiro_nome: engenheiroNome,
+          area_codigo: area?.codigo || '',
+          area_descricao: area?.descricao || '',
+          status_id: atrib.status_id,
+          status_codigo: status?.codigo || '',
+          status_descricao: status?.descricao || '',
+          data_inicio: atrib.data_inicio,
+          data_prevista: atrib.data_prevista,
+          data_conclusao: atrib.data_conclusao,
+          percentual_andamento: atrib.percentual_andamento,
+          tempo_trabalho_dias: atrib.tempo_trabalho_dias,
+          observacoes: atrib.observacoes,
+          ativo: atrib.ativo,
+          created_at: atrib.created_at,
+        });
+      }
+    } else {
+      // Buscar todas as atribuições usando novo método
+      const todasAtribs = await supabase.listarTodasAtribuicoes();
+      
+      // Enriquecer cada uma
+      for (const atrib of todasAtribs) {
+        const projetoData = await supabase.buscarProjetoPorId(atrib.projeto_id);
+        
+        const engenheiro = await supabase.buscarEngenheiroPorId(atrib.eng_id);
+        const area = await supabase.buscarAreaPorId(atrib.area_id);
+        const status = atrib.status_id ? await supabase.buscarStatusPorId(atrib.status_id) : null;
+        
+        atribuicoes.push({
+          id: atrib.id,
+          eng_id: atrib.eng_id,
+          projeto_id: atrib.projeto_id,
+          area_id: atrib.area_id,
+          codigo_projeto: projetoData?.codigo_projeto || '',
+          cliente: projetoData?.cliente || '',
+          engenheiro_nome: engenheiro?.nome || '',
+          area_codigo: area?.codigo || '',
+          area_descricao: area?.descricao || '',
+          status_id: atrib.status_id,
+          status_codigo: status?.codigo || '',
+          status_descricao: status?.descricao || '',
+          data_inicio: atrib.data_inicio,
+          data_prevista: atrib.data_prevista,
+          data_conclusao: atrib.data_conclusao,
+          percentual_andamento: atrib.percentual_andamento,
+          tempo_trabalho_dias: atrib.tempo_trabalho_dias,
+          observacoes: atrib.observacoes,
+          ativo: atrib.ativo,
+          created_at: atrib.created_at,
+        });
+      }
+    }
 
     if (error) {
-      console.error('   ❌ Erro ao buscar projetos:', error);
+      console.error('   ❌ Erro ao buscar atribuições:', error);
       return;
     }
 
-    if (!projetos || projetos.length === 0) {
-      console.log('   ℹ️  Nenhum projeto encontrado');
+    if (!atribuicoes || atribuicoes.length === 0) {
+      console.log('   ℹ️  Nenhuma atribuição encontrada');
       return;
     }
 
-    // 2. Formatar dados para planilha (31 colunas)
+    console.log(`   📊 ${atribuicoes.length} atribuição(ões) encontrada(s)`);
+
+    // 3. Formatar dados para planilha (uma linha por atribuição)
     const rows: any[][] = [];
 
-    for (const proj of projetos) {
-      // Filtrar por engenheiro se necessário
-      if (config.engenheiroWhatsapp && 
-          proj.engenheiro?.whatsapp !== config.engenheiroWhatsapp) {
-        continue;
-      }
+    for (const atrib of atribuicoes) {
+      // Buscar última previsão, retrabalho e prazos usando métodos do supabaseService
+      const ultimaPrevisao = await supabase.buscarUltimaPrevisao(atrib.id);
+      const ultimoRetrabalho = await supabase.buscarUltimoRetrabalho(atrib.id);
+      const prazos = await supabase.buscarPrazos(atrib.id);
 
-      // Buscar última atualização diária
-      const { data: ultimaAtualizacao } = await supabase['supabase']
-        .from('atualizacoes_diarias')
-        .select('*')
-        .eq('projeto_id', proj.id)
-        .order('data', { ascending: false })
-        .limit(1)
-        .single();
+      // Mapear status_id para descrição
+      const statusDescricao = atrib.status_descricao || atrib.status_codigo || '';
+      
+      // Mapear area_id para descrição
+      const areaDescricao = atrib.area_descricao || atrib.area_codigo || '';
 
-      // Montar linha com as 31 colunas (A-AE)
+      // Montar linha com as 31 colunas (A-AE) - uma linha por atribuição
       const row = [
-        proj.codigo || '',                                      // A - Código do Projeto
-        proj.cliente || '',                                     // B - Cliente
-        proj.contato_cliente || '',                             // C - Contato
-        proj.tipo_obra || '',                                   // D - Obra
-        proj.area || '',                                        // E - Área
-        proj.engenheiro?.nome || '',                            // F - Eng. Responsável
-        proj.tipo_projeto || '',                                // G - Tipo de Projeto
-        proj.descricao_projeto || '',                           // H - Descrição do projeto
-        proj.complexidade || '',                                // I - Complexidade
-        proj.dias_estimados_interno || '',                      // J - Dias estimados (interno)
-        supabase.formatarDataParaExibicao(proj.data_inicio),   // K - Data de Início
-        supabase.formatarDataParaExibicao(proj.data_previsao_termino), // L - Data de Previsão
-        supabase.formatarDataParaExibicao(proj.data_final_cliente),    // M - Data Final Cliente
-        proj.prazo_interno_dias || '',                          // N - Prazo Interno (dias úteis)
-        proj.prazo_cliente_dias || '',                          // O - Prazo Cliente (dias úteis)
-        proj.dias_atraso || '0',                                // P - Dias de atraso
-        proj.status || '',                                      // Q - Status do projeto
-        ultimaAtualizacao?.previsao_dia || '',                  // R - Previsão para o dia
-        ultimaAtualizacao?.feito_dia || '',                     // S - Feito ao final do dia
-        ultimaAtualizacao?.necessitou_retrabalho ? 'sim' : 'não', // T - Necessitou de retrabalho?
-        ultimaAtualizacao?.motivo_revisao || '',                // U - motivo da revisão
-        supabase.formatarDataParaExibicao(
-          ultimaAtualizacao?.necessitou_retrabalho ? 
-            ultimaAtualizacao.data : null
-        ),                                                      // V - Data do registro do retrabalho
-        proj.etapa_atual || '',                                 // W - Etapa
-        proj.percentual_total || '0',                           // X - % executado
-        ultimaAtualizacao?.observacoes || proj.observacoes || '', // Y - Observações
-        proj.metrica_retrabalho || '0',                         // Z - Métrica de retrabalho
-        proj.dias_estimados_interno || '',                      // AA - Dias estimados (dias úteis) [duplicado]
-        supabase.formatarDataParaExibicao(proj.data_entrega_real), // AB - Data de entrega real
-        proj.lead_time_dias || '',                              // AC - Lead Time (dias úteis)
-        proj.dias_parado_cliente || '0',                        // AD - Dias Parado cliente
-        proj.dias_parado_tecpred || '0'                         // AE - Dias parado TecPred
+        atrib.codigo_projeto || '',                             // A - Código do Projeto
+        atrib.cliente || '',                                     // B - Cliente
+        '',                                                      // C - Contato (não está na view, pode adicionar depois)
+        '',                                                      // D - Obra (não está na view, pode adicionar depois)
+        areaDescricao,                                          // E - Área (da tabela areas)
+        atrib.engenheiro_nome || '',                            // F - Eng. Responsável
+        '',                                                      // G - Tipo de Projeto (não está na view)
+        '',                                                      // H - Descrição do projeto
+        '',                                                      // I - Complexidade
+        atrib.tempo_trabalho_dias?.toString() || '',            // J - Dias estimados (interno) - tempo_trabalho_dias
+        supabase.formatarDataParaExibicao(atrib.data_inicio),  // K - Data de Início
+        supabase.formatarDataParaExibicao(atrib.data_prevista), // L - Data de Previsão
+        prazos ? supabase.formatarDataParaExibicao(prazos.prazo_final_cliente) : '', // M - Data Final Cliente
+        prazos ? (prazos.prazo_interno_dias?.toString() || '') : '', // N - Prazo Interno (dias úteis)
+        prazos ? (prazos.prazo_cliente_dias?.toString() || '') : '', // O - Prazo Cliente (dias úteis)
+        '',                                                      // P - Dias de atraso (calcular depois)
+        statusDescricao,                                        // Q - Status do projeto (da tabela status_codes)
+        ultimaPrevisao?.previsao_texto || '',                   // R - Previsão para o dia
+        ultimaPrevisao?.feito_texto || '',                      // S - Feito ao final do dia
+        ultimoRetrabalho ? 'sim' : 'não',                       // T - Necessitou de retrabalho?
+        ultimoRetrabalho?.motivo_retrabalho || '',              // U - motivo da revisão
+        supabase.formatarDataParaExibicao(ultimoRetrabalho?.data_retrabalho), // V - Data do registro do retrabalho
+        statusDescricao,                                        // W - Etapa (mesmo que status por enquanto)
+        atrib.percentual_andamento?.toString() || '0',          // X - % executado
+        atrib.observacoes || '',                                 // Y - Observações
+        '',                                                      // Z - Métrica de retrabalho (calcular depois)
+        atrib.tempo_trabalho_dias?.toString() || '',            // AA - Dias estimados (dias úteis) [duplicado]
+        supabase.formatarDataParaExibicao(atrib.data_conclusao), // AB - Data de entrega real
+        '',                                                      // AC - Lead Time (calcular depois)
+        '',                                                      // AD - Dias Parado cliente
+        ''                                                       // AE - Dias parado TecPred
       ];
 
       rows.push(row);
@@ -264,11 +283,37 @@ async function syncDashboardCEO(): Promise<void> {
       return;
     }
 
-    // Usar view consolidada do banco
-    const { data: projetos, error } = await supabase['supabase']
-      .from('view_projetos_completo')
-      .select('*')
-      .order('data_inicio', { ascending: false });
+    // Buscar todas as atribuições ativas
+    const todasAtribs = await supabase.listarTodasAtribuicoes();
+    
+    if (!todasAtribs || todasAtribs.length === 0) {
+      console.log('   ℹ️  Nenhuma atribuição encontrada');
+      return;
+    }
+    
+    // Enriquecer com dados de projeto, área, status e engenheiro
+    const projetos: any[] = [];
+    for (const atrib of todasAtribs) {
+      const projetoData = await supabase.buscarProjetoPorId(atrib.projeto_id);
+      
+      const engenheiro = await supabase.buscarEngenheiroPorId(atrib.eng_id);
+      const area = await supabase.buscarAreaPorCodigo(atrib.area_id.toString());
+      const status = atrib.status_id ? await supabase.buscarStatusPorCodigo(atrib.status_id.toString()) : null;
+      
+      projetos.push({
+        codigo: projetoData?.codigo_projeto || '',
+        cliente: projetoData?.cliente || '',
+        engenheiro_nome: engenheiro?.nome || '',
+        area: area?.descricao || '',
+        status: status?.descricao || '',
+        percentual_total: atrib.percentual_andamento,
+        etapa_atual: status?.descricao || '',
+        data_inicio: atrib.data_inicio,
+        data_previsao_termino: atrib.data_prevista,
+        dias_atraso: '0',
+        metrica_retrabalho: '0'
+      });
+    }
 
     if (error) {
       console.error('   ❌ Erro ao buscar dashboard:', error);
