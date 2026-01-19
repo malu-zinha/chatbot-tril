@@ -57,60 +57,58 @@ const STATUS_PARA_ETAPA: { [key: string]: string } = {
 
 type FlowStep =
   | 'inicio'
-  | 'escolher_acao'  // Agora com 3 opções: Criar, Editar, Notificações
+  | 'escolher_acao'
   
-  // Fluxo de Criação (Modo A)
-  | 'cliente'
-  | 'contato'
-  | 'obra'
-  | 'area_projeto'
-  | 'tipo_projeto'
-  | 'data_inicio'              // NOVO: data de início manual
-  | 'data_previsao_interna'    // NOVO: data previsão interna manual
-  | 'data_final_cliente'       // Data final cliente manual
+  // Notificacao Manha
+  | 'escolher_projeto_manha'
+  | 'escolher_area_manha'
+  | 'status_atual_manha'
+  | 'previsao_dia'
   
-  // Fluxo de Edição (Modo B)
-  | 'escolher_projeto_edicao'     // NOVO
-  | 'escolher_categoria'          // NOVO
-  | 'escolher_campo'              // NOVO
-  | 'novo_valor'                  // NOVO
+  // Notificacao Noite
+  | 'escolher_projeto_noite'
+  | 'escolher_area_noite'
+  | 'feito_dia'
+  | 'retrabalho_pergunta'
+  | 'retrabalho_motivo'
+  | 'observacoes_pergunta'
+  | 'observacoes_texto'
   
-  // Fluxo de Notificações (Modo C)
-  | 'escolher_tipo_notificacao'   // NOVO: manhã ou noite
-  | 'escolher_projeto_notif'      // NOVO
-  | 'status_projeto'              // Pergunta o status (manhã e noite)
-  | 'previsao_dia'                // Apenas manhã
-  | 'feito_dia'                   // Apenas noite
-  | 'retrabalho_pergunta'         // Apenas noite
-  | 'retrabalho_motivo'           // Apenas noite (se teve retrabalho)
-  // REMOVIDO: 'etapa_projeto' - Agora é automático baseado no status
-  | 'observacoes_pergunta'        // Apenas noite
-  | 'observacoes_texto'           // Apenas noite (se quiser adicionar)
-  
+  // Edicao
+  | 'escolher_projeto_edicao'
+  | 'escolher_area_edicao'
+  | 'escolher_campo'
+  | 'novo_valor'
   | 'confirmacao'
-  | 'salvar'
   | 'fim';
 
 interface FlowState {
   step: FlowStep;
-  mode: 'create' | 'edit' | 'notification' | 'update_morning' | 'update_night' | null;  // ATUALIZADO
+  mode: 'notif_manha' | 'notif_noite' | 'edit' | null;
   periodo?: 'manha' | 'noite';
   projectCode?: string;
   projectData: Partial<ProjectData>;
-  availableProjects?: Project[];
-  availableAtribuicoes?: Array<{  // NOVO: atribuições do Supabase
+  availableAtribuicoes?: Array<{
     id: string;  // eng_projeto_id
     codigo: string;
     cliente: string;
     area: string;
+    area_id: string;  // UUID da area
     status: string;
     projeto_id: string;  // UUID do projeto
   }>;
-  selectedAtribuicaoId?: string;  // NOVO: eng_projeto_id selecionado
+  selectedAtribuicaoId?: string;  // eng_projeto_id selecionado
+  selectedAreaId?: string;  // area_id selecionado
   engineerName?: string;
-  editCategory?: string;      // NOVO: categoria selecionada na edição
-  editField?: string;          // NOVO: campo sendo editado
-  originalValue?: string;      // NOVO: valor original do campo sendo editado
+  editField?: string;
+  originalValue?: string;
+  // Dados temporarios das notificacoes
+  statusAtual?: number;  // status_id
+  previsaoTexto?: string;
+  feitoTexto?: string;
+  teveRetrabalho?: boolean;
+  motivoRetrabalho?: string;
+  observacoesTexto?: string;
 }
 
 interface FlowResult {
@@ -156,34 +154,54 @@ export class EngineerProjectFlow {
     status: string;
     projeto_id: string;
   }>> {
+    console.log('🔍 [DEBUG] buscarAtribuicoesEngenheiro() iniciado');
+    console.log('🔍 [DEBUG] WhatsApp:', this.whatsapp);
+    console.log('🔍 [DEBUG] Supabase conectado?', this.supabase.isConnected());
+    
     // Tentar buscar do Supabase primeiro
     if (this.supabase.isConnected()) {
       try {
+        console.log('🔍 [DEBUG] Buscando engenheiro no Supabase...');
         const engenheiro = await this.supabase.buscarEngenheiroPorWhatsapp(this.whatsapp);
+        console.log('🔍 [DEBUG] Engenheiro encontrado?', engenheiro ? 'SIM' : 'NÃO');
+        
         if (engenheiro) {
+          console.log('🔍 [DEBUG] eng_id:', engenheiro.eng_id);
+          console.log('🔍 [DEBUG] Buscando atribuições...');
           const atribuicoes = await this.supabase.listarAtribuicoesEngenheiro(engenheiro.eng_id);
+          console.log('🔍 [DEBUG] Atribuições encontradas:', atribuicoes.length);
+          console.log('🔍 [DEBUG] Atribuições:', JSON.stringify(atribuicoes, null, 2));
           
           // Enriquecer com dados de projeto, área e status
           const atribuicoesEnriquecidas = [];
           for (const atrib of atribuicoes) {
+            console.log('🔍 [DEBUG] Processando atribuição:', atrib.id);
             const projeto = await this.supabase.buscarProjetoPorId(atrib.projeto_id);
+            console.log('🔍 [DEBUG] Projeto:', projeto?.codigo_projeto);
             const area = await this.supabase.buscarAreaPorId(atrib.area_id);
+            console.log('🔍 [DEBUG] Área:', area?.nome);
             const status = atrib.status_id ? await this.supabase.buscarStatusPorId(atrib.status_id) : null;
+            console.log('🔍 [DEBUG] Status:', status?.descricao);
             
             atribuicoesEnriquecidas.push({
               id: atrib.id,  // eng_projeto_id
               codigo: projeto?.codigo_projeto || '',
               cliente: projeto?.cliente || '',
               area: area?.descricao || '',
+              area_id: atrib.area_id,
               status: status?.descricao || '',
               projeto_id: atrib.projeto_id
             });
           }
           
+          console.log('🔍 [DEBUG] Atribuições enriquecidas:', atribuicoesEnriquecidas.length);
           return atribuicoesEnriquecidas;
+        } else {
+          console.log('❌ [DEBUG] Engenheiro não encontrado no Supabase');
         }
       } catch (error: any) {
-        console.error('Erro ao buscar atribuições do Supabase:', error);
+        console.error('❌ Erro ao buscar atribuições do Supabase:', error);
+        console.error('❌ Stack:', error.stack);
         // Fallback para planilha
       }
     }
@@ -249,79 +267,41 @@ export class EngineerProjectFlow {
         case 'escolher_acao':
           return await this.stepEscolherAcao(msg);
 
-        // Modo B: Edição
-        case 'escolher_projeto_edicao':
-          return await this.stepEscolherProjetoEdicao(msg);
-
-        case 'escolher_categoria':
-          return await this.stepEscolherCategoria(msg);
-
-        case 'escolher_campo':
-          return await this.stepEscolherCampo(msg);
-
-        case 'novo_valor':
-          return await this.stepNovoValor(msg);
-
-        // Modo C: Notificações
-        case 'escolher_tipo_notificacao':
-          return await this.stepEscolherTipoNotificacao(msg);
-
-        case 'escolher_projeto_notif':
-          return await this.stepEscolherProjetoNotif(msg);
-
-        // Modo A: Criação
-        case 'cliente':
-          return await this.stepCliente(msg);
-
-        case 'contato':
-          return await this.stepContato(msg);
-
-        case 'obra':
-          return await this.stepObra(msg);
-
-        case 'tipo_projeto':
-          return await this.stepTipoProjeto(msg);
-
-        case 'area_projeto':
-          return await this.stepAreaProjeto(msg);
-
-        case 'data_inicio':
-          return await this.stepDataInicio(msg);
-
-        case 'data_previsao_interna':
-          return await this.stepDataPrevisaoInterna(msg);
-
-        case 'data_final_cliente':
-          return await this.stepDataFinalCliente(msg);
-
-        case 'escolher_areas':
-          return await this.stepEscolherAreas(msg);
-
-        case 'dados_area':
-          return await this.stepDadosArea(msg);
-
-        case 'status_projeto':
-          return await this.stepStatusProjeto(msg);
-
+        // Notificacao Manha
+        case 'escolher_projeto_manha':
+          return await this.stepEscolherProjetoManha(msg);
+        case 'escolher_area_manha':
+          return await this.stepEscolherAreaManha(msg); // Processa escolha do projeto
+        case 'status_atual_manha':
+          return await this.stepStatusAtualManha(msg);
         case 'previsao_dia':
           return await this.stepPrevisaoDia(msg);
 
+        // Notificacao Noite
+        case 'escolher_projeto_noite':
+          return await this.stepEscolherProjetoNoite(msg);
+        case 'escolher_area_noite':
+          return await this.stepEscolherAreaNoite(msg); // Processa escolha do projeto
         case 'feito_dia':
           return await this.stepFeitoDia(msg);
-
         case 'retrabalho_pergunta':
           return await this.stepRetrabalhoPergunta(msg);
-
         case 'retrabalho_motivo':
           return await this.stepRetrabalhoMotivo(msg);
-
-        // REMOVIDO: case 'etapa_projeto' - Etapa agora é automática baseada no status
-
         case 'observacoes_pergunta':
           return await this.stepObservacoesPergunta(msg);
-
         case 'observacoes_texto':
           return await this.stepObservacoesTexto(msg);
+
+        // Edicao
+        case 'escolher_projeto_edicao':
+          return await this.stepEscolherProjetoEdicao(msg);
+        case 'escolher_area_edicao':
+          return await this.stepEscolherAreaEdicao(msg); // Não usado, mantido para compatibilidade
+        case 'escolher_campo':
+          return await this.stepEscolherCampo(msg);
+        case 'novo_valor':
+          return await this.stepNovoValor(msg);
 
         case 'confirmacao':
           return await this.stepConfirmacao(msg);
@@ -348,83 +328,34 @@ export class EngineerProjectFlow {
   // =====================================================
 
   private async stepInicio(): Promise<FlowResult> {
-    // Ir direto para escolher_acao sem mostrar menu
-    // (o menu já foi mostrado pelo messageHandler)
+    // O menu já foi mostrado pelo messageHandler
+    // Apenas aguardar escolha (1, 2 ou 3)
     this.state.step = 'escolher_acao';
-    
-    let mensagem = `📊 *Gestão de Projetos*\n\n`;
-    mensagem += `O que você deseja fazer?\n\n`;
-    mensagem += `1️⃣ Criar novo projeto\n`;
-    mensagem += `2️⃣ Editar projeto existente\n`;
-    mensagem += `3️⃣ Notificações diárias (Manhã/Noite)\n\n`;
-    mensagem += `_Digite o número da opção_`;
-
-    return { mensagem, finalizado: false };
+    return { mensagem: '', finalizado: false };
   }
 
   private async stepEscolherAcao(msg: string): Promise<FlowResult> {
     const opcao = msg.trim();
 
     if (opcao === '1') {
-      // MODO A: Criar novo projeto
-      this.state.mode = 'create';
-      this.state.step = 'cliente';
-      
-      let mensagem = `✅ *Criar Novo Projeto*\n\n`;
-      mensagem += `Vamos preencher os dados do projeto.\n`;
-      mensagem += `O código será gerado automaticamente.\n\n`;
-      mensagem += `👤 *Digite o nome do CLIENTE*\n\n`;
-      mensagem += `_Digite o nome completo do cliente_`;
-
-      return { mensagem, finalizado: false };
+      // Notificacao Matinal
+      this.state.mode = 'notif_manha';
+      this.state.periodo = 'manha';
+      this.state.step = 'escolher_projeto_manha';
+      return await this.stepEscolherProjetoManha('');
       
     } else if (opcao === '2') {
-      // MODO B: Editar projeto existente
-      this.state.mode = 'edit';
-      this.state.step = 'escolher_projeto_edicao';
-
-      // Buscar atribuições do engenheiro (Supabase ou planilha)
-      const atribuicoes = await this.buscarAtribuicoesEngenheiro();
-      
-      if (atribuicoes.length === 0) {
-        return {
-          mensagem: '❌ Nenhum projeto encontrado.\n\nCadastre um novo projeto primeiro.',
-          finalizado: true
-        };
-      }
-
-      // Agrupar por projeto (mesmo código pode ter múltiplas áreas)
-      const projetosAgrupados = this.agruparAtribuicoesPorProjeto(atribuicoes);
-      this.state.availableAtribuicoes = atribuicoes;
-
-      let mensagem = `✏️ *Editar Projeto Existente*\n\n`;
-      mensagem += `📋 Escolha o projeto que deseja editar:\n\n`;
-      
-      projetosAgrupados.forEach((proj, index) => {
-        mensagem += `${index + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
-        if (proj.areas.length > 0) {
-          mensagem += `   Áreas: ${proj.areas.join(', ')}\n`;
-        }
-        mensagem += `   Status: ${proj.status || 'N/A'}\n\n`;
-      });
-
-      mensagem += `_Digite o número do projeto_`;
-      return { mensagem, finalizado: false };
+      // Notificacao Noturna
+      this.state.mode = 'notif_noite';
+      this.state.periodo = 'noite';
+      this.state.step = 'escolher_projeto_noite';
+      return await this.stepEscolherProjetoNoite('');
       
     } else if (opcao === '3') {
-      // MODO C: Notificações diárias
-      this.state.mode = 'notification';
-      this.state.step = 'escolher_tipo_notificacao';
-
-      let mensagem = `📅 *Notificações Diárias*\n\n`;
-      mensagem += `Qual tipo de notificação deseja simular?\n\n`;
-      mensagem += `🌅 *1️⃣ Manhã*\n`;
-      mensagem += `   Status do projeto e previsão para o dia\n\n`;
-      mensagem += `🌙 *2️⃣ Noite*\n`;
-      mensagem += `   Feito hoje, retrabalho, etapa e observações\n\n`;
-      mensagem += `_Digite o número da opção_`;
-
-      return { mensagem, finalizado: false };
+      // Editar projeto
+      this.state.mode = 'edit';
+      this.state.step = 'escolher_projeto_edicao';
+      return await this.stepEscolherProjetoEdicao('');
       
     } else {
       return {
@@ -2186,5 +2117,606 @@ export class EngineerProjectFlow {
     }
 
     return summary;
+  }
+
+  // =====================================================
+  // NOVOS STEPS: NOTIFICAÇÃO MATINAL
+  // =====================================================
+
+  private async stepEscolherProjetoManha(msg: string): Promise<FlowResult> {
+    const atribuicoes = await this.buscarAtribuicoesEngenheiro();
+    
+    if (atribuicoes.length === 0) {
+      return {
+        mensagem: '❌ Você não tem projetos atribuídos.\n\nContate o dono da empresa.',
+        finalizado: true
+      };
+    }
+
+    this.state.availableAtribuicoes = atribuicoes;
+    this.state.step = 'escolher_area_manha'; // Avançar step para receber escolha
+    
+    let mensagem = `🌅 *Notificação Matinal*\n\n`;
+    mensagem += `📋 Escolha o projeto:\n\n`;
+    
+    atribuicoes.forEach((atrib, index) => {
+      mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}\n`;
+      mensagem += `   Área: ${atrib.area}\n`;
+      mensagem += `   Status: ${atrib.status || 'N/A'}\n\n`;
+    });
+
+    mensagem += `_Digite o número do projeto_`;
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepEscolherAreaManha(msg: string): Promise<FlowResult> {
+    const escolha = parseInt(msg.trim()) - 1;
+    
+    if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.availableAtribuicoes?.length || 0)) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.availableAtribuicoes?.length || 0}.`,
+        finalizado: false
+      };
+    }
+
+    const atribuicao = this.state.availableAtribuicoes![escolha];
+    this.state.selectedAtribuicaoId = atribuicao.id;
+    this.state.projectCode = atribuicao.codigo;
+
+    // Prosseguir para status
+    this.state.step = 'status_atual_manha';
+    return await this.stepStatusAtualManha('');
+  }
+
+  private async stepStatusAtualManha(msg: string): Promise<FlowResult> {
+    if (msg === '') {
+      // Primeira vez, mostrar lista de status
+      const statusList = await this.supabase.listarStatus();
+      
+      let mensagem = `📊 *Status Atual do Projeto*\n\n`;
+      mensagem += `Qual o status atual?\n\n`;
+      
+      statusList.forEach((status, index) => {
+        mensagem += `${index + 1}️⃣ ${status.descricao}\n`;
+      });
+      
+      mensagem += `\n_Digite o número do status_`;
+      
+      // Armazenar lista para referência
+      (this.state as any).statusList = statusList;
+      return { mensagem, finalizado: false };
+    }
+
+    const escolha = parseInt(msg.trim()) - 1;
+    const statusList = (this.state as any).statusList || [];
+    
+    if (isNaN(escolha) || escolha < 0 || escolha >= statusList.length) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${statusList.length}.`,
+        finalizado: false
+      };
+    }
+
+    this.state.statusAtual = statusList[escolha].status_id;
+    this.state.step = 'previsao_dia';
+    
+    return {
+      mensagem: `✅ Status: ${statusList[escolha].descricao}\n\n📝 *O que você pretende fazer hoje?*\n\n_Descreva brevemente a previsão para o dia_`,
+      finalizado: false
+    };
+  }
+
+  private async stepPrevisaoDia(msg: string): Promise<FlowResult> {
+    const previsao = msg.trim();
+    
+    if (previsao.length < 5) {
+      return {
+        mensagem: '❌ Previsão muito curta. Digite pelo menos 5 caracteres.',
+        finalizado: false
+      };
+    }
+
+    this.state.previsaoTexto = previsao;
+    
+    // Salvar no Supabase
+    const sucesso = await this.supabase.registrarPrevisaoDia(
+      this.state.selectedAtribuicaoId!,
+      this.state.statusAtual!,
+      previsao
+    );
+
+    if (!sucesso) {
+      return {
+        mensagem: '❌ Erro ao salvar previsão. Tente novamente.',
+        finalizado: true
+      };
+    }
+
+    let mensagem = `✅ *Notificação Matinal Registrada!*\n\n`;
+    mensagem += `📊 Projeto: ${this.state.projectCode}\n`;
+    mensagem += `📝 Previsão: ${previsao}\n\n`;
+    mensagem += `Tenha um ótimo dia de trabalho! 🚀`;
+
+    return { mensagem, finalizado: true };
+  }
+
+  // =====================================================
+  // NOVOS STEPS: NOTIFICAÇÃO NOTURNA
+  // =====================================================
+
+  private async stepEscolherProjetoNoite(msg: string): Promise<FlowResult> {
+    const atribuicoes = await this.buscarAtribuicoesEngenheiro();
+    
+    if (atribuicoes.length === 0) {
+      return {
+        mensagem: '❌ Você não tem projetos atribuídos.\n\nContate o dono da empresa.',
+        finalizado: true
+      };
+    }
+
+    this.state.availableAtribuicoes = atribuicoes;
+    this.state.step = 'escolher_area_noite'; // Avançar step para receber escolha
+    
+    let mensagem = `🌙 *Notificação Noturna*\n\n`;
+    mensagem += `📋 Escolha o projeto:\n\n`;
+    
+    atribuicoes.forEach((atrib, index) => {
+      mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}\n`;
+      mensagem += `   Área: ${atrib.area}\n`;
+      mensagem += `   Status: ${atrib.status || 'N/A'}\n\n`;
+    });
+
+    mensagem += `_Digite o número do projeto_`;
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepEscolherAreaNoite(msg: string): Promise<FlowResult> {
+    const escolha = parseInt(msg.trim()) - 1;
+    
+    if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.availableAtribuicoes?.length || 0)) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.availableAtribuicoes?.length || 0}.`,
+        finalizado: false
+      };
+    }
+
+    const atribuicao = this.state.availableAtribuicoes![escolha];
+    this.state.selectedAtribuicaoId = atribuicao.id;
+    this.state.projectCode = atribuicao.codigo;
+
+    // Prosseguir para feito do dia
+    this.state.step = 'feito_dia';
+    
+    return {
+      mensagem: `✅ Projeto: *${atribuicao.codigo}*\n\n✔️ *O que foi feito hoje?*\n\n_Descreva o trabalho realizado no dia_`,
+      finalizado: false
+    };
+  }
+
+  private async stepFeitoDia(msg: string): Promise<FlowResult> {
+    const feito = msg.trim();
+    
+    if (feito.length < 5) {
+      return {
+        mensagem: '❌ Descrição muito curta. Digite pelo menos 5 caracteres.',
+        finalizado: false
+      };
+    }
+
+    this.state.feitoTexto = feito;
+    this.state.step = 'retrabalho_pergunta';
+    
+    return {
+      mensagem: `✅ Feito registrado!\n\n🔄 *Teve retrabalho hoje?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
+      finalizado: false
+    };
+  }
+
+  private async stepRetrabalhoPergunta(msg: string): Promise<FlowResult> {
+    const resposta = msg.trim();
+    
+    if (resposta === '1') {
+      // Teve retrabalho
+      this.state.teveRetrabalho = true;
+      this.state.step = 'retrabalho_motivo';
+      
+      let mensagem = `⚠️ *Motivo do Retrabalho*\n\n`;
+      mensagem += `1️⃣ Erro de dimensionamento\n`;
+      mensagem += `2️⃣ Mudança de requisitos\n`;
+      mensagem += `3️⃣ Falta de informações\n`;
+      mensagem += `4️⃣ Erro de comunicação\n`;
+      mensagem += `5️⃣ Outro\n\n`;
+      mensagem += `_Digite o número do motivo_`;
+      
+      return { mensagem, finalizado: false };
+      
+    } else if (resposta === '2') {
+      // Não teve retrabalho
+      this.state.teveRetrabalho = false;
+      this.state.step = 'observacoes_pergunta';
+      
+      return {
+        mensagem: `✅ Sem retrabalho!\n\n📝 *Quer adicionar observações?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
+        finalizado: false
+      };
+      
+    } else {
+      return {
+        mensagem: '❌ Opção inválida. Digite *1* para Sim ou *2* para Não.',
+        finalizado: false
+      };
+    }
+  }
+
+  private async stepRetrabalhoMotivo(msg: string): Promise<FlowResult> {
+    const motivos = [
+      'Erro de dimensionamento',
+      'Mudança de requisitos',
+      'Falta de informações',
+      'Erro de comunicação',
+      'Outro'
+    ];
+    
+    const escolha = parseInt(msg.trim()) - 1;
+    
+    if (isNaN(escolha) || escolha < 0 || escolha >= motivos.length) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${motivos.length}.`,
+        finalizado: false
+      };
+    }
+
+    this.state.motivoRetrabalho = motivos[escolha];
+    
+    // Registrar retrabalho no Supabase
+    await this.supabase.registrarRetrabalho(
+      this.state.selectedAtribuicaoId!,
+      true,
+      motivos[escolha]
+    );
+    
+    this.state.step = 'observacoes_pergunta';
+    
+    return {
+      mensagem: `✅ Motivo registrado: ${motivos[escolha]}\n\n📝 *Quer adicionar observações?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
+      finalizado: false
+    };
+  }
+
+  private async stepObservacoesPergunta(msg: string): Promise<FlowResult> {
+    const resposta = msg.trim();
+    
+    if (resposta === '1') {
+      // Quer adicionar observações
+      this.state.step = 'observacoes_texto';
+      
+      return {
+        mensagem: `📝 *Observações*\n\n_Digite suas observações sobre o dia de trabalho_`,
+        finalizado: false
+      };
+      
+    } else if (resposta === '2') {
+      // Não quer observações
+      this.state.observacoesTexto = undefined;
+      
+      // Salvar tudo e finalizar
+      return await this.salvarNotificacaoNoturna();
+      
+    } else {
+      return {
+        mensagem: '❌ Opção inválida. Digite *1* para Sim ou *2* para Não.',
+        finalizado: false
+      };
+    }
+  }
+
+  private async stepObservacoesTexto(msg: string): Promise<FlowResult> {
+    const obs = msg.trim();
+    
+    if (obs.length < 3) {
+      return {
+        mensagem: '❌ Observação muito curta. Digite pelo menos 3 caracteres.',
+        finalizado: false
+      };
+    }
+
+    this.state.observacoesTexto = obs;
+    
+    // Salvar tudo e finalizar
+    return await this.salvarNotificacaoNoturna();
+  }
+
+  private async salvarNotificacaoNoturna(): Promise<FlowResult> {
+    // Salvar feito do dia e observações
+    const obsCompleta = this.state.observacoesTexto 
+      ? `Feito: ${this.state.feitoTexto}\n\nObservações: ${this.state.observacoesTexto}`
+      : `Feito: ${this.state.feitoTexto}`;
+    
+    const sucesso = await this.supabase.atualizarFeitoDia(
+      this.state.selectedAtribuicaoId!,
+      this.state.feitoTexto!,
+      obsCompleta
+    );
+
+    if (!sucesso) {
+      return {
+        mensagem: '❌ Erro ao salvar notificação. Tente novamente.',
+        finalizado: true
+      };
+    }
+
+    let mensagem = `✅ *Notificação Noturna Registrada!*\n\n`;
+    mensagem += `📊 Projeto: ${this.state.projectCode}\n`;
+    mensagem += `✔️ Feito: ${this.state.feitoTexto}\n`;
+    
+    if (this.state.teveRetrabalho) {
+      mensagem += `🔄 Retrabalho: Sim (${this.state.motivoRetrabalho})\n`;
+    } else {
+      mensagem += `🔄 Retrabalho: Não\n`;
+    }
+    
+    if (this.state.observacoesTexto) {
+      mensagem += `📝 Observações: ${this.state.observacoesTexto}\n`;
+    }
+    
+    mensagem += `\nDescanse bem! 🌙`;
+
+    return { mensagem, finalizado: true };
+  }
+
+  // =====================================================
+  // NOVOS STEPS: EDIÇÃO DE PROJETOS
+  // =====================================================
+
+  private async stepEscolherProjetoEdicao(msg: string): Promise<FlowResult> {
+    if (msg === '') {
+      // Primeira vez, buscar projetos
+      const atribuicoes = await this.buscarAtribuicoesEngenheiro();
+      
+      if (atribuicoes.length === 0) {
+        return {
+          mensagem: '❌ Você não tem projetos atribuídos.\n\nContate o dono da empresa.',
+          finalizado: true
+        };
+      }
+
+      this.state.availableAtribuicoes = atribuicoes;
+      // Não muda o step aqui, a próxima mensagem será processada aqui mesmo
+      
+      let mensagem = `✏️ *Editar Projeto*\n\n`;
+      mensagem += `📋 Escolha o projeto:\n\n`;
+      
+      atribuicoes.forEach((atrib, index) => {
+        mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}\n`;
+        mensagem += `   Área: ${atrib.area}\n`;
+        mensagem += `   Status: ${atrib.status || 'N/A'}\n\n`;
+      });
+
+      mensagem += `_Digite o número do projeto_`;
+      return { mensagem, finalizado: false };
+    }
+
+    // Processar a escolha do projeto
+    const escolha = parseInt(msg.trim()) - 1;
+    
+    if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.availableAtribuicoes?.length || 0)) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.availableAtribuicoes?.length || 0}.`,
+        finalizado: false
+      };
+    }
+
+    const atribuicao = this.state.availableAtribuicoes![escolha];
+    this.state.selectedAtribuicaoId = atribuicao.id;
+    this.state.projectCode = atribuicao.codigo;
+
+    // Agora sim, avançar para escolher campo
+    this.state.step = 'escolher_campo';
+    return await this.stepEscolherCampo('');
+  }
+
+  private async stepEscolherAreaEdicao(msg: string): Promise<FlowResult> {
+    // Este step não é necessário pois já escolhemos a atribuição específica
+    // Mantido para compatibilidade
+    return await this.stepEscolherCampo('');
+  }
+
+  private async stepEscolherCampo(msg: string): Promise<FlowResult> {
+    if (msg === '') {
+      // Primeira vez, mostrar campos
+      let mensagem = `✏️ *Editar Projeto: ${this.state.projectCode}*\n\n`;
+      mensagem += `📋 Escolha o campo para editar:\n\n`;
+      mensagem += `1️⃣ Status do projeto\n`;
+      mensagem += `2️⃣ Percentual de andamento (%)\n`;
+      mensagem += `3️⃣ Data de início\n`;
+      mensagem += `4️⃣ Data prevista de conclusão\n`;
+      mensagem += `5️⃣ Observações\n\n`;
+      mensagem += `_Digite o número do campo_`;
+      
+      return { mensagem, finalizado: false };
+    }
+
+    const campos = ['status_id', 'percentual_andamento', 'data_inicio', 'data_prevista', 'observacoes'];
+    const nomeCampos = ['Status', 'Percentual', 'Data início', 'Data prevista', 'Observações'];
+    const escolha = parseInt(msg.trim()) - 1;
+    
+    if (isNaN(escolha) || escolha < 0 || escolha >= campos.length) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${campos.length}.`,
+        finalizado: false
+      };
+    }
+
+    this.state.editField = campos[escolha];
+    (this.state as any).editFieldName = nomeCampos[escolha];
+    this.state.step = 'novo_valor';
+    
+    return await this.stepNovoValor('');
+  }
+
+  private async stepNovoValor(msg: string): Promise<FlowResult> {
+    const campo = this.state.editField!;
+    
+    if (msg === '') {
+      // Primeira vez, pedir o novo valor
+      let mensagem = `✏️ *Editar: ${(this.state as any).editFieldName}*\n\n`;
+      
+      if (campo === 'status_id') {
+        const statusList = await this.supabase.listarStatus();
+        (this.state as any).statusList = statusList;
+        
+        mensagem += `Escolha o novo status:\n\n`;
+        statusList.forEach((status, index) => {
+          mensagem += `${index + 1}️⃣ ${status.descricao}\n`;
+        });
+        mensagem += `\n_Digite o número do status_`;
+        
+      } else if (campo === 'percentual_andamento') {
+        mensagem += `Digite o novo percentual (0-100):\n\n`;
+        mensagem += `_Digite apenas o número (ex: 75)_`;
+        
+      } else if (campo === 'data_inicio' || campo === 'data_prevista') {
+        mensagem += `Digite a nova data:\n\n`;
+        mensagem += `_Formato: DD/MM/AAAA (ex: 25/01/2026)_`;
+        
+      } else if (campo === 'observacoes') {
+        mensagem += `Digite as novas observações:\n\n`;
+        mensagem += `_Texto livre_`;
+      }
+      
+      return { mensagem, finalizado: false };
+    }
+
+    // Validar e processar o valor
+    let novoValor: any;
+    let valorFormatado: string;
+    
+    if (campo === 'status_id') {
+      const statusList = (this.state as any).statusList || [];
+      const escolha = parseInt(msg.trim()) - 1;
+      
+      if (isNaN(escolha) || escolha < 0 || escolha >= statusList.length) {
+        return {
+          mensagem: `❌ Opção inválida. Digite um número entre 1 e ${statusList.length}.`,
+          finalizado: false
+        };
+      }
+      
+      novoValor = statusList[escolha].status_id;
+      valorFormatado = statusList[escolha].descricao;
+      
+    } else if (campo === 'percentual_andamento') {
+      const percentual = parseFloat(msg.trim());
+      
+      if (isNaN(percentual) || percentual < 0 || percentual > 100) {
+        return {
+          mensagem: '❌ Percentual inválido. Digite um número entre 0 e 100.',
+          finalizado: false
+        };
+      }
+      
+      novoValor = percentual;
+      valorFormatado = `${percentual}%`;
+      
+    } else if (campo === 'data_inicio' || campo === 'data_prevista') {
+      // Validar formato DD/MM/AAAA
+      const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+      const match = msg.trim().match(regex);
+      
+      if (!match) {
+        return {
+          mensagem: '❌ Data inválida. Use o formato DD/MM/AAAA (ex: 25/01/2026).',
+          finalizado: false
+        };
+      }
+      
+      // Converter para YYYY-MM-DD
+      const [_, dia, mes, ano] = match;
+      novoValor = `${ano}-${mes}-${dia}`;
+      valorFormatado = msg.trim();
+      
+    } else if (campo === 'observacoes') {
+      if (msg.trim().length < 3) {
+        return {
+          mensagem: '❌ Observações muito curtas. Digite pelo menos 3 caracteres.',
+          finalizado: false
+        };
+      }
+      
+      novoValor = msg.trim();
+      valorFormatado = msg.trim();
+    }
+
+    (this.state as any).novoValor = novoValor;
+    (this.state as any).valorFormatado = valorFormatado;
+    this.state.step = 'confirmacao';
+    
+    let mensagem = `✅ *Confirmação*\n\n`;
+    mensagem += `📊 Projeto: ${this.state.projectCode}\n`;
+    mensagem += `✏️ Campo: ${(this.state as any).editFieldName}\n`;
+    mensagem += `📝 Novo valor: ${valorFormatado}\n\n`;
+    mensagem += `Confirmar alteração?\n\n`;
+    mensagem += `1️⃣ Sim\n`;
+    mensagem += `2️⃣ Não\n\n`;
+    mensagem += `_Digite 1 ou 2_`;
+    
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepConfirmacao(msg: string): Promise<FlowResult> {
+    const resposta = msg.trim();
+    
+    if (resposta === '1') {
+      // Confirmar e salvar
+      const campo = this.state.editField!;
+      const novoValor = (this.state as any).novoValor;
+      
+      let sucesso = false;
+      
+      if (campo === 'status_id') {
+        // Usar método específico para status
+        const statusList = (this.state as any).statusList || [];
+        const status = statusList.find((s: any) => s.status_id === novoValor);
+        sucesso = await this.supabase.atualizarStatusAtribuicao(
+          this.state.selectedAtribuicaoId!,
+          status.codigo
+        );
+      } else {
+        // Atualizar campo genérico
+        sucesso = await this.supabase.atualizarCampoAtribuicao(
+          this.state.selectedAtribuicaoId!,
+          campo as any,
+          novoValor
+        );
+      }
+
+      if (!sucesso) {
+        return {
+          mensagem: '❌ Erro ao salvar alteração. Tente novamente.',
+          finalizado: true
+        };
+      }
+
+      let mensagem = `✅ *Alteração Salva!*\n\n`;
+      mensagem += `📊 Projeto: ${this.state.projectCode}\n`;
+      mensagem += `✏️ Campo: ${(this.state as any).editFieldName}\n`;
+      mensagem += `📝 Novo valor: ${(this.state as any).valorFormatado}\n\n`;
+      mensagem += `Projeto atualizado com sucesso! 🎉`;
+
+      return { mensagem, finalizado: true };
+      
+    } else if (resposta === '2') {
+      // Cancelar
+      return {
+        mensagem: '❌ Alteração cancelada.\n\nNenhuma modificação foi feita.',
+        finalizado: true
+      };
+      
+    } else {
+      return {
+        mensagem: '❌ Opção inválida. Digite *1* para confirmar ou *2* para cancelar.',
+        finalizado: false
+      };
+    }
   }
 }
