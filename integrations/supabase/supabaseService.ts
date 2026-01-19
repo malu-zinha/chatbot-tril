@@ -1637,12 +1637,12 @@ export class SupabaseService {
       const { data, error } = await this.supabase
         .from('projetos')
         .select(`
-          *,
-          engenheiros_projetos (
-            percentual_andamento,
-            status_id,
-            status_codes (descricao)
-          )
+          projeto_id,
+          codigo_projeto,
+          cliente,
+          descricao,
+          ativo,
+          created_at
         `)
         .eq('ativo', true)
         .order('created_at', { ascending: false });
@@ -1652,19 +1652,9 @@ export class SupabaseService {
         return { success: false, error: error.message };
       }
 
-      // Transformar os dados para facilitar o uso
-      const projetosFormatados = data?.map((proj: any) => ({
-        projeto_id: proj.projeto_id,
-        codigo_projeto: proj.codigo_projeto,
-        cliente: proj.cliente,
-        descricao: proj.descricao,
-        status_atual: proj.engenheiros_projetos?.[0]?.status_codes?.descricao || 'N/A',
-        percentual_andamento: proj.engenheiros_projetos?.[0]?.percentual_andamento || 0,
-      })) || [];
-
-      return { success: true, data: projetosFormatados };
+      return { success: true, data: data || [] };
     } catch (error: any) {
-      console.error('❌ Erro ao listar todos os projetos:', error.message);
+      console.error('❌ Erro ao listar projetos:', error.message);
       return { success: false, error: error.message };
     }
   }
@@ -1714,6 +1704,389 @@ export class SupabaseService {
     } catch (error: any) {
       console.error('❌ Erro ao distribuir tarefa:', error.message);
       return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Distribui projeto existente com prazos completos
+   */
+  async distribuirProjetoComPrazos(params: {
+    dono_id: string;
+    eng_id: string;
+    projeto_id: string;
+    area_codigo: string;
+    data_inicio: string;
+    data_inicio_esperada_cliente?: string;
+    prazo_final_eng: string;
+    prazo_final_cliente: string;
+    observacoes?: string;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!this.connected) {
+      return { success: false, error: 'Supabase não conectado' };
+    }
+
+    try {
+      const { data, error } = await this.supabase.rpc('dono_distribuir_projeto_com_prazos', {
+        p_dono_id: params.dono_id,
+        p_eng_id: params.eng_id,
+        p_projeto_id: params.projeto_id,
+        p_area_codigo: params.area_codigo,
+        p_data_inicio: params.data_inicio,
+        p_data_inicio_esperada_cliente: params.data_inicio_esperada_cliente || null,
+        p_prazo_final_eng: params.prazo_final_eng,
+        p_prazo_final_cliente: params.prazo_final_cliente,
+        p_observacoes: params.observacoes || null,
+      });
+
+      if (error) {
+        console.error('❌ Erro ao distribuir projeto com prazos:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Projeto distribuído com prazos:', data);
+      return { success: true, data };
+    } catch (error: any) {
+      console.error('❌ Erro ao distribuir projeto:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Cria projeto completo (apenas tabela projetos)
+   */
+  async criarProjetoCompleto(params: {
+    codigo: string;
+    cliente: string;
+    descricao: string;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!this.connected) {
+      return { success: false, error: 'Supabase não conectado' };
+    }
+
+    try {
+      const { data, error } = await this.supabase.rpc('criar_projeto', {
+        p_codigo: params.codigo,
+        p_cliente: params.cliente,
+        p_descricao: params.descricao,
+      });
+
+      if (error) {
+        console.error('❌ Erro ao criar projeto:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Projeto criado:', data);
+      return { success: true, data };
+    } catch (error: any) {
+      console.error('❌ Erro ao criar projeto:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Busca detalhes completos de um projeto específico por ID
+   */
+  async buscarProjetoDetalhado(projetoId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!this.connected) {
+      return { success: false, error: 'Supabase não conectado' };
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('vw_projetos_completo')
+        .select('*')
+        .eq('projeto_id', projetoId);
+
+      if (error) {
+        console.error('❌ Erro ao buscar projeto detalhado:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data: data || [] };
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar projeto:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Busca projetos de um engenheiro específico
+   */
+  async buscarProjetosPorEngenheiro(engId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!this.connected) {
+      return { success: false, error: 'Supabase não conectado' };
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('vw_projetos_completo')
+        .select('*')
+        .eq('eng_id', engId)
+        .order('data_inicio', { ascending: false });
+
+      if (error) {
+        console.error('❌ Erro ao buscar projetos do engenheiro:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data: data || [] };
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar projetos:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Busca histórico de retrabalhos com filtros opcionais
+   */
+  async buscarHistoricoRetrabalhos(filters?: {
+    engId?: string;
+    projetoId?: string;
+  }): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!this.connected) {
+      return { success: false, error: 'Supabase não conectado' };
+    }
+
+    try {
+      let query = this.supabase
+        .from('vw_dono_retrabalhos_historico')
+        .select('*')
+        .order('data_retrabalho', { ascending: false });
+
+      if (filters?.engId) {
+        query = query.eq('eng_id', filters.engId);
+      }
+
+      if (filters?.projetoId) {
+        query = query.eq('projeto_id', filters.projetoId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('❌ Erro ao buscar histórico de retrabalhos:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data: data || [] };
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar retrabalhos:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Busca áreas de um projeto específico
+   */
+  async buscarAreasDoProjeto(projetoId: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!this.connected) {
+      return { success: false, error: 'Supabase não conectado' };
+    }
+
+    try {
+      const { data, error } = await this.supabase
+        .from('engenheiros_projetos')
+        .select(`
+          area_id,
+          areas!inner(area_id, codigo, descricao)
+        `)
+        .eq('projeto_id', projetoId)
+        .eq('ativo', true);
+
+      if (error) {
+        console.error('❌ Erro ao buscar áreas do projeto:', error);
+        return { success: false, error: error.message };
+      }
+
+      // Remove duplicatas de áreas
+      const areasUnicas = data?.reduce((acc: any[], curr: any) => {
+        const area = curr.areas;
+        if (!acc.find((a: any) => a.area_id === area.area_id)) {
+          acc.push(area);
+        }
+        return acc;
+      }, []);
+
+      return { success: true, data: areasUnicas || [] };
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar áreas:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // =====================================================
+  // MÉTODOS PARA NOTIFICAÇÕES E EDIÇÃO DO ENGENHEIRO
+  // =====================================================
+
+  /**
+   * Atualiza campo específico da atribuição
+   */
+  async atualizarCampoAtribuicao(
+    eng_projeto_id: string,
+    campo: 'data_inicio' | 'data_prevista' | 'percentual_andamento' | 'observacoes',
+    valor: any
+  ): Promise<boolean> {
+    if (!this.connected) return false;
+
+    try {
+      const updateData: any = {};
+      updateData[campo] = valor;
+      updateData.updated_at = new Date().toISOString();
+
+      const { error } = await this.supabase
+        .from('engenheiros_projetos')
+        .update(updateData)
+        .eq('id', eng_projeto_id);
+
+      if (error) {
+        console.error(`❌ Erro ao atualizar ${campo}:`, error);
+        return false;
+      }
+
+      console.log(`✅ Campo ${campo} atualizado com sucesso`);
+      return true;
+    } catch (error: any) {
+      console.error(`❌ Erro ao atualizar ${campo}:`, error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Registra previsão do dia (manhã)
+   */
+  async registrarPrevisaoDia(
+    eng_projeto_id: string,
+    status_id: number,
+    previsao_texto: string
+  ): Promise<boolean> {
+    if (!this.connected) return false;
+
+    try {
+      // Buscar eng_id e projeto_id da atribuição
+      const { data: atrib, error: erroAtrib } = await this.supabase
+        .from('engenheiros_projetos')
+        .select('eng_id, projeto_id')
+        .eq('id', eng_projeto_id)
+        .single();
+
+      if (erroAtrib || !atrib) {
+        console.error('❌ Erro ao buscar atribuição:', erroAtrib);
+        return false;
+      }
+
+      // Inserir ou atualizar previsão
+      const { error } = await this.supabase
+        .from('projetos_previsao')
+        .upsert({
+          eng_projeto_id,
+          projeto_id: atrib.projeto_id,
+          eng_id: atrib.eng_id,
+          data_registro: new Date().toISOString().split('T')[0],
+          previsao_texto,
+          status_id,
+          editavel: true,
+        }, {
+          onConflict: 'eng_projeto_id,data_registro'
+        });
+
+      if (error) {
+        console.error('❌ Erro ao registrar previsão:', error);
+        return false;
+      }
+
+      console.log('✅ Previsão registrada com sucesso');
+      return true;
+    } catch (error: any) {
+      console.error('❌ Erro ao registrar previsão:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Atualiza atribuição com feito do dia (noite)
+   */
+  async atualizarFeitoDia(
+    eng_projeto_id: string,
+    feito_texto: string,
+    observacoes?: string
+  ): Promise<boolean> {
+    if (!this.connected) return false;
+
+    try {
+      // Atualizar previsão com feito
+      const { data: atrib, error: erroAtrib } = await this.supabase
+        .from('engenheiros_projetos')
+        .select('eng_id, projeto_id')
+        .eq('id', eng_projeto_id)
+        .single();
+
+      if (erroAtrib || !atrib) {
+        console.error('❌ Erro ao buscar atribuição:', erroAtrib);
+        return false;
+      }
+
+      // Atualizar previsão do dia com o feito
+      const { error: erroPrevisao } = await this.supabase
+        .from('projetos_previsao')
+        .update({
+          feito_texto,
+          data_fim_dia: new Date().toISOString(),
+          editavel: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('eng_projeto_id', eng_projeto_id)
+        .eq('data_registro', new Date().toISOString().split('T')[0]);
+
+      if (erroPrevisao) {
+        console.warn('⚠️ Aviso ao atualizar previsão:', erroPrevisao);
+      }
+
+      // Atualizar observações na atribuição se fornecidas
+      if (observacoes) {
+        const { error: erroObs } = await this.supabase
+          .from('engenheiros_projetos')
+          .update({
+            observacoes,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', eng_projeto_id);
+
+        if (erroObs) {
+          console.error('❌ Erro ao atualizar observações:', erroObs);
+          return false;
+        }
+      }
+
+      console.log('✅ Feito do dia registrado com sucesso');
+      return true;
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar feito do dia:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Lista status disponíveis
+   */
+  async listarStatus(): Promise<Array<{ status_id: number; descricao: string; codigo: string }>> {
+    if (!this.connected) return [];
+
+    try {
+      const { data, error } = await this.supabase
+        .from('status_codes')
+        .select('status_id, descricao, codigo')
+        .eq('ativo', true)
+        .order('ordem');
+
+      if (error) {
+        console.error('❌ Erro ao listar status:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error: any) {
+      console.error('❌ Erro ao listar status:', error.message);
+      return [];
     }
   }
 

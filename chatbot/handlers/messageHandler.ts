@@ -117,6 +117,17 @@ export class MessageHandler {
         this.sessoes.set(whatsappNormalizado, sessao);
         
         console.log(`   ✅ Sessão criada - Tipo: ${tipoUsuario.tipo}`);
+        
+        // Se for dono, iniciar OwnerFlow imediatamente
+        if (tipoUsuario.tipo === 'dono') {
+          console.log(`   🔄 Iniciando OwnerFlow automaticamente para novo dono`);
+          return await this.iniciarFluxoDono(sessao);
+        }
+        
+        // Se for engenheiro, mostrar menu
+        if (tipoUsuario.tipo === 'engenheiro') {
+          return { resposta: this.mensagemMenu(tipoUsuario.tipo) };
+        }
       } else {
         console.log(`   ✅ Sessão existente encontrada`);
         console.log(`   Tipo de usuário: ${sessao.tipo_usuario || 'não autenticado'}`);
@@ -220,11 +231,20 @@ export class MessageHandler {
         
         case 'menu':
           console.log(`   ✅ Retornando menu principal\n`);
+          // Para o dono, iniciar o OwnerFlow diretamente
+          if (sessao.tipo_usuario === 'dono') {
+            return await this.iniciarFluxoDono(sessao);
+          }
           return { resposta: this.mensagemMenu(sessao.tipo_usuario) };
         
         default:
           // Não tenta mais processar via IA - força uso do menu
           console.log(`   ⚠️ Intenção não reconhecida\n`);
+          // Se for dono, iniciar OwnerFlow ao invés de mostrar mensagem de erro
+          if (sessao.tipo_usuario === 'dono') {
+            console.log(`   🔄 Iniciando OwnerFlow para dono (intenção não reconhecida)`);
+            return await this.iniciarFluxoDono(sessao);
+          }
           return { resposta: this.mensagemNaoEntendida() };
       }
     } catch (error: any) {
@@ -422,10 +442,12 @@ _Digite o número da opção desejada_`;
     // Menu de engenheiro (padrão)
     return `🤖 *Menu do Engenheiro*
 
-📋 *Gestão de Projetos*
-1️⃣ Criar novo projeto
-2️⃣ Editar projeto existente
-3️⃣ Notificações diárias (Manhã/Noite)
+📋 *Atualizações Diárias*
+1️⃣ Notificação Matinal
+2️⃣ Notificação Noturna
+
+✏️ *Gestão*
+3️⃣ Editar projeto
 
 ❓ *Ajuda*
 Digite "ajuda" para instruções
