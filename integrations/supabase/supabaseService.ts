@@ -1914,6 +1914,58 @@ export class SupabaseService {
     }
   }
 
+  /**
+   * Busca última atualização noturna do engenheiro (feito do dia + observações)
+   */
+  async buscarUltimaAtualizacaoNoturna(
+    engProjetoId: string
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!this.connected) {
+      return { success: false, error: 'Supabase não conectado' };
+    }
+
+    try {
+      // Buscar observações do engenheiros_projetos
+      const { data: atribuicao, error: errorAtrib } = await this.supabase
+        .from('engenheiros_projetos')
+        .select('observacoes')
+        .eq('id', engProjetoId)
+        .single();
+
+      if (errorAtrib) {
+        console.error('❌ Erro ao buscar atribuição:', errorAtrib);
+        return { success: false, error: errorAtrib.message };
+      }
+
+      // Buscar último feito_dia do projetos_previsao
+      const { data: previsao, error: errorPrev } = await this.supabase
+        .from('projetos_previsao')
+        .select('feito_texto, data_registro')
+        .eq('eng_projeto_id', engProjetoId)
+        .not('feito_texto', 'is', null)
+        .order('data_registro', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (errorPrev) {
+        console.error('❌ Erro ao buscar previsão:', errorPrev);
+        return { success: false, error: errorPrev.message };
+      }
+
+      return {
+        success: true,
+        data: {
+          feito_texto: previsao?.feito_texto || null,
+          data_registro: previsao?.data_registro || null,
+          observacoes: atribuicao?.observacoes || null,
+        },
+      };
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar última atualização:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
   // =====================================================
   // MÉTODOS PARA NOTIFICAÇÕES E EDIÇÃO DO ENGENHEIRO
   // =====================================================

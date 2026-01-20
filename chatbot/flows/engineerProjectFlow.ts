@@ -2333,6 +2333,14 @@ export class EngineerProjectFlow {
     } else if (resposta === '2') {
       // Não teve retrabalho
       this.state.teveRetrabalho = false;
+      
+      // Registrar dia SEM retrabalho (importante para calcular a taxa corretamente!)
+      await this.supabase.registrarRetrabalho(
+        this.state.selectedAtribuicaoId!,
+        false, // necessitou_retrabalho = false
+        null   // sem motivo
+      );
+      
       this.state.step = 'observacoes_pergunta';
       
       return {
@@ -2427,15 +2435,11 @@ export class EngineerProjectFlow {
   }
 
   private async salvarNotificacaoNoturna(): Promise<FlowResult> {
-    // Salvar feito do dia e observações
-    const obsCompleta = this.state.observacoesTexto 
-      ? `Feito: ${this.state.feitoTexto}\n\nObservações: ${this.state.observacoesTexto}`
-      : `Feito: ${this.state.feitoTexto}`;
-    
+    // Salvar feito do dia (em projetos_previsao) e observações (em engenheiros_projetos)
     const sucesso = await this.supabase.atualizarFeitoDia(
       this.state.selectedAtribuicaoId!,
       this.state.feitoTexto!,
-      obsCompleta
+      this.state.observacoesTexto || null  // Apenas as observações, sem repetir o feito
     );
 
     if (!sucesso) {
