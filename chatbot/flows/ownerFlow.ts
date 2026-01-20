@@ -560,6 +560,15 @@ export class OwnerFlow {
 
     const info = dados[0];
     
+    // Buscar última atualização noturna do engenheiro
+    let ultimaAtualizacao = null;
+    if (info.atribuicao_id) {
+      const resultadoAtualizacao = await getSupabase().buscarUltimaAtualizacaoNoturna(info.atribuicao_id);
+      if (resultadoAtualizacao.success && resultadoAtualizacao.data) {
+        ultimaAtualizacao = resultadoAtualizacao.data;
+      }
+    }
+    
     let msg = `📊 *Informações Completas*\n\n`;
     msg += `📋 *Projeto:* ${info.codigo_projeto}\n`;
     msg += `👤 *Cliente:* ${info.cliente}\n`;
@@ -602,6 +611,24 @@ export class OwnerFlow {
     
     if (info.dias_atraso > 0) {
       msg += `⚠️ *Atraso:* ${info.dias_atraso} dia(s)\n\n`;
+    }
+    
+    // Adicionar última atualização do engenheiro (NOVO!)
+    if (ultimaAtualizacao) {
+      msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+      msg += `🌙 *Última Atualização Noturna*\n\n`;
+      
+      if (ultimaAtualizacao.feito_texto) {
+        const dataFormatada = ultimaAtualizacao.data_registro 
+          ? new Date(ultimaAtualizacao.data_registro).toLocaleDateString('pt-BR')
+          : 'N/A';
+        msg += `📅 Data: ${dataFormatada}\n`;
+        msg += `✅ *Feito:* ${ultimaAtualizacao.feito_texto}\n\n`;
+      }
+      
+      if (ultimaAtualizacao.observacoes) {
+        msg += `💬 *Observações:* ${ultimaAtualizacao.observacoes}\n\n`;
+      }
     }
     
     msg += `_Digite "menu" para voltar ao menu principal_`;
