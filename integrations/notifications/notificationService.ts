@@ -2,199 +2,290 @@
 // SERVICE: Notification Service
 // =====================================================
 // Gerencia envio de notificações automáticas matinais e noturnas
-// Uma mensagem por projeto ativo
+// UMA mensagem consolidada por engenheiro
 // =====================================================
 
-import { getEngineerSheetService } from '../sheets/engineerSheetService.ts';
-import type { Project } from '../sheets/engineerSheetService.ts';
+import { getSupabaseService } from '../supabase/supabaseService.ts';
+import { getWhatsAppService } from '../whatsapp/whatsappService.ts';
+import type { WhatsAppService } from '../whatsapp/whatsappService.ts';
+
+// =====================================================
+// TIPOS
+// =====================================================
+
+interface EngenheiroComProjetos {
+  eng_id: string;
+  nome: string;
+  telefone: string;
+  projetos: ProjetoAtribuido[];
+}
+
+interface ProjetoAtribuido {
+  codigo_projeto: string;
+  cliente: string;
+  area_descricao: string;
+  status_descricao: string;
+  percentual_andamento: number;
+  data_prevista: string | null;
+}
 
 // =====================================================
 // CLASSE: NotificationService
 // =====================================================
 
 export class NotificationService {
-  private engineerService;
-  private whatsappClient: any; // Cliente do WhatsApp (será injetado)
-  private messageHandler: any; // MessageHandler para gerenciar contexto
+  private supabaseService;
+  private whatsappService: WhatsAppService;
 
-  constructor(whatsappClient?: any, messageHandler?: any) {
-    this.engineerService = getEngineerSheetService();
-    this.whatsappClient = whatsappClient;
-    this.messageHandler = messageHandler;
+  constructor(whatsappService?: WhatsAppService) {
+    this.supabaseService = getSupabaseService();
+    this.whatsappService = whatsappService || getWhatsAppService();
   }
 
   /**
-   * Define o cliente WhatsApp
+   * Define o WhatsApp Service (para injeção de dependência)
    */
-  setWhatsAppClient(client: any): void {
-    this.whatsappClient = client;
+  setWhatsAppService(service: WhatsAppService): void {
+    this.whatsappService = service;
   }
 
   /**
-   * Define o MessageHandler
-   */
-  setMessageHandler(handler: any): void {
-    this.messageHandler = handler;
-  }
-
-  /**
-   * Envia notificações matinais para todos os projetos ativos
-   * UMA MENSAGEM POR PROJETO
+   * Envia notificações matinais para todos os engenheiros com projetos ativos
+   * UMA MENSAGEM CONSOLIDADA POR ENGENHEIRO
    */
   async sendMorningNotifications(): Promise<void> {
-    console.log('🌅 Iniciando notificações matinais...');
+    console.log('🌅 Iniciando notificações matinais...\n');
 
     try {
-      const activeProjects = await this.engineerService.listActiveProjects();
+      const engenheirosComProjetos = await this.buscarEngenheirosComProjetosAtivos();
 
-      console.log(`📊 Projetos ativos encontrados: ${activeProjects.length}`);
-
-      if (activeProjects.length === 0) {
-        console.log('⚠️ Nenhum projeto ativo para notificar');
+      if (engenheirosComProjetos.length === 0) {
+        console.log('⚠️  Nenhum engenheiro com projetos ativos para notificar\n');
         return;
       }
 
-      // UMA MENSAGEM POR PROJETO
-      for (const project of activeProjects) {
+      console.log(`📊 Engenheiros com projetos ativos: ${engenheirosComProjetos.length}\n`);
+
+      let totalEnviadas = 0;
+      let totalErros = 0;
+
+      for (const eng of engenheirosComProjetos) {
         try {
-          // TODO: Buscar WhatsApp do engenheiro responsável
-          // Por enquanto, assumir que cada projeto tem um campo 'whatsapp' ou usar um padrão
-          const whatsapp = project.codigo; // Placeholder - precisa implementar lógica real
+          const mensagem = this.formatarNotificacaoMatinal(eng);
+          const sucesso = await this.whatsappService.sendMessage(eng.telefone, mensagem);
 
-          const message = this.formatMorningNotification(project);
-
-          // Enviar mensagem
-          if (this.whatsappClient) {
-            await this.sendWhatsAppMessage(whatsapp, message, project.codigo, 'matinal');
+          if (sucesso) {
+            console.log(`✅ Notificação matinal enviada: ${eng.nome} (${eng.projetos.length} projetos)`);
+            totalEnviadas++;
           } else {
-            console.log(`[SIMULAÇÃO] Mensagem matinal para ${project.codigo}:\n${message}`);
+            console.log(`❌ Falha ao enviar para: ${eng.nome}`);
+            totalErros++;
           }
 
-          console.log(`✅ Notificação matinal enviada: ${project.codigo}`);
-
-          // Pequeno delay entre mensagens para não sobrecarregar
+          // Delay entre mensagens
           await this.sleep(1000);
+
         } catch (error: any) {
-          console.error(`❌ Erro ao enviar notificação para ${project.codigo}:`, error.message);
+          console.error(`❌ Erro ao enviar para ${eng.nome}:`, error.message);
+          totalErros++;
         }
       }
 
-      console.log('✅ Notificações matinais concluídas');
+      console.log('\n' + '='.repeat(60));
+      console.log('📊 Resumo das Notificações Matinais:');
+      console.log(`   ✅ Enviadas: ${totalEnviadas}`);
+      console.log(`   ❌ Erros: ${totalErros}`);
+      console.log(`   📱 Total: ${engenheirosComProjetos.length}`);
+      console.log('='.repeat(60) + '\n');
+
     } catch (error: any) {
-      console.error('❌ Erro ao buscar projetos ativos:', error.message);
+      console.error('❌ Erro geral ao buscar engenheiros:', error.message);
       throw error;
     }
   }
 
   /**
-   * Envia notificações noturnas para todos os projetos ativos
-   * UMA MENSAGEM POR PROJETO
+   * Envia notificações noturnas para todos os engenheiros com projetos ativos
+   * UMA MENSAGEM CONSOLIDADA POR ENGENHEIRO
    */
   async sendNightNotifications(): Promise<void> {
-    console.log('🌙 Iniciando notificações noturnas...');
+    console.log('🌙 Iniciando notificações noturnas...\n');
 
     try {
-      const activeProjects = await this.engineerService.listActiveProjects();
+      const engenheirosComProjetos = await this.buscarEngenheirosComProjetosAtivos();
 
-      console.log(`📊 Projetos ativos encontrados: ${activeProjects.length}`);
-
-      if (activeProjects.length === 0) {
-        console.log('⚠️ Nenhum projeto ativo para notificar');
+      if (engenheirosComProjetos.length === 0) {
+        console.log('⚠️  Nenhum engenheiro com projetos ativos para notificar\n');
         return;
       }
 
-      // UMA MENSAGEM POR PROJETO
-      for (const project of activeProjects) {
+      console.log(`📊 Engenheiros com projetos ativos: ${engenheirosComProjetos.length}\n`);
+
+      let totalEnviadas = 0;
+      let totalErros = 0;
+
+      for (const eng of engenheirosComProjetos) {
         try {
-          // TODO: Buscar WhatsApp do engenheiro responsável
-          const whatsapp = project.codigo; // Placeholder
+          const mensagem = this.formatarNotificacaoNoturna(eng);
+          const sucesso = await this.whatsappService.sendMessage(eng.telefone, mensagem);
 
-          const message = this.formatNightNotification(project);
-
-          // Enviar mensagem
-          if (this.whatsappClient) {
-            await this.sendWhatsAppMessage(whatsapp, message, project.codigo, 'noturna');
+          if (sucesso) {
+            console.log(`✅ Notificação noturna enviada: ${eng.nome} (${eng.projetos.length} projetos)`);
+            totalEnviadas++;
           } else {
-            console.log(`[SIMULAÇÃO] Mensagem noturna para ${project.codigo}:\n${message}`);
+            console.log(`❌ Falha ao enviar para: ${eng.nome}`);
+            totalErros++;
           }
 
-          console.log(`✅ Notificação noturna enviada: ${project.codigo}`);
-
-          // Pequeno delay entre mensagens
+          // Delay entre mensagens
           await this.sleep(1000);
+
         } catch (error: any) {
-          console.error(`❌ Erro ao enviar notificação para ${project.codigo}:`, error.message);
+          console.error(`❌ Erro ao enviar para ${eng.nome}:`, error.message);
+          totalErros++;
         }
       }
 
-      console.log('✅ Notificações noturnas concluídas');
+      console.log('\n' + '='.repeat(60));
+      console.log('📊 Resumo das Notificações Noturnas:');
+      console.log(`   ✅ Enviadas: ${totalEnviadas}`);
+      console.log(`   ❌ Erros: ${totalErros}`);
+      console.log(`   📱 Total: ${engenheirosComProjetos.length}`);
+      console.log('='.repeat(60) + '\n');
+
     } catch (error: any) {
-      console.error('❌ Erro ao buscar projetos ativos:', error.message);
+      console.error('❌ Erro geral ao buscar engenheiros:', error.message);
       throw error;
     }
   }
 
   /**
-   * Formata mensagem de notificação matinal
+   * Busca engenheiros com projetos ativos no Supabase
+   * Agrupa projetos por engenheiro
    */
-  private formatMorningNotification(project: Project): string {
-    let mensagem = `🌅 *Notificação Matinal*\n\n`;
-    mensagem += `📊 Projeto: *${project.codigo}*\n`;
-    mensagem += `👤 Cliente: ${project.cliente}\n`;
-    mensagem += `🏗️ Obra: ${project.obra}\n`;
-    mensagem += `📍 Status atual: ${project.status}\n\n`;
-    mensagem += `Por favor, atualize:\n`;
-    mensagem += `1️⃣ Status do projeto\n`;
-    mensagem += `2️⃣ Previsão para o dia\n\n`;
-    mensagem += `_Responda a esta mensagem para iniciar_`;
+  private async buscarEngenheirosComProjetosAtivos(): Promise<EngenheiroComProjetos[]> {
+    const supabase = this.supabaseService.getClient();
 
-    return mensagem;
-  }
+    // Buscar todas as atribuições ativas
+    const { data, error } = await supabase
+      .from('engenheiros_projetos')
+      .select(`
+        eng_id,
+        engenheiros!inner(eng_id, nome, telefone),
+        projetos!inner(codigo_projeto, cliente, ativo),
+        areas!inner(descricao),
+        status_codes(descricao),
+        percentual_andamento,
+        data_prevista
+      `)
+      .eq('ativo', true)
+      .eq('projetos.ativo', true);
 
-  /**
-   * Formata mensagem de notificação noturna
-   */
-  private formatNightNotification(project: Project): string {
-    let mensagem = `🌙 *Notificação Noturna*\n\n`;
-    mensagem += `📊 Projeto: *${project.codigo}*\n`;
-    mensagem += `👤 Cliente: ${project.cliente}\n`;
-    mensagem += `🏗️ Obra: ${project.obra}\n`;
-    mensagem += `📍 Etapa atual: ${project.etapa}\n\n`;
-    mensagem += `Por favor, registre:\n`;
-    mensagem += `1️⃣ O que foi feito hoje\n`;
-    mensagem += `2️⃣ Houve retrabalho?\n`;
-    mensagem += `3️⃣ Etapa atual\n`;
-    mensagem += `4️⃣ Observações (obrigatório)\n\n`;
-    mensagem += `_Responda a esta mensagem para iniciar_`;
-
-    return mensagem;
-  }
-
-  /**
-   * Envia mensagem via WhatsApp e registra contexto de notificação
-   */
-  private async sendWhatsAppMessage(
-    whatsapp: string,
-    message: string,
-    projectCode: string,
-    tipo: 'matinal' | 'noturna'
-  ): Promise<void> {
-    if (!this.whatsappClient) {
-      throw new Error('WhatsApp client não configurado');
+    if (error) {
+      console.error('❌ Erro ao buscar atribuições:', error);
+      throw error;
     }
 
-    // TODO: Implementar envio real via whatsapp-web.js
-    // await this.whatsappClient.sendMessage(whatsapp, message);
+    if (!data || data.length === 0) {
+      return [];
+    }
 
-    // Registrar contexto de notificação no MessageHandler
-    if (this.messageHandler) {
-      // O MessageHandler deve guardar que este usuário está respondendo
-      // a uma notificação específica
-      this.messageHandler.setNotificationContext(whatsapp, {
-        projectCode,
-        tipo
+    // Agrupar por engenheiro
+    const engenheirosMap = new Map<string, EngenheiroComProjetos>();
+
+    for (const atrib of data) {
+      const engenheiro: any = atrib.engenheiros;
+      const projeto: any = atrib.projetos;
+      const area: any = atrib.areas;
+      const status: any = atrib.status_codes;
+
+      const eng_id = engenheiro.eng_id;
+
+      if (!engenheirosMap.has(eng_id)) {
+        engenheirosMap.set(eng_id, {
+          eng_id: engenheiro.eng_id,
+          nome: engenheiro.nome,
+          telefone: engenheiro.telefone,
+          projetos: []
+        });
+      }
+
+      engenheirosMap.get(eng_id)!.projetos.push({
+        codigo_projeto: projeto.codigo_projeto,
+        cliente: projeto.cliente,
+        area_descricao: area.descricao,
+        status_descricao: status?.descricao || 'N/A',
+        percentual_andamento: atrib.percentual_andamento || 0,
+        data_prevista: atrib.data_prevista
       });
     }
+
+    return Array.from(engenheirosMap.values());
+  }
+
+  /**
+   * Formata mensagem de notificação matinal consolidada
+   */
+  private formatarNotificacaoMatinal(engenheiro: EngenheiroComProjetos): string {
+    const primeiroNome = engenheiro.nome.split(' ')[0];
+    const totalProjetos = engenheiro.projetos.length;
+
+    let mensagem = `🌅 *Bom dia, ${primeiroNome}!*\n\n`;
+
+    if (totalProjetos === 1) {
+      mensagem += `Você tem *1 projeto ativo* para atualizar hoje:\n\n`;
+    } else {
+      mensagem += `Você tem *${totalProjetos} projetos ativos* para atualizar hoje:\n\n`;
+    }
+
+    engenheiro.projetos.forEach((proj, idx) => {
+      mensagem += `📊 *${proj.codigo_projeto}* - ${proj.cliente}\n`;
+      mensagem += `   📦 Área: ${proj.area_descricao}\n`;
+      mensagem += `   📈 Status: ${proj.status_descricao}\n`;
+      if (proj.data_prevista) {
+        const data = new Date(proj.data_prevista).toLocaleDateString('pt-BR');
+        mensagem += `   📅 Prazo: ${data}\n`;
+      }
+      mensagem += `\n`;
+    });
+
+    mensagem += `Por favor, atualize:\n`;
+    mensagem += `• Status do projeto\n`;
+    mensagem += `• Previsão para o dia\n\n`;
+    mensagem += `_Digite "menu" para iniciar_`;
+
+    return mensagem;
+  }
+
+  /**
+   * Formata mensagem de notificação noturna consolidada
+   */
+  private formatarNotificacaoNoturna(engenheiro: EngenheiroComProjetos): string {
+    const primeiroNome = engenheiro.nome.split(' ')[0];
+    const totalProjetos = engenheiro.projetos.length;
+
+    let mensagem = `🌙 *Boa noite, ${primeiroNome}!*\n\n`;
+
+    if (totalProjetos === 1) {
+      mensagem += `Hora de registrar o trabalho de hoje em *1 projeto*:\n\n`;
+    } else {
+      mensagem += `Hora de registrar o trabalho de hoje em *${totalProjetos} projetos*:\n\n`;
+    }
+
+    engenheiro.projetos.forEach((proj) => {
+      mensagem += `📊 *${proj.codigo_projeto}* - ${proj.cliente}\n`;
+      mensagem += `   📦 Área: ${proj.area_descricao}\n`;
+      mensagem += `   ⚡ Andamento: ${proj.percentual_andamento}%\n`;
+      mensagem += `\n`;
+    });
+
+    mensagem += `Por favor, registre:\n`;
+    mensagem += `• O que foi feito hoje\n`;
+    mensagem += `• Houve retrabalho?\n`;
+    mensagem += `• Observações (obrigatório)\n\n`;
+    mensagem += `_Digite "menu" para iniciar_`;
+
+    return mensagem;
   }
 
   /**
@@ -205,9 +296,10 @@ export class NotificationService {
   }
 }
 
-/**
- * Singleton instance
- */
+// =====================================================
+// SINGLETON
+// =====================================================
+
 let notificationServiceInstance: NotificationService | null = null;
 
 export function getNotificationService(): NotificationService {
@@ -217,3 +309,6 @@ export function getNotificationService(): NotificationService {
   return notificationServiceInstance;
 }
 
+export function setNotificationService(service: NotificationService): void {
+  notificationServiceInstance = service;
+}
