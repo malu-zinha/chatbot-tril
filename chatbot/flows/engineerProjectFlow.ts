@@ -80,6 +80,12 @@ type FlowStep =
   | 'escolher_campo'
   | 'novo_valor'
   | 'confirmacao'
+  
+  // Visualizacao
+  | 'visualizar_projetos'
+  | 'escolher_projeto_viz'
+  | 'mostrar_detalhes_projeto'
+  
   | 'fim';
 
 interface FlowState {
@@ -306,6 +312,14 @@ export class EngineerProjectFlow {
         case 'confirmacao':
           return await this.stepConfirmacao(msg);
 
+        // Visualizacao
+        case 'visualizar_projetos':
+          return await this.stepVisualizarProjetos();
+        case 'escolher_projeto_viz':
+          return await this.stepEscolherProjetoViz(msg);
+        case 'mostrar_detalhes_projeto':
+          return { mensagem: 'Digite "menu" para voltar', finalizado: true };
+
         default:
           return {
             mensagem: '❌ Estado inválido do fluxo.',
@@ -357,9 +371,14 @@ export class EngineerProjectFlow {
       this.state.step = 'escolher_projeto_edicao';
       return await this.stepEscolherProjetoEdicao('');
       
+    } else if (opcao === '4') {
+      // Visualizar projetos
+      this.state.step = 'visualizar_projetos';
+      return await this.stepVisualizarProjetos();
+      
     } else {
       return {
-        mensagem: '❌ Opção inválida. Digite *1*, *2* ou *3*.',
+        mensagem: '❌ Opção inválida. Digite *1*, *2*, *3* ou *4*.',
         finalizado: false
       };
     }
@@ -2722,5 +2741,106 @@ export class EngineerProjectFlow {
         finalizado: false
       };
     }
+  }
+
+  // =====================================================
+  // VISUALIZAÇÃO DE PROJETOS
+  // =====================================================
+
+  /**
+   * STEP: Visualizar Projetos
+   * Lista todos os projetos do engenheiro com informações resumidas
+   */
+  private async stepVisualizarProjetos(): Promise<FlowResult> {
+    const atribuicoes = await this.buscarAtribuicoesEngenheiro();
+
+    if (atribuicoes.length === 0) {
+      return {
+        mensagem: '📭 Você não tem projetos atribuídos no momento.',
+        finalizado: true
+      };
+    }
+
+    let mensagem = `📊 *Meus Projetos (${atribuicoes.length})*\n\n`;
+
+    atribuicoes.forEach((proj, idx) => {
+      mensagem += `${idx + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
+      mensagem += `   📦 Área: ${proj.area}\n`;
+      mensagem += `   📈 Status: ${proj.status}\n`;
+      mensagem += `   ⚡ Andamento: ${proj.percentual || 0}%\n`;
+      if (proj.data_prevista) {
+        const data = new Date(proj.data_prevista).toLocaleDateString('pt-BR');
+        mensagem += `   📅 Previsto: ${data}\n`;
+      }
+      mensagem += `\n`;
+    });
+
+    mensagem += `_Digite o número para ver detalhes completos_\n`;
+    mensagem += `_Ou "menu" para voltar_`;
+
+    this.state.availableAtribuicoes = atribuicoes;
+    this.state.step = 'escolher_projeto_viz';
+
+    return { mensagem, finalizado: false };
+  }
+
+  /**
+   * STEP: Escolher Projeto para Visualização
+   * Permite escolher um projeto para ver detalhes completos
+   */
+  private async stepEscolherProjetoViz(msg: string): Promise<FlowResult> {
+    const escolha = parseInt(msg.trim()) - 1;
+
+    if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.availableAtribuicoes?.length || 0)) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.availableAtribuicoes?.length || 0}`,
+        finalizado: false
+      };
+    }
+
+    const atribuicao = this.state.availableAtribuicoes![escolha];
+    return await this.mostrarDetalhesProjeto(atribuicao);
+  }
+
+  /**
+   * Mostra detalhes completos de um projeto
+   */
+  private async mostrarDetalhesProjeto(atribuicao: any): Promise<FlowResult> {
+    let msg = `📊 *Detalhes do Projeto*\n\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `📋 *Projeto:* ${atribuicao.codigo}\n`;
+    msg += `👤 *Cliente:* ${atribuicao.cliente}\n`;
+    msg += `📦 *Área:* ${atribuicao.area}\n\n`;
+
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `📈 *Status Atual*\n\n`;
+    msg += `📊 Status: ${atribuicao.status}\n`;
+    msg += `⚡ Andamento: ${atribuicao.percentual || 0}%\n\n`;
+
+    if (atribuicao.data_inicio || atribuicao.data_prevista || atribuicao.data_conclusao) {
+      msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+      msg += `📅 *Datas*\n\n`;
+      
+      if (atribuicao.data_inicio) {
+        const data = new Date(atribuicao.data_inicio).toLocaleDateString('pt-BR');
+        msg += `📅 Início: ${data}\n`;
+      }
+      if (atribuicao.data_prevista) {
+        const data = new Date(atribuicao.data_prevista).toLocaleDateString('pt-BR');
+        msg += `⏰ Prazo: ${data}\n`;
+      }
+      if (atribuicao.data_conclusao) {
+        const data = new Date(atribuicao.data_conclusao).toLocaleDateString('pt-BR');
+        msg += `✅ Concluído: ${data}\n`;
+      }
+      msg += `\n`;
+    }
+
+    msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    msg += `_Digite "menu" para voltar ao menu principal_`;
+
+    this.state.step = 'mostrar_detalhes_projeto';
+
+    return { mensagem: msg, finalizado: true };
   }
 }

@@ -13,6 +13,9 @@ import dotenv from 'dotenv';
 import { startSheetsBot } from '../chatbot/handlers/sheetsBot.ts';
 import { getCronJobManager } from '../integrations/cron/cronJobs.ts';
 import { iniciarSincronizacaoAutomatica } from '../integrations/cron/syncDatabaseToSheets.ts';
+import { getWhatsAppService } from '../integrations/whatsapp/whatsappService.ts';
+import { getNotificationService } from '../integrations/notifications/notificationService.ts';
+import { getNotificationWorker } from '../integrations/notifications/notificationWorker.ts';
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -70,7 +73,19 @@ if (missingOptional.length > 0) {
     
     console.log('\n⏰ Iniciando sistema de notificações automáticas...');
     
-    // Iniciar Cron Jobs (notificações)
+    // Inicializar WhatsApp Service
+    const whatsappService = getWhatsAppService();
+    console.log(`   📱 ${whatsappService.getProviderName()}`);
+    
+    // Inicializar Notification Service e injetar WhatsApp Service
+    const notificationService = getNotificationService();
+    notificationService.setWhatsAppService(whatsappService);
+    
+    // Inicializar Notification Worker e injetar WhatsApp Service
+    const notificationWorker = getNotificationWorker();
+    notificationWorker.setWhatsAppService(whatsappService);
+    
+    // Iniciar Cron Jobs (notificações + worker)
     const cronManager = getCronJobManager();
     cronManager.start();
     

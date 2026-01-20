@@ -7,7 +7,9 @@
 
 import cron from 'node-cron';
 import { getNotificationService } from '../notifications/notificationService.ts';
+import { getNotificationWorker } from '../notifications/notificationWorker.ts';
 import type { NotificationService } from '../notifications/notificationService.ts';
+import type { NotificationWorker } from '../notifications/notificationWorker.ts';
 
 // =====================================================
 // CLASSE: CronJobManager
@@ -15,11 +17,14 @@ import type { NotificationService } from '../notifications/notificationService.t
 
 export class CronJobManager {
   private notificationService: NotificationService;
+  private notificationWorker: NotificationWorker;
   private morningJob: cron.ScheduledTask | null = null;
   private nightJob: cron.ScheduledTask | null = null;
+  private workerJob: cron.ScheduledTask | null = null;
 
-  constructor(notificationService?: NotificationService) {
+  constructor(notificationService?: NotificationService, notificationWorker?: NotificationWorker) {
     this.notificationService = notificationService || getNotificationService();
+    this.notificationWorker = notificationWorker || getNotificationWorker();
   }
 
   /**
@@ -64,10 +69,24 @@ export class CronJobManager {
       scheduled: true
     });
 
+    // Worker de Notificações Pendentes - A cada 1 minuto
+    this.workerJob = cron.schedule('*/1 * * * *', async () => {
+      // Log silencioso - apenas quando houver notificações
+      try {
+        await this.notificationWorker.processarNotificacoesPendentes();
+      } catch (error: any) {
+        console.error('\n❌ Erro no worker de notificações:', error.message);
+      }
+    }, {
+      timezone: 'America/Sao_Paulo',
+      scheduled: true
+    });
+
     console.log('✅ Cron Jobs iniciados com sucesso!\n');
     console.log('📅 Agendamentos configurados:');
     console.log('   🌅 Notificação Matinal:  09:00 (seg-sex)');
     console.log('   🌙 Notificação Noturna:  17:00 (seg-sex)');
+    console.log('   📬 Worker Notificações:  A cada 1 minuto');
     console.log('   🌍 Timezone: America/Sao_Paulo\n');
   }
 
@@ -85,6 +104,11 @@ export class CronJobManager {
     if (this.nightJob) {
       this.nightJob.stop();
       console.log('   🌙 Notificação Noturna: parada');
+    }
+
+    if (this.workerJob) {
+      this.workerJob.stop();
+      console.log('   📬 Worker Notificações: parado');
     }
 
     console.log('✅ Cron Jobs parados\n');
@@ -121,10 +145,11 @@ export class CronJobManager {
   /**
    * Retorna status dos cron jobs
    */
-  getStatus(): { morning: string; night: string } {
+  getStatus(): { morning: string; night: string; worker: string } {
     return {
       morning: this.morningJob ? 'Ativo (09:00 seg-sex)' : 'Inativo',
-      night: this.nightJob ? 'Ativo (17:00 seg-sex)' : 'Inativo'
+      night: this.nightJob ? 'Ativo (17:00 seg-sex)' : 'Inativo',
+      worker: this.workerJob ? 'Ativo (a cada 1min)' : 'Inativo'
     };
   }
 }

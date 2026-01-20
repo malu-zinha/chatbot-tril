@@ -810,7 +810,7 @@ export class OwnerFlow {
 
   private async stepDistDataInicioCliente(mensagem: string): Promise<FlowResult> {
     const input = mensagem.trim().toLowerCase();
-    
+      
     if (input !== 'pular') {
       const partes = input.split('/');
       if (partes.length !== 3) {
@@ -869,7 +869,7 @@ export class OwnerFlow {
   }
 
     const prazoEng = `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
-    
+
     // Validar: prazo_eng >= data_inicio
     if (prazoEng < this.contexto.dist_data_inicio!) {
       return {
@@ -1040,7 +1040,7 @@ export class OwnerFlow {
         finalizado: false,
       };
     }
-    
+
     this.contexto.criar_codigo = codigo;
     this.stepAtual = 'criar_cliente';
 
@@ -1106,10 +1106,10 @@ export class OwnerFlow {
       return {
         mensagem: `❌ Criação cancelada.\n\n` +
                   `_Digite "menu" para voltar ao menu principal_`,
-        finalizado: true,
-      };
-    }
-    
+      finalizado: true,
+    };
+  }
+
     if (opcao !== '1') {
       return {
         mensagem: `❌ Opção inválida.\n\nDigite 1 para confirmar ou 2 para cancelar`,

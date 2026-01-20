@@ -198,6 +198,13 @@ export class SupabaseService {
     return this.connected;
   }
 
+  /**
+   * Retorna o cliente Supabase para queries diretas
+   */
+  getClient() {
+    return this.supabase;
+  }
+
   // =====================================================
   // AUTENTICAÇÃO VIA WHATSAPP
   // =====================================================

@@ -203,9 +203,9 @@ export class MessageHandler {
             return await this.iniciarFluxoDono(sessao);
           }
           
-          // Se for comando direto de menu (1, 2, 3), processar diretamente
+          // Se for comando direto de menu (1, 2, 3, 4), processar diretamente
           const mensagemNorm = mensagem.trim();
-          if (mensagemNorm === '1' || mensagemNorm === '2' || mensagemNorm === '3') {
+          if (mensagemNorm === '1' || mensagemNorm === '2' || mensagemNorm === '3' || mensagemNorm === '4') {
             console.log(`   ✅ Opção do menu detectada: ${mensagemNorm}`);
             // Iniciar fluxo e processar a escolha imediatamente
             const flow = new EngineerProjectFlow(sessao.whatsapp);
@@ -215,7 +215,7 @@ export class MessageHandler {
             // Processar "iniciar" primeiro (vai para stepInicio → escolher_acao)
             await flow.processarMensagem('iniciar');
             
-            // Depois processar a escolha (1, 2 ou 3)
+            // Depois processar a escolha (1, 2, 3 ou 4)
             const resultado = await flow.processarMensagem(mensagemNorm);
             console.log(`   ✅ Fluxo processado, retornando resposta\n`);
             return { resposta: resultado.mensagem };
@@ -330,8 +330,8 @@ export class MessageHandler {
     const mensagemLower = mensagem.toLowerCase().trim();
 
     // Atalhos numéricos do menu
-    if (mensagemLower === '1' || mensagemLower === '2' || mensagemLower === '3') {
-      return 'gerenciar_projeto'; // Opções 1, 2, 3 = Gestão de projetos
+    if (mensagemLower === '1' || mensagemLower === '2' || mensagemLower === '3' || mensagemLower === '4') {
+      return 'gerenciar_projeto'; // Opções 1, 2, 3, 4 = Gestão de projetos
     }
 
     // Palavras-chave para MODIFICAR projetos (Engenheiros)
@@ -448,6 +448,7 @@ _Digite o número da opção desejada_`;
 
 ✏️ *Gestão*
 3️⃣ Editar projeto
+4️⃣ Visualizar Meus Projetos
 
 ❓ *Ajuda*
 Digite "ajuda" para instruções
