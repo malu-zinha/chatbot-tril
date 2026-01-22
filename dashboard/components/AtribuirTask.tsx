@@ -125,7 +125,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-fade-in">
         {/* Header */}
-        <div className="bg-gradient-to-r from-tecpred-primary to-tecpred-secondary p-6 rounded-t-xl">
+        <div className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary p-6 rounded-t-xl border-b-4 border-tecpred-orange">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -268,7 +268,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
 
                 <button
                   type="submit"
-                  className="w-full px-6 py-3 bg-tecpred-primary text-white rounded-lg hover:bg-tecpred-secondary transition-colors font-semibold"
+                  className="w-full px-6 py-3 bg-gradient-to-r from-tecpred-orange to-tecpred-coral text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold border-2 border-tecpred-orange"
                 >
                   Atribuir Task
                 </button>
@@ -285,8 +285,8 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                     key={eng.eng_id}
                     className={`bg-white rounded-lg p-4 border-2 transition-all ${
                       eng.eng_id === melhorEngenheiro.eng_id
-                        ? 'border-tecpred-primary shadow-lg'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-tecpred-orange shadow-xl shadow-tecpred-orange/20'
+                        : 'border-gray-200 hover:border-tecpred-primary'
                     }`}
                   >
                     <div className="flex items-start justify-between mb-3">
@@ -294,13 +294,13 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                         <div className="flex items-center gap-2">
                           <h4 className="font-bold text-gray-900">{eng.nome}</h4>
                           {eng.eng_id === melhorEngenheiro.eng_id && (
-                            <span className="px-2 py-1 bg-tecpred-primary text-white text-xs rounded-full flex items-center gap-1">
+                            <span className="px-2 py-1 bg-gradient-to-r from-tecpred-orange to-tecpred-coral text-white text-xs rounded-full flex items-center gap-1 shadow-lg">
                               <CheckCircle className="w-3 h-3" />
                               Recomendado
                             </span>
                           )}
                           {eng.exclusivo && (
-                            <span className="px-2 py-1 bg-tecpred-accent text-white text-xs rounded-full">
+                            <span className="px-2 py-1 bg-tecpred-primary text-white text-xs rounded-full">
                               Exclusivo
                             </span>
                           )}

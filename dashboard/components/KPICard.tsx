@@ -13,27 +13,27 @@ interface KPICardProps {
 }
 
 const colorClasses = {
-  primary: 'from-tecpred-primary to-tecpred-secondary',
+  primary: 'from-tecpred-primary via-tecpred-secondary to-tecpred-primary',
   success: 'from-success to-green-600',
-  warning: 'from-warning to-orange-600',
+  warning: 'from-tecpred-orange to-tecpred-coral',
   danger: 'from-danger to-red-600',
-  info: 'from-info to-blue-600',
+  info: 'from-tecpred-primary to-tecpred-secondary',
 }
 
 const iconBgClasses = {
-  primary: 'bg-tecpred-accent',
+  primary: 'bg-tecpred-orange bg-opacity-20',
   success: 'bg-green-100',
-  warning: 'bg-orange-100',
+  warning: 'bg-tecpred-orange bg-opacity-20',
   danger: 'bg-red-100',
-  info: 'bg-blue-100',
+  info: 'bg-tecpred-primary bg-opacity-20',
 }
 
 const iconColorClasses = {
-  primary: 'text-tecpred-primary',
+  primary: 'text-tecpred-orange',
   success: 'text-success',
-  warning: 'text-warning',
+  warning: 'text-tecpred-orange',
   danger: 'text-danger',
-  info: 'text-info',
+  info: 'text-tecpred-primary',
 }
 
 export default function KPICard({

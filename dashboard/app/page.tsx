@@ -153,7 +153,7 @@ export default function Dashboard() {
         <div className="mb-6">
           <button
             onClick={() => setShowAtribuirTaskModal(true)}
-            className="px-6 py-3 bg-gradient-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg hover:shadow-lg transition-all font-semibold flex items-center gap-2"
+            className="px-6 py-3 bg-gradient-to-r from-tecpred-orange to-tecpred-coral text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold flex items-center gap-2 border-2 border-tecpred-orange"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
