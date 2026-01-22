@@ -17,6 +17,7 @@ import RetrabalhoCard from '../components/RetrabalhoCard'
 import ProjetosTable from '../components/ProjetosTable'
 import EngenheirosTable from '../components/EngenheirosTable'
 import AreasTable from '../components/AreasTable'
+import AtribuirTask, { TaskData } from '../components/AtribuirTask'
 import {
   fetchVisaoGeral,
   fetchAtrasosEngenheiro,
@@ -57,6 +58,7 @@ export default function Dashboard() {
   const [showAtrasadosModal, setShowAtrasadosModal] = useState(false)
   const [showEngenheirosModal, setShowEngenheirosModal] = useState(false)
   const [showAreasModal, setShowAreasModal] = useState(false)
+  const [showAtribuirTaskModal, setShowAtribuirTaskModal] = useState(false)
 
   // Função para carregar todos os dados
   const loadData = async () => {
@@ -133,11 +135,36 @@ export default function Dashboard() {
     }
   }, [])
 
+  // Handler para atribuir task
+  const handleAtribuirTask = (data: TaskData) => {
+    console.log('Nova task atribuída:', data)
+    // Aqui você integraria com o Supabase
+    alert(`Task ${data.codigo_projeto} atribuída com sucesso para o engenheiro!`)
+    // Recarregar dados
+    loadData()
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-tecpred-light">
       <Header lastUpdate={lastUpdate} isLoading={isLoading} />
 
       <main className="container mx-auto px-6 py-8">
+        {/* Botão Atribuir Task */}
+        <div className="mb-6">
+          <button
+            onClick={() => setShowAtribuirTaskModal(true)}
+            className="px-6 py-3 bg-gradient-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg hover:shadow-lg transition-all font-semibold flex items-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <line x1="19" x2="19" y1="8" y2="14"></line>
+              <line x1="22" x2="16" y1="11" y2="11"></line>
+            </svg>
+            Atribuir Nova Task
+          </button>
+        </div>
+
         {/* Seção 1: KPIs Principais */}
         <section className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
@@ -221,6 +248,13 @@ export default function Dashboard() {
           isOpen={showAreasModal}
           onClose={() => setShowAreasModal(false)}
           data={mockAreas}
+        />
+        <AtribuirTask
+          isOpen={showAtribuirTaskModal}
+          onClose={() => setShowAtribuirTaskModal(false)}
+          engenheiros={mockEngenheiros}
+          areas={mockAreas}
+          onAtribuir={handleAtribuirTask}
         />
 
         {/* Seção 2: Progresso */}
