@@ -21,9 +21,18 @@ interface ProjetosTableProps {
   onClose: () => void
   data: Projeto[]
   initialFilter?: 'all' | 'concluido' | 'em_execucao' | 'atrasado'
+  title?: string
+  color?: 'primary' | 'success' | 'info' | 'danger'
 }
 
-export default function ProjetosTable({ isOpen, onClose, data, initialFilter = 'all' }: ProjetosTableProps) {
+export default function ProjetosTable({ 
+  isOpen, 
+  onClose, 
+  data, 
+  initialFilter = 'all',
+  title = 'Listagem de Projetos',
+  color = 'primary'
+}: ProjetosTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
   const [filterStatus, setFilterStatus] = React.useState<string>(initialFilter)
   
@@ -39,6 +48,14 @@ export default function ProjetosTable({ isOpen, onClose, data, initialFilter = '
   }, [isOpen, initialFilter])
 
   if (!isOpen) return null
+
+  // Mapa de cores para o header
+  const colorClasses = {
+    primary: 'from-tecpred-primary to-tecpred-secondary',
+    success: 'from-success to-green-600',
+    info: 'from-info to-blue-600',
+    danger: 'from-danger to-red-600',
+  }
 
   const filteredData = data.filter(item => {
     const matchesSearch = 
@@ -73,11 +90,11 @@ export default function ProjetosTable({ isOpen, onClose, data, initialFilter = '
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-fade-in">
         {/* Header */}
-        <div className="bg-gradient-to-r from-tecpred-primary to-tecpred-secondary p-6 rounded-t-xl">
+        <div className={`bg-gradient-to-r ${colorClasses[color]} p-6 rounded-t-xl`}>
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-white">Listagem de Projetos</h2>
-              <p className="text-tecpred-light text-sm mt-1">
+              <h2 className="text-2xl font-bold text-white">{title}</h2>
+              <p className="text-white text-opacity-90 text-sm mt-1">
                 {filteredData.length} projeto(s) encontrado(s)
               </p>
             </div>
@@ -90,35 +107,17 @@ export default function ProjetosTable({ isOpen, onClose, data, initialFilter = '
           </div>
         </div>
 
-        {/* Filtros */}
+        {/* Busca */}
         <div className="p-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex flex-col md:flex-row gap-4">
-            {/* Busca */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Buscar por código, cliente, engenheiro ou área..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
-              />
-            </div>
-            
-            {/* Filtro Status */}
-            <div className="flex items-center space-x-2">
-              <Filter className="w-5 h-5 text-gray-500" />
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
-              >
-                <option value="all">Todos</option>
-                <option value="concluido">Concluídos</option>
-                <option value="em_execucao">Em Execução</option>
-                <option value="atrasado">Atrasados</option>
-              </select>
-            </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Buscar por código, cliente, engenheiro ou área..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
+            />
           </div>
         </div>
 

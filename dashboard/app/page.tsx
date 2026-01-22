@@ -185,24 +185,32 @@ export default function Dashboard() {
           onClose={() => setShowProjetosModal(false)}
           data={mockProjetos}
           initialFilter="all"
+          title="Total de Projetos"
+          color="primary"
         />
         <ProjetosTable
           isOpen={showProjetosConcluidosModal}
           onClose={() => setShowProjetosConcluidosModal(false)}
           data={mockProjetos}
           initialFilter="concluido"
+          title="Projetos Concluídos"
+          color="success"
         />
         <ProjetosTable
           isOpen={showProjetosExecucaoModal}
           onClose={() => setShowProjetosExecucaoModal(false)}
           data={mockProjetos}
           initialFilter="em_execucao"
+          title="Em Execução"
+          color="info"
         />
         <ProjetosTable
           isOpen={showAtrasadosModal}
           onClose={() => setShowAtrasadosModal(false)}
           data={mockProjetos}
           initialFilter="atrasado"
+          title="Atrasados"
+          color="danger"
         />
         <EngenheirosTable
           isOpen={showEngenheirosModal}
