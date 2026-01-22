@@ -9,6 +9,7 @@ interface KPICardProps {
   color?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
   trend?: 'up' | 'down' | 'neutral'
   trendValue?: string
+  onClick?: () => void
 }
 
 const colorClasses = {
@@ -43,9 +44,15 @@ export default function KPICard({
   color = 'primary',
   trend,
   trendValue,
+  onClick,
 }: KPICardProps) {
   return (
-    <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 animate-fade-in">
+    <button
+      onClick={onClick}
+      className={`bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 animate-fade-in w-full text-left ${
+        onClick ? 'cursor-pointer hover:scale-105 active:scale-95' : ''
+      }`}
+    >
       <div className={`h-2 bg-gradient-to-r ${colorClasses[color]}`}></div>
       
       <div className="p-6">
@@ -74,6 +81,12 @@ export default function KPICard({
                 </span>
               </div>
             )}
+            
+            {onClick && (
+              <div className="mt-3 text-xs text-tecpred-primary font-medium">
+                Clique para ver detalhes →
+              </div>
+            )}
           </div>
           
           <div className={`p-3 rounded-lg ${iconBgClasses[color]}`}>
@@ -81,7 +94,7 @@ export default function KPICard({
           </div>
         </div>
       </div>
-    </div>
+    </button>
   )
 }
 

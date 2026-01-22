@@ -14,6 +14,9 @@ import ProjetosStatusChart from '../components/ProjetosStatusChart'
 import CargaTrabalhoChart from '../components/CargaTrabalhoChart'
 import AtrasosTable from '../components/AtrasosTable'
 import RetrabalhoCard from '../components/RetrabalhoCard'
+import ProjetosTable from '../components/ProjetosTable'
+import EngenheirosTable from '../components/EngenheirosTable'
+import AreasTable from '../components/AreasTable'
 import {
   fetchVisaoGeral,
   fetchAtrasosEngenheiro,
@@ -27,6 +30,16 @@ import {
   RetrabalhoEngenheiro,
   ProjetosStatus,
 } from '../lib/supabase'
+import {
+  mockVisaoGeral,
+  mockAtrasosEngenheiro,
+  mockCargaTrabalho,
+  mockRetrabalhos,
+  mockProjetosStatus,
+  mockProjetos,
+  mockEngenheiros,
+  mockAreas,
+} from '../lib/mockData'
 
 export default function Dashboard() {
   const [visaoGeral, setVisaoGeral] = useState<VisaoGeral | null>(null)
@@ -36,33 +49,61 @@ export default function Dashboard() {
   const [projetosStatus, setProjetosStatus] = useState<ProjetosStatus[]>([])
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  
+  // Estados para modais
+  const [showProjetosModal, setShowProjetosModal] = useState(false)
+  const [showEngenheirosModal, setShowEngenheirosModal] = useState(false)
+  const [showAreasModal, setShowAreasModal] = useState(false)
+  const [showAtrasadosModal, setShowAtrasadosModal] = useState(false)
 
   // Função para carregar todos os dados
   const loadData = async () => {
     setIsLoading(true)
     try {
-      const [
-        visaoGeralData,
-        atrasosData,
-        cargaData,
-        retrabalhosData,
-        statusData,
-      ] = await Promise.all([
-        fetchVisaoGeral(),
-        fetchAtrasosEngenheiro(),
-        fetchCargaTrabalho(),
-        fetchRetrabalhoEngenheiro(),
-        fetchProjetosStatus(),
-      ])
+      // Verifica se Supabase está configurado
+      const supabaseConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && 
+                                  process.env.NEXT_PUBLIC_SUPABASE_URL !== 'https://exemplo.supabase.co'
 
-      setVisaoGeral(visaoGeralData)
-      setAtrasosEngenheiro(atrasosData)
-      setCargaTrabalho(cargaData)
-      setRetrabalhos(retrabalhosData)
-      setProjetosStatus(statusData)
+      if (supabaseConfigured) {
+        // Usa dados reais do Supabase
+        const [
+          visaoGeralData,
+          atrasosData,
+          cargaData,
+          retrabalhosData,
+          statusData,
+        ] = await Promise.all([
+          fetchVisaoGeral(),
+          fetchAtrasosEngenheiro(),
+          fetchCargaTrabalho(),
+          fetchRetrabalhoEngenheiro(),
+          fetchProjetosStatus(),
+        ])
+
+        setVisaoGeral(visaoGeralData)
+        setAtrasosEngenheiro(atrasosData)
+        setCargaTrabalho(cargaData)
+        setRetrabalhos(retrabalhosData)
+        setProjetosStatus(statusData)
+      } else {
+        // Usa dados mockados para preview
+        console.log('⚠️  Usando dados mockados - Configure o Supabase em .env.local')
+        setVisaoGeral(mockVisaoGeral)
+        setAtrasosEngenheiro(mockAtrasosEngenheiro)
+        setCargaTrabalho(mockCargaTrabalho)
+        setRetrabalhos(mockRetrabalhos)
+        setProjetosStatus(mockProjetosStatus)
+      }
+      
       setLastUpdate(new Date())
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
+      // Em caso de erro, usa dados mockados
+      setVisaoGeral(mockVisaoGeral)
+      setAtrasosEngenheiro(mockAtrasosEngenheiro)
+      setCargaTrabalho(mockCargaTrabalho)
+      setRetrabalhos(mockRetrabalhos)
+      setProjetosStatus(mockProjetosStatus)
     } finally {
       setIsLoading(false)
     }
@@ -72,16 +113,21 @@ export default function Dashboard() {
   useEffect(() => {
     loadData()
 
-    // Configurar subscrições em tempo real
-    const channels = [
-      subscribeToChanges('engenheiros_projetos', loadData),
-      subscribeToChanges('projetos_previsao', loadData),
-      subscribeToChanges('retrabalho_projetos', loadData),
-    ]
+    // Configurar subscrições em tempo real (só se Supabase estiver configurado)
+    const supabaseConfigured = process.env.NEXT_PUBLIC_SUPABASE_URL && 
+                                process.env.NEXT_PUBLIC_SUPABASE_URL !== 'https://exemplo.supabase.co'
 
-    // Cleanup
-    return () => {
-      channels.forEach(channel => channel.unsubscribe())
+    if (supabaseConfigured) {
+      const channels = [
+        subscribeToChanges('engenheiros_projetos', loadData),
+        subscribeToChanges('projetos_previsao', loadData),
+        subscribeToChanges('retrabalho_projetos', loadData),
+      ]
+
+      // Cleanup
+      return () => {
+        channels.forEach(channel => channel.unsubscribe())
+      }
     }
   }, [])
 
@@ -102,6 +148,7 @@ export default function Dashboard() {
               subtitle={`${visaoGeral?.total_areas || 0} áreas`}
               icon={Briefcase}
               color="primary"
+              onClick={() => setShowProjetosModal(true)}
             />
             <KPICard
               title="Projetos Concluídos"
@@ -109,6 +156,7 @@ export default function Dashboard() {
               subtitle={`${visaoGeral?.areas_concluidas || 0} áreas concluídas`}
               icon={CheckCircle}
               color="success"
+              onClick={() => setShowProjetosModal(true)}
             />
             <KPICard
               title="Em Execução"
@@ -116,6 +164,7 @@ export default function Dashboard() {
               subtitle={`${visaoGeral?.areas_ativas || 0} áreas ativas`}
               icon={Play}
               color="info"
+              onClick={() => setShowProjetosModal(true)}
             />
             <KPICard
               title="Atrasados"
@@ -123,9 +172,32 @@ export default function Dashboard() {
               subtitle="Requer atenção"
               icon={AlertTriangle}
               color="danger"
+              onClick={() => setShowAtrasadosModal(true)}
             />
           </div>
         </section>
+        
+        {/* Modais */}
+        <ProjetosTable
+          isOpen={showProjetosModal}
+          onClose={() => setShowProjetosModal(false)}
+          data={mockProjetos}
+        />
+        <EngenheirosTable
+          isOpen={showEngenheirosModal}
+          onClose={() => setShowEngenheirosModal(false)}
+          data={mockEngenheiros}
+        />
+        <AreasTable
+          isOpen={showAreasModal}
+          onClose={() => setShowAreasModal(false)}
+          data={mockAreas}
+        />
+        <ProjetosTable
+          isOpen={showAtrasadosModal}
+          onClose={() => setShowAtrasadosModal(false)}
+          data={mockProjetos.filter(p => p.dias_atraso > 0)}
+        />
 
         {/* Seção 2: Progresso */}
         <section className="mb-8">
@@ -159,6 +231,15 @@ export default function Dashboard() {
 
         {/* Seção 3: Gráficos */}
         <section className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">Análises e Gráficos</h2>
+            <button
+              onClick={() => setShowAreasModal(true)}
+              className="px-4 py-2 bg-tecpred-primary text-white rounded-lg hover:bg-tecpred-secondary transition-colors text-sm"
+            >
+              Ver Todas as Áreas
+            </button>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <ProjetosStatusChart data={projetosStatus} />
             <CargaTrabalhoChart data={cargaTrabalho} />
@@ -167,6 +248,15 @@ export default function Dashboard() {
 
         {/* Seção 4: Atrasos */}
         <section className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">Atrasos</h2>
+            <button
+              onClick={() => setShowEngenheirosModal(true)}
+              className="px-4 py-2 bg-tecpred-primary text-white rounded-lg hover:bg-tecpred-secondary transition-colors text-sm"
+            >
+              Ver Todos os Engenheiros
+            </button>
+          </div>
           <AtrasosTable data={atrasosEngenheiro} />
         </section>
 
