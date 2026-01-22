@@ -52,9 +52,11 @@ export default function Dashboard() {
   
   // Estados para modais
   const [showProjetosModal, setShowProjetosModal] = useState(false)
+  const [showProjetosConcluidosModal, setShowProjetosConcluidosModal] = useState(false)
+  const [showProjetosExecucaoModal, setShowProjetosExecucaoModal] = useState(false)
+  const [showAtrasadosModal, setShowAtrasadosModal] = useState(false)
   const [showEngenheirosModal, setShowEngenheirosModal] = useState(false)
   const [showAreasModal, setShowAreasModal] = useState(false)
-  const [showAtrasadosModal, setShowAtrasadosModal] = useState(false)
 
   // Função para carregar todos os dados
   const loadData = async () => {
@@ -156,7 +158,7 @@ export default function Dashboard() {
               subtitle={`${visaoGeral?.areas_concluidas || 0} áreas concluídas`}
               icon={CheckCircle}
               color="success"
-              onClick={() => setShowProjetosModal(true)}
+              onClick={() => setShowProjetosConcluidosModal(true)}
             />
             <KPICard
               title="Em Execução"
@@ -164,7 +166,7 @@ export default function Dashboard() {
               subtitle={`${visaoGeral?.areas_ativas || 0} áreas ativas`}
               icon={Play}
               color="info"
-              onClick={() => setShowProjetosModal(true)}
+              onClick={() => setShowProjetosExecucaoModal(true)}
             />
             <KPICard
               title="Atrasados"
@@ -182,6 +184,25 @@ export default function Dashboard() {
           isOpen={showProjetosModal}
           onClose={() => setShowProjetosModal(false)}
           data={mockProjetos}
+          initialFilter="all"
+        />
+        <ProjetosTable
+          isOpen={showProjetosConcluidosModal}
+          onClose={() => setShowProjetosConcluidosModal(false)}
+          data={mockProjetos}
+          initialFilter="concluido"
+        />
+        <ProjetosTable
+          isOpen={showProjetosExecucaoModal}
+          onClose={() => setShowProjetosExecucaoModal(false)}
+          data={mockProjetos}
+          initialFilter="em_execucao"
+        />
+        <ProjetosTable
+          isOpen={showAtrasadosModal}
+          onClose={() => setShowAtrasadosModal(false)}
+          data={mockProjetos}
+          initialFilter="atrasado"
         />
         <EngenheirosTable
           isOpen={showEngenheirosModal}
@@ -192,11 +213,6 @@ export default function Dashboard() {
           isOpen={showAreasModal}
           onClose={() => setShowAreasModal(false)}
           data={mockAreas}
-        />
-        <ProjetosTable
-          isOpen={showAtrasadosModal}
-          onClose={() => setShowAtrasadosModal(false)}
-          data={mockProjetos.filter(p => p.dias_atraso > 0)}
         />
 
         {/* Seção 2: Progresso */}

@@ -20,11 +20,23 @@ interface ProjetosTableProps {
   isOpen: boolean
   onClose: () => void
   data: Projeto[]
+  initialFilter?: 'all' | 'concluido' | 'em_execucao' | 'atrasado'
 }
 
-export default function ProjetosTable({ isOpen, onClose, data }: ProjetosTableProps) {
+export default function ProjetosTable({ isOpen, onClose, data, initialFilter = 'all' }: ProjetosTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
-  const [filterStatus, setFilterStatus] = React.useState<string>('all')
+  const [filterStatus, setFilterStatus] = React.useState<string>(initialFilter)
+  
+  // Atualiza o filtro e limpa busca quando o modal abre com um filtro inicial
+  React.useEffect(() => {
+    if (isOpen) {
+      if (initialFilter) {
+        setFilterStatus(initialFilter)
+      }
+      // Limpa busca quando abre o modal
+      setSearchTerm('')
+    }
+  }, [isOpen, initialFilter])
 
   if (!isOpen) return null
 
@@ -35,10 +47,24 @@ export default function ProjetosTable({ isOpen, onClose, data }: ProjetosTablePr
       item.engenheiro_nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.area_descricao.toLowerCase().includes(searchTerm.toLowerCase())
     
-    const matchesFilter = filterStatus === 'all' || 
-      (filterStatus === 'concluido' && item.data_conclusao) ||
-      (filterStatus === 'em_execucao' && !item.data_conclusao && item.dias_atraso === 0) ||
-      (filterStatus === 'atrasado' && item.dias_atraso > 0)
+    // Filtro mais preciso baseado no estado real do projeto
+    let matchesFilter = false
+    
+    if (filterStatus === 'all') {
+      matchesFilter = true
+    } else if (filterStatus === 'concluido') {
+      // Projeto concluído: tem data_conclusao OU percentual = 100%
+      matchesFilter = (item.data_conclusao !== null && item.data_conclusao !== undefined) || 
+                      item.percentual_andamento >= 100
+    } else if (filterStatus === 'em_execucao') {
+      // Em execução: não concluído (sem data_conclusao E percentual < 100) E não atrasado
+      matchesFilter = (item.data_conclusao === null || item.data_conclusao === undefined) && 
+                      item.percentual_andamento < 100 && 
+                      item.dias_atraso === 0
+    } else if (filterStatus === 'atrasado') {
+      // Atrasado: tem dias de atraso
+      matchesFilter = item.dias_atraso > 0
+    }
     
     return matchesSearch && matchesFilter
   })
