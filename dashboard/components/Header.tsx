@@ -37,24 +37,24 @@ export default function Header({ lastUpdate, isLoading }: HeaderProps) {
 
           {/* Status */}
           <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 bg-tecpred-secondary px-4 py-2 rounded-lg">
+            <div className="flex items-center space-x-2 bg-white bg-opacity-10 backdrop-blur-sm px-4 py-2 rounded-lg border border-white border-opacity-20">
               <RefreshCw 
-                className={`w-4 h-4 text-white ${isLoading ? 'animate-spin' : ''}`} 
+                className={`w-4 h-4 text-tecpred-orange ${isLoading ? 'animate-spin' : ''}`} 
               />
               <div className="text-white text-sm">
                 <div className="font-semibold">
                   {isLoading ? 'Atualizando...' : 'Ao vivo'}
                 </div>
                 {lastUpdate && (
-                  <div className="text-xs text-tecpred-light">
+                  <div className="text-xs opacity-80">
                     {lastUpdate.toLocaleTimeString('pt-BR')}
                   </div>
                 )}
               </div>
             </div>
             
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-success rounded-full animate-pulse-slow"></div>
+            <div className="flex items-center space-x-2 bg-success bg-opacity-20 px-3 py-2 rounded-lg border border-success">
+              <div className="w-3 h-3 bg-success rounded-full animate-pulse-slow shadow-lg shadow-success"></div>
               <span className="text-white text-sm font-medium">
                 Conectado
               </span>
