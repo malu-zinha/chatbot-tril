@@ -479,3 +479,5 @@ Bot: [registra previsão escolhida]
 
 
 
+
+

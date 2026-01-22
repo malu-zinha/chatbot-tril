@@ -14,8 +14,8 @@
 -- 6. Views consolidadas
 -- 
 -- Ordem de execução:
--- 1º → Este arquivo (MASTER_SCHEMA_COMPLETO.sql)
--- 2º → Testar functions via SQL Editor
+-- 1º → Este arquivo (MASTER_SCHEMA_COMPLETO.sql)=
+===-- 2º → Testar functions via SQL Editor
 -- 3º → Implementar webhook WhatsApp
 -- 
 -- =====================================================

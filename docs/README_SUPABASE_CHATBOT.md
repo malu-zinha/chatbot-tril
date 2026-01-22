@@ -558,3 +558,5 @@ SELECT * FROM pg_trigger WHERE tgname LIKE 'trg_calcular%';
 
 
 
+
+
