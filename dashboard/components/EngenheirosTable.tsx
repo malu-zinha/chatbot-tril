@@ -190,16 +190,8 @@ export default function EngenheirosTable({ isOpen, onClose, data }: EngenheirosT
 
         {/* Footer */}
         <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              Mostrando {filteredData.length} de {data.length} engenheiros
-            </div>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-tecpred-primary text-white rounded-lg hover:bg-tecpred-secondary transition-colors"
-            >
-              Fechar
-            </button>
+          <div className="text-sm text-gray-600 text-center">
+            Mostrando {filteredData.length} de {data.length} engenheiros
           </div>
         </div>
       </div>
