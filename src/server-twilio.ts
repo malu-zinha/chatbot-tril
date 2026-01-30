@@ -133,14 +133,8 @@ app.post('/webhook/whatsapp', async (req, res) => {
 
     console.log('✅ Resposta enviada com sucesso!\n');
 
-    // Responder ao Twilio com TwiML (opcional, mas recomendado)
-    res.set('Content-Type', 'text/xml');
-    res.send(`
-      <?xml version="1.0" encoding="UTF-8"?>
-      <Response>
-        <Message>${escapeXml(handlerResponse.resposta)}</Message>
-      </Response>
-    `);
+    // Responder ao Twilio com 200 OK (sem TwiML para evitar duplicação)
+    res.status(200).send('OK');
 
   } catch (error: any) {
     console.error('\n❌ ERRO NO WEBHOOK:');

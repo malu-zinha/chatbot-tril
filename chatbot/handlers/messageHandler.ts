@@ -60,13 +60,14 @@ export interface MessageResponse {
 
 export class MessageHandler {
   private sessoes: Map<string, UserSession>;
+  private readonly MAX_STACK_DEPTH = 10;
   private timeout_sessao: number = 15 * 60 * 1000; // 15 minutos
 
   constructor() {
-    this.sessoes = new Map();
-    
-    // Limpar sessões antigas periodicamente
-    setInterval(() => this.limparSessoesAntigas(), 5 * 60 * 1000); // A cada 5 minutos
+    this.sessoes = new Map(); // DEPRECATED
+
+    // Redis cuida da expiração automática via TTL
+    console.log('✅ MessageHandler inicializado com SessionService (Redis)');
   }
 
   // =====================================================
@@ -78,35 +79,35 @@ export class MessageHandler {
       // DEBUG ESPECÍFICO: Número problemático
       const numeroProblema = '5583988990772';
       const isNumeroProblema = whatsapp.includes(numeroProblema) || whatsapp.includes('98899');
-      
+
       console.log(`\n🔵 MessageHandler.processarMensagem()`);
       console.log(`   WhatsApp: ${whatsapp}`);
       console.log(`   Mensagem: "${mensagem}"`);
-      
+
       if (isNumeroProblema) {
         console.log(`   🔴🔴🔴 NÚMERO PROBLEMÁTICO CHEGOU NO MESSAGEHANDLER! 🔴🔴🔴`);
       }
-      
+
       // Normalizar WhatsApp
       console.log(`   🔍 [DEBUG] Normalizando WhatsApp...`);
       const whatsappNormalizado = this.normalizarWhatsapp(whatsapp);
       console.log(`   🔍 [DEBUG] WhatsApp normalizado: ${whatsappNormalizado}`);
-      
+
       if (isNumeroProblema) {
         console.log(`   🔴 WhatsApp normalizado: ${whatsappNormalizado}`);
       }
 
       // Obter ou criar sessão
       let sessao = this.sessoes.get(whatsappNormalizado);
-      
+
       if (!sessao) {
         console.log(`   📝 Criando nova sessão para ${whatsappNormalizado}`);
-        
+
         // AUTENTICAÇÃO: Verificar se é engenheiro ou dono
         console.log(`   🔍 [DEBUG] Iniciando autenticação...`);
         const tipoUsuario = await this.autenticarUsuario(whatsappNormalizado);
         console.log(`   🔍 [DEBUG] Autenticação concluída: ${tipoUsuario.tipo}`);
-        
+
         sessao = {
           whatsapp: whatsappNormalizado,
           tipo_usuario: tipoUsuario.tipo,
@@ -115,15 +116,15 @@ export class MessageHandler {
           ultima_interacao: new Date(),
         };
         this.sessoes.set(whatsappNormalizado, sessao);
-        
+
         console.log(`   ✅ Sessão criada - Tipo: ${tipoUsuario.tipo}`);
-        
+
         // Se for dono, iniciar OwnerFlow imediatamente
         if (tipoUsuario.tipo === 'dono') {
           console.log(`   🔄 Iniciando OwnerFlow automaticamente para novo dono`);
           return await this.iniciarFluxoDono(sessao);
         }
-        
+
         // Se for engenheiro, mostrar menu
         if (tipoUsuario.tipo === 'engenheiro') {
           return { resposta: this.mensagemMenu(tipoUsuario.tipo) };
@@ -197,12 +198,12 @@ export class MessageHandler {
       switch (intencao) {
         case 'gerenciar_projeto':
           console.log(`   🔄 Processando fluxo de gerenciamento de projeto`);
-          
+
           // DECISÃO: Fluxo de engenheiro OU fluxo de dono
           if (sessao.tipo_usuario === 'dono') {
             return await this.iniciarFluxoDono(sessao);
           }
-          
+
           // Se for comando direto de menu (1, 2, 3, 4), processar diretamente
           const mensagemNorm = mensagem.trim();
           if (mensagemNorm === '1' || mensagemNorm === '2' || mensagemNorm === '3' || mensagemNorm === '4') {
@@ -211,10 +212,10 @@ export class MessageHandler {
             const flow = new EngineerProjectFlow(sessao.whatsapp);
             sessao.fluxo_ativo = 'engineer_project';
             sessao.instancia_fluxo = flow;
-            
+
             // Processar "iniciar" primeiro (vai para stepInicio → escolher_acao)
             await flow.processarMensagem('iniciar');
-            
+
             // Depois processar a escolha (1, 2, 3 ou 4)
             const resultado = await flow.processarMensagem(mensagemNorm);
             console.log(`   ✅ Fluxo processado, retornando resposta\n`);
@@ -224,11 +225,11 @@ export class MessageHandler {
             // Palavra-chave genérica (projeto, cadastrar, etc) - mostrar menu
             return await this.iniciarFluxoProjeto(sessao);
           }
-        
+
         case 'ajuda':
           console.log(`   ✅ Retornando mensagem de ajuda\n`);
           return { resposta: this.mensagemAjuda(sessao.tipo_usuario) };
-        
+
         case 'menu':
           console.log(`   ✅ Retornando menu principal\n`);
           // Para o dono, iniciar o OwnerFlow diretamente
@@ -236,7 +237,7 @@ export class MessageHandler {
             return await this.iniciarFluxoDono(sessao);
           }
           return { resposta: this.mensagemMenu(sessao.tipo_usuario) };
-        
+
         default:
           // Não tenta mais processar via IA - força uso do menu
           console.log(`   ⚠️ Intenção não reconhecida\n`);
@@ -266,7 +267,7 @@ export class MessageHandler {
 
   private async autenticarUsuario(whatsapp: string): Promise<{ tipo: TipoUsuario; user_id?: string }> {
     console.log(`   🔐 Autenticando usuário: ${whatsapp}`);
-    
+
     // Verificar se é engenheiro
     console.log(`   🔍 [DEBUG] Buscando engenheiro por telefone...`);
     const engenheiro = await getSupabase().buscarEngenheiroPorTelefone(whatsapp);
@@ -552,21 +553,21 @@ Digite *menu* para ver as opções disponíveis`;
   private async executarSincronizacaoManual(): Promise<string> {
     try {
       const { executarSincronizacao } = await import('../../integrations/cron/syncDatabaseToSheets.ts');
-      
+
       // Executar sincronização em background
       executarSincronizacao().catch(error => {
         console.error('❌ Erro na sincronização manual:', error);
       });
-      
+
       return `🔄 *Sincronização iniciada!*\n\n` +
-             `Os dados do Supabase estão sendo sincronizados\n` +
-             `para o Google Sheets agora.\n\n` +
-             `⏱️ Aguarde alguns segundos e verifique a planilha.\n\n` +
-             `_A sincronização automática continua a cada 5 minutos_`;
+        `Os dados do Supabase estão sendo sincronizados\n` +
+        `para o Google Sheets agora.\n\n` +
+        `⏱️ Aguarde alguns segundos e verifique a planilha.\n\n` +
+        `_A sincronização automática continua a cada 5 minutos_`;
     } catch (error: any) {
       console.error('Erro ao executar sincronização manual:', error);
       return `❌ Erro ao iniciar sincronização.\n\n` +
-             `Verifique se o Supabase está configurado corretamente.`;
+        `Verifique se o Supabase está configurado corretamente.`;
     }
   }
 
@@ -581,10 +582,10 @@ Digite *menu* para ver as opções disponíveis`;
       if (whatsapp.includes('@')) {
         numero = whatsapp.split('@')[0];
       }
-      
+
       // Remove caracteres especiais e garante formato +55XXXXXXXXXXX
       const cleaned = numero.replace(/[^\d+]/g, '');
-      
+
       // DEBUG: Número problemático
       if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
         console.log(`   🔍 Normalizando número problemático:`);
@@ -592,7 +593,7 @@ Digite *menu* para ver as opções disponíveis`;
         console.log(`   Após remover @: ${numero}`);
         console.log(`   Após limpar: ${cleaned}`);
       }
-      
+
       if (!cleaned.startsWith('+')) {
         const resultado = '+55' + cleaned;
         if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
@@ -600,11 +601,11 @@ Digite *menu* para ver as opções disponíveis`;
         }
         return resultado;
       }
-      
+
       if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
         console.log(`   Resultado final: ${cleaned}`);
       }
-      
+
       return cleaned;
     } catch (error: any) {
       console.error(`❌ Erro ao normalizar WhatsApp "${whatsapp}":`, error);
