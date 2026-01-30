@@ -58,13 +58,13 @@ const STATUS_PARA_ETAPA: { [key: string]: string } = {
 type FlowStep =
   | 'inicio'
   | 'escolher_acao'
-  
+
   // Notificacao Manha
   | 'escolher_projeto_manha'
   | 'escolher_area_manha'
   | 'status_atual_manha'
   | 'previsao_dia'
-  
+
   // Notificacao Noite
   | 'escolher_projeto_noite'
   | 'escolher_area_noite'
@@ -73,19 +73,19 @@ type FlowStep =
   | 'retrabalho_motivo'
   | 'observacoes_pergunta'
   | 'observacoes_texto'
-  
+
   // Edicao
   | 'escolher_projeto_edicao'
   | 'escolher_area_edicao'
   | 'escolher_campo'
   | 'novo_valor'
   | 'confirmacao'
-  
+
   // Visualizacao
   | 'visualizar_projetos'
   | 'escolher_projeto_viz'
   | 'mostrar_detalhes_projeto'
-  
+
   | 'fim';
 
 interface FlowState {
@@ -163,21 +163,21 @@ export class EngineerProjectFlow {
     console.log('🔍 [DEBUG] buscarAtribuicoesEngenheiro() iniciado');
     console.log('🔍 [DEBUG] WhatsApp:', this.whatsapp);
     console.log('🔍 [DEBUG] Supabase conectado?', this.supabase.isConnected());
-    
+
     // Tentar buscar do Supabase primeiro
     if (this.supabase.isConnected()) {
       try {
         console.log('🔍 [DEBUG] Buscando engenheiro no Supabase...');
         const engenheiro = await this.supabase.buscarEngenheiroPorWhatsapp(this.whatsapp);
         console.log('🔍 [DEBUG] Engenheiro encontrado?', engenheiro ? 'SIM' : 'NÃO');
-        
+
         if (engenheiro) {
           console.log('🔍 [DEBUG] eng_id:', engenheiro.eng_id);
           console.log('🔍 [DEBUG] Buscando atribuições...');
           const atribuicoes = await this.supabase.listarAtribuicoesEngenheiro(engenheiro.eng_id);
           console.log('🔍 [DEBUG] Atribuições encontradas:', atribuicoes.length);
           console.log('🔍 [DEBUG] Atribuições:', JSON.stringify(atribuicoes, null, 2));
-          
+
           // Enriquecer com dados de projeto, área e status
           const atribuicoesEnriquecidas = [];
           for (const atrib of atribuicoes) {
@@ -188,7 +188,7 @@ export class EngineerProjectFlow {
             console.log('🔍 [DEBUG] Área:', area?.nome);
             const status = atrib.status_id ? await this.supabase.buscarStatusPorId(atrib.status_id) : null;
             console.log('🔍 [DEBUG] Status:', status?.descricao);
-            
+
             atribuicoesEnriquecidas.push({
               id: atrib.id,  // eng_projeto_id
               codigo: projeto?.codigo_projeto || '',
@@ -199,7 +199,7 @@ export class EngineerProjectFlow {
               projeto_id: atrib.projeto_id
             });
           }
-          
+
           console.log('🔍 [DEBUG] Atribuições enriquecidas:', atribuicoesEnriquecidas.length);
           return atribuicoesEnriquecidas;
         } else {
@@ -211,7 +211,7 @@ export class EngineerProjectFlow {
         // Fallback para planilha
       }
     }
-    
+
     // Fallback: buscar da planilha
     const projects = await this.sheetService.listAllProjects();
     return projects.map(proj => ({
@@ -227,7 +227,7 @@ export class EngineerProjectFlow {
   /**
    * Agrupa atribuições por código de projeto (para mostrar projetos únicos)
    */
-  private agruparAtribuicoesPorProjeto(atribuicoes: Array<{codigo: string, area: string, [key: string]: any}>): Array<{
+  private agruparAtribuicoesPorProjeto(atribuicoes: Array<{ codigo: string, area: string, [key: string]: any }>): Array<{
     codigo: string;
     cliente: string;
     areas: string[];
@@ -235,14 +235,14 @@ export class EngineerProjectFlow {
     atribuicoes: typeof atribuicoes;
   }> {
     const grupos = new Map<string, typeof atribuicoes>();
-    
+
     atribuicoes.forEach(atrib => {
       if (!grupos.has(atrib.codigo)) {
         grupos.set(atrib.codigo, []);
       }
       grupos.get(atrib.codigo)!.push(atrib);
     });
-    
+
     return Array.from(grupos.entries()).map(([codigo, atribs]) => ({
       codigo,
       cliente: atribs[0]?.cliente || '',
@@ -259,6 +259,13 @@ export class EngineerProjectFlow {
   async processarMensagem(mensagem: string): Promise<FlowResult> {
     try {
       const msg = mensagem.trim();
+
+      // ═══════════════════════════════════════════
+      // COMANDO: VOLTAR
+      // ═══════════════════════════════════════════
+      if (msg.toLowerCase() === 'voltar' || msg === '0') {
+        return this.voltarPasso();
+      }
 
       // Comandos globais
       if (msg.toLowerCase() === 'cancelar') {
@@ -357,25 +364,25 @@ export class EngineerProjectFlow {
       this.state.periodo = 'manha';
       this.state.step = 'escolher_projeto_manha';
       return await this.stepEscolherProjetoManha('');
-      
+
     } else if (opcao === '2') {
       // Notificacao Noturna
       this.state.mode = 'notif_noite';
       this.state.periodo = 'noite';
       this.state.step = 'escolher_projeto_noite';
       return await this.stepEscolherProjetoNoite('');
-      
+
     } else if (opcao === '3') {
       // Editar projeto
       this.state.mode = 'edit';
       this.state.step = 'escolher_projeto_edicao';
       return await this.stepEscolherProjetoEdicao('');
-      
+
     } else if (opcao === '4') {
       // Visualizar projetos
       this.state.step = 'visualizar_projetos';
       return await this.stepVisualizarProjetos();
-      
+
     } else {
       return {
         mensagem: '❌ Opção inválida. Digite *1*, *2*, *3* ou *4*.',
@@ -406,7 +413,7 @@ export class EngineerProjectFlow {
 
       let mensagem = `🌅 *Atualização Matinal*\n\n`;
       mensagem += `📋 Escolha o projeto:\n\n`;
-      
+
       projects.forEach((proj, index) => {
         mensagem += `${index + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
         mensagem += `   ${proj.obra || 'Sem descrição'}\n`;
@@ -435,7 +442,7 @@ export class EngineerProjectFlow {
 
       let mensagem = `🌙 *Atualização Noturna*\n\n`;
       mensagem += `📋 Escolha o projeto:\n\n`;
-      
+
       projects.forEach((proj, index) => {
         mensagem += `${index + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
         mensagem += `   ${proj.obra || 'Sem descrição'}\n`;
@@ -488,7 +495,7 @@ export class EngineerProjectFlow {
       this.state.step = 'feito_dia';
       mensagem += `Vamos registrar a atualização noturna.\n\n`;
       mensagem += `✔️ *O que foi FEITO ao final do dia?*\n\n`;
-      
+
       // Menu dinâmico conforme status
       const opcoes = this.sheetService.getFeitosPorStatus(projectData?.['Status do projeto'] || '');
       mensagem += this.formatOptions(opcoes);
@@ -573,11 +580,11 @@ export class EngineerProjectFlow {
 
     const tipo = TIPOS_PROJETO[numero - 1];
     this.state.projectData['Tipo de Projeto'] = tipo;
-    
+
     // Gerar descrição automática conforme tipo
     const descricao = this.sheetService.getDescricaoPorTipo(tipo);
     this.state.projectData['Descrição do projeto'] = descricao;
-    
+
     this.state.step = 'data_inicio';
 
     let mensagem = `✅ Tipo *${tipo}* selecionado\n\n`;
@@ -707,11 +714,11 @@ export class EngineerProjectFlow {
       // Armazenar atribuições deste projeto
       const atribsDoProjeto = atribuicoes.filter(a => a.codigo === selectedProjeto.codigo);
       this.state.availableAtribuicoes = atribsDoProjeto;
-      
+
       // Por enquanto, editar a primeira atribuição
       // TODO: Permitir escolher qual área editar
       this.state.selectedAtribuicaoId = atribsDoProjeto[0]?.id || '';
-      
+
       let mensagem = `✅ Projeto *${selectedProjeto.codigo}* selecionado\n\n`;
       mensagem += `📊 Cliente: ${selectedProjeto.cliente}\n`;
       mensagem += `🏢 Áreas: ${selectedProjeto.areas.join(', ')}\n\n`;
@@ -725,7 +732,7 @@ export class EngineerProjectFlow {
       mensagem += `3️⃣ *Status e Execução*\n`;
       mensagem += `   Status do projeto, Etapa, % executado\n\n`;
       mensagem += `_Digite o número da categoria_`;
-      
+
       this.state.step = 'escolher_categoria';
       return { mensagem, finalizado: false };
     }
@@ -785,7 +792,7 @@ export class EngineerProjectFlow {
 
     let mensagem = `✏️ *${categoriaInfo.nome}*\n\n`;
     mensagem += `Qual campo deseja editar?\n\n`;
-    
+
     categoriaInfo.campos.forEach((campo, index) => {
       const valorAtual = this.state.projectData[campo] || '(vazio)';
       mensagem += `${index + 1}️⃣ *${campo}*\n`;
@@ -905,18 +912,18 @@ export class EngineerProjectFlow {
       novoValor = ETAPAS_PROJETO[numero - 1].nome;
     } else if (campo.includes('Data')) {
       const dateStr = msg.trim();
-    if (!this.sheetService.validateDateFormat(dateStr)) {
-      return {
-        mensagem: '❌ Formato inválido. Use DD/MM/AAAA (exemplo: 15/12/2024).',
-        finalizado: false
-      };
-    }
-    const date = this.sheetService.parseDate(dateStr);
-    if (!date) {
-      return {
-        mensagem: '❌ Data inválida. Verifique o dia, mês e ano.',
-        finalizado: false
-      };
+      if (!this.sheetService.validateDateFormat(dateStr)) {
+        return {
+          mensagem: '❌ Formato inválido. Use DD/MM/AAAA (exemplo: 15/12/2024).',
+          finalizado: false
+        };
+      }
+      const date = this.sheetService.parseDate(dateStr);
+      if (!date) {
+        return {
+          mensagem: '❌ Data inválida. Verifique o dia, mês e ano.',
+          finalizado: false
+        };
       }
       novoValor = dateStr;
     } else {
@@ -979,7 +986,7 @@ export class EngineerProjectFlow {
 
       let mensagem = `🌅 *Notificação Matinal*\n\n`;
       mensagem += `📋 Escolha o projeto:\n\n`;
-      
+
       projetosAgrupados.forEach((proj, index) => {
         mensagem += `${index + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
         if (proj.areas.length > 0) {
@@ -1013,7 +1020,7 @@ export class EngineerProjectFlow {
 
       let mensagem = `🌙 *Notificação Noturna*\n\n`;
       mensagem += `📋 Escolha o projeto:\n\n`;
-      
+
       projetosAgrupados.forEach((proj, index) => {
         mensagem += `${index + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
         if (proj.areas.length > 0) {
@@ -1054,7 +1061,7 @@ export class EngineerProjectFlow {
     if (atribsDoProjeto.length > 0) {
       // Usar primeira atribuição (ou permitir escolher depois)
       this.state.selectedAtribuicaoId = atribsDoProjeto[0].id;
-      
+
       if (atribsDoProjeto.length > 1) {
         // Múltiplas áreas - por enquanto usar primeira
         // TODO: Permitir escolher qual área atualizar
@@ -1080,13 +1087,13 @@ export class EngineerProjectFlow {
     // Ambos os períodos começam perguntando o STATUS
     // (a etapa será definida automaticamente baseada no status)
     this.state.step = 'status_projeto';
-    
+
     if (this.state.periodo === 'manha') {
       mensagem += `Vamos registrar a atualização matinal.\n\n`;
     } else if (this.state.periodo === 'noite') {
       mensagem += `Vamos registrar a atualização noturna.\n\n`;
     }
-    
+
     mensagem += `📌 *Qual o STATUS atual do projeto?*\n\n`;
     mensagem += this.formatOptions(STATUS_PROJETO);
     mensagem += `\n_Digite o número da opção_`;
@@ -1126,7 +1133,7 @@ export class EngineerProjectFlow {
     }
 
     this.state.projectData['Data Final (acordado com o cliente)'] = dateStr;
-    
+
     // NOVO FLUXO: Após preencher todas as datas, perguntar áreas que vai trabalhar
     // (pode ser múltiplas áreas)
     this.state.step = 'escolher_areas';
@@ -1145,7 +1152,7 @@ export class EngineerProjectFlow {
     // Processar entrada: pode ser um número ou múltiplos números separados por vírgula
     const partes = msg.split(',').map(p => p.trim());
     const numeros: number[] = [];
-    
+
     for (const parte of partes) {
       const num = parseInt(parte, 10);
       if (isNaN(num) || num < 1 || num > AREAS_PROJETO.length) {
@@ -1166,27 +1173,27 @@ export class EngineerProjectFlow {
     if (areasSelecionadas.length === 1) {
       (this.state as any).areaAtual = areasSelecionadas[0];
       this.state.step = 'dados_area';
-      
+
       let mensagem = `✅ Área selecionada: *${areasSelecionadas[0]}*\n\n`;
       mensagem += `📅 *Digite a DATA DE INÍCIO para esta área*\n\n`;
       mensagem += `Formato: DD/MM/AAAA\n`;
       mensagem += `Exemplo: 15/01/2025\n\n`;
       mensagem += `_Digite a data de início_`;
-      
+
       return { mensagem, finalizado: false };
     }
 
     // Múltiplas áreas: processar primeira área
     (this.state as any).areaAtual = areasSelecionadas[0];
     this.state.step = 'dados_area';
-    
+
     let mensagem = `✅ Áreas selecionadas: ${areasSelecionadas.length}\n\n`;
     mensagem += `📋 Vamos preencher os dados de cada área:\n\n`;
     mensagem += `🏢 *Área 1 de ${areasSelecionadas.length}: ${areasSelecionadas[0]}*\n\n`;
     mensagem += `📅 *Digite a DATA DE INÍCIO para esta área*\n\n`;
     mensagem += `Formato: DD/MM/AAAA\n`;
     mensagem += `_Digite a data de início_`;
-    
+
     return { mensagem, finalizado: false };
   }
 
@@ -1195,14 +1202,14 @@ export class EngineerProjectFlow {
     const areasSelecionadas = (this.state as any).areasSelecionadas || [];
     const areaIndex = (this.state as any).areaIndex || 0;
     const areaAtual = (this.state as any).areaAtual || areasSelecionadas[areaIndex];
-    
+
     // Estado interno para rastrear qual dado está sendo preenchido
     const dadosAreaKey = `dados_area_${areaIndex}`;
     if (!(this.state as any)[dadosAreaKey]) {
       (this.state as any)[dadosAreaKey] = { area: areaAtual };
     }
     const dadosArea = (this.state as any)[dadosAreaKey];
-    
+
     // Verificar qual campo está sendo preenchido
     if (!dadosArea.data_inicio) {
       // Preenchendo data de início
@@ -1221,12 +1228,12 @@ export class EngineerProjectFlow {
         };
       }
       dadosArea.data_inicio = dateStr;
-      
+
       let mensagem = `✅ Data de início: *${dateStr}*\n\n`;
       mensagem += `📅 *Digite a DATA PREVISTA para esta área*\n\n`;
       mensagem += `Formato: DD/MM/AAAA\n`;
       mensagem += `_Digite a data prevista_`;
-      
+
       return { mensagem, finalizado: false };
     } else if (!dadosArea.data_prevista) {
       // Preenchendo data prevista
@@ -1245,12 +1252,12 @@ export class EngineerProjectFlow {
         };
       }
       dadosArea.data_prevista = dateStr;
-      
+
       let mensagem = `✅ Data prevista: *${dateStr}*\n\n`;
       mensagem += `📊 *Qual o STATUS inicial desta área?*\n\n`;
       mensagem += this.formatOptions(STATUS_PROJETO);
       mensagem += `\n_Digite o número da opção_`;
-      
+
       return { mensagem, finalizado: false };
     } else if (!dadosArea.status) {
       // Preenchendo status
@@ -1262,37 +1269,37 @@ export class EngineerProjectFlow {
         };
       }
       dadosArea.status = STATUS_PROJETO[numero - 1];
-      
+
       // Verificar se há mais áreas para processar
       const nextIndex = areaIndex + 1;
       if (nextIndex < areasSelecionadas.length) {
         // Próxima área
         (this.state as any).areaIndex = nextIndex;
         (this.state as any).areaAtual = areasSelecionadas[nextIndex];
-        
+
         let mensagem = `✅ Área ${areaIndex + 1} completa!\n\n`;
         mensagem += `🏢 *Área ${nextIndex + 1} de ${areasSelecionadas.length}: ${areasSelecionadas[nextIndex]}*\n\n`;
         mensagem += `📅 *Digite a DATA DE INÍCIO para esta área*\n\n`;
         mensagem += `Formato: DD/MM/AAAA\n`;
         mensagem += `_Digite a data de início_`;
-        
+
         return { mensagem, finalizado: false };
       } else {
         // Todas as áreas processadas, ir para confirmação
-    this.state.step = 'confirmacao';
+        this.state.step = 'confirmacao';
 
         let mensagem = `✅ Todas as áreas preenchidas!\n\n`;
-    mensagem += `📋 *CONFIRMAÇÃO DO CADASTRO*\n\n`;
-    mensagem += this.generateSummary();
-    mensagem += `\n\n*Confirma os dados?*\n\n`;
-    mensagem += `1️⃣ Sim, salvar\n`;
-    mensagem += `2️⃣ Não, cancelar\n\n`;
-    mensagem += `_Digite o número da opção_`;
+        mensagem += `📋 *CONFIRMAÇÃO DO CADASTRO*\n\n`;
+        mensagem += this.generateSummary();
+        mensagem += `\n\n*Confirma os dados?*\n\n`;
+        mensagem += `1️⃣ Sim, salvar\n`;
+        mensagem += `2️⃣ Não, cancelar\n\n`;
+        mensagem += `_Digite o número da opção_`;
 
-    return { mensagem, finalizado: false };
+        return { mensagem, finalizado: false };
       }
     }
-    
+
     return {
       mensagem: '❌ Erro no fluxo de áreas.',
       finalizado: true,
@@ -1312,7 +1319,7 @@ export class EngineerProjectFlow {
 
     const status = STATUS_PROJETO[numero - 1];
     this.state.projectData['Status do projeto'] = status;
-    
+
     // ✅ DEFINIR ETAPA AUTOMATICAMENTE baseado no status
     const etapaAutomatica = STATUS_PARA_ETAPA[status] || status;
     this.state.projectData['Etapa'] = etapaAutomatica;
@@ -1323,22 +1330,22 @@ export class EngineerProjectFlow {
     // Decidir próximo passo baseado no período
     if (this.state.periodo === 'manha') {
       // Período manhã: vai para previsão do dia
-    this.state.step = 'previsao_dia';
+      this.state.step = 'previsao_dia';
 
-    // Buscar opções de previsão conforme status (menu dinâmico)
-    const opcoes = this.sheetService.getPrevisoesPorStatus(status);
+      // Buscar opções de previsão conforme status (menu dinâmico)
+      const opcoes = this.sheetService.getPrevisoesPorStatus(status);
 
-    mensagem += `📝 *PREVISÃO PARA O DIA*\n\n`;
-    mensagem += `O que você planeja realizar hoje?\n\n`;
-    mensagem += this.formatOptions(opcoes);
-    mensagem += `\n_Digite o número da opção_`;
+      mensagem += `📝 *PREVISÃO PARA O DIA*\n\n`;
+      mensagem += `O que você planeja realizar hoje?\n\n`;
+      mensagem += this.formatOptions(opcoes);
+      mensagem += `\n_Digite o número da opção_`;
     } else if (this.state.periodo === 'noite') {
       // Período noite: vai para feito do dia
       this.state.step = 'feito_dia';
-      
+
       // Menu dinâmico conforme status
       const opcoes = this.sheetService.getFeitosPorStatus(status);
-      
+
       mensagem += `✔️ *O que foi FEITO ao final do dia?*\n\n`;
       mensagem += this.formatOptions(opcoes);
       mensagem += `\n_Digite o número da opção_`;
@@ -1385,7 +1392,7 @@ export class EngineerProjectFlow {
 
     let mensagem = `✅ Previsão registrada\n\n`;
     mensagem += `✔️ *O que foi FEITO ao final do dia?*\n\n`;
-    
+
     // Menu dinâmico conforme status
     const statusAtual = this.state.projectData['Status do projeto'] || '';
     const opcoesFeito = this.sheetService.getFeitosPorStatus(statusAtual);
@@ -1468,12 +1475,12 @@ export class EngineerProjectFlow {
 
     const motivo = MOTIVOS_REVISAO[numero - 1];
     this.state.projectData['motivo da revisão'] = motivo;
-    
+
     // Data automática do retrabalho
     const hoje = new Date();
     const dataFormatada = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
     this.state.projectData['Data do registro do retrabalho'] = dataFormatada;
-    
+
     this.state.step = 'observacoes_pergunta';
 
     let mensagem = `✅ Motivo: *${motivo}*\n`;
@@ -1489,7 +1496,7 @@ export class EngineerProjectFlow {
   // MÉTODO REMOVIDO: stepEtapaProjeto
   // A etapa agora é definida AUTOMATICAMENTE baseada no status do projeto
   // Ver mapeamento STATUS_PARA_ETAPA no início do arquivo
-  
+
   /* 
   private async stepEtapaProjeto(msg: string): Promise<FlowResult> {
     const numero = parseInt(msg.trim(), 10);
@@ -1571,7 +1578,7 @@ export class EngineerProjectFlow {
       let mensagem = '❌ *Observações são OBRIGATÓRIAS!*\n\n';
       mensagem += 'Digite pelo menos 5 caracteres descrevendo o dia de trabalho.\n\n';
       mensagem += '_Este campo não pode ser pulado na atualização noturna._';
-      
+
       return {
         mensagem,
         finalizado: false
@@ -1600,7 +1607,7 @@ export class EngineerProjectFlow {
       if (this.state.mode === 'edit') {
         return await this.salvarEdicao();
       } else {
-      return await this.salvar();
+        return await this.salvar();
       }
     } else if (opcao === '2') {
       // Cancelar
@@ -1620,7 +1627,7 @@ export class EngineerProjectFlow {
   private async salvar(): Promise<FlowResult> {
     try {
       const supabase = getSupabaseService();
-      
+
       if (this.state.mode === 'create') {
         // GERAR CÓDIGO AUTOMÁTICO
         const nextCode = await this.sheetService.generateNextProjectCode();
@@ -1632,11 +1639,11 @@ export class EngineerProjectFlow {
         // - Data de Início
         // - Data de Previsão de entrega (interna)
         // - Data Final (acordado com o cliente)
-        
+
         const dataInicio = this.sheetService.parseDate(this.state.projectData['Data de Início']!);
         const dataPrevisaoInterna = this.sheetService.parseDate(this.state.projectData['Data de Previsão de entrega (interna)']!);
         const dataFinalCliente = this.sheetService.parseDate(this.state.projectData['Data Final (acordado com o cliente)']!);
-        
+
         if (!dataInicio || !dataPrevisaoInterna || !dataFinalCliente) {
           return {
             mensagem: '❌ Erro: uma ou mais datas inválidas',
@@ -1644,31 +1651,31 @@ export class EngineerProjectFlow {
             erro: 'Data inválida'
           };
         }
-        
+
         // Calcular prazos em dias úteis (diferença entre as datas)
         const prazoInterno = this.sheetService.calculateBusinessDays(dataInicio, dataPrevisaoInterna);
         const prazoCliente = this.sheetService.calculateBusinessDays(dataInicio, dataFinalCliente);
-        
+
         // Preencher campos automáticos
         this.state.projectData['Dias estimados (interno)'] = prazoInterno.toString(); // Para compatibilidade
         this.state.projectData['Prazo Interno (dias úteis)'] = prazoInterno.toString();
         this.state.projectData['Prazo Cliente (dias úteis)'] = prazoCliente.toString();
         this.state.projectData['Dias de atraso'] = '0'; // inicial
-        
+
         // Descrição já foi preenchida no stepTipoProjeto
-        
+
         // ESTRATÉGIA: Salvar APENAS no Supabase (planilhas são atualizadas por sincronização)
-        
+
         // 1. Salvar no Supabase
         if (supabase.isConnected()) {
           console.log('💾 Salvando projeto no Supabase...');
-          
+
           // Buscar ou criar engenheiro
           const engenheiro = await supabase.criarOuBuscarEngenheiro(
             this.whatsapp,
             this.state.engineerName || 'Engenheiro'
           );
-          
+
           if (!engenheiro) {
             return {
               mensagem: `❌ Erro ao buscar/criar engenheiro`,
@@ -1683,7 +1690,7 @@ export class EngineerProjectFlow {
             this.state.projectData['Cliente']!,
             this.state.projectData['Descrição do projeto']
           );
-          
+
           if (!projetoSalvo) {
             return {
               mensagem: `❌ Erro ao criar projeto no banco de dados`,
@@ -1711,7 +1718,7 @@ export class EngineerProjectFlow {
             // O banco tem códigos como "E1", "H1", "CL1", etc.
             // Por enquanto, vamos buscar área por descrição ou criar mapeamento
             const areaNome = dadosArea.area.toLowerCase();
-            
+
             // Mapeamento nome planilha → código banco
             // (Este mapeamento precisa ser ajustado conforme as áreas reais do banco)
             const areaMap: Record<string, string> = {
@@ -1726,9 +1733,9 @@ export class EngineerProjectFlow {
               'solar fotovoltaico': 'E1',
               'hidráulico piscina': 'H1',
             };
-            
+
             let areaCodigo = areaMap[areaNome] || 'E1'; // Fallback para E1
-            
+
             // Tentar buscar área no banco para validar
             const supabase = getSupabaseService();
             const areaBD = await supabase.buscarAreaPorCodigo(areaCodigo);
@@ -1777,7 +1784,7 @@ export class EngineerProjectFlow {
           }
 
           console.log(`✅ ${atribuicoesCriadas.length} atribuição(ões) criada(s)`);
-          
+
           let mensagem = `✅ *Projeto criado com sucesso!*\n\n`;
           mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
           mensagem += `👤 Cliente: ${this.state.projectData['Cliente']}\n`;
@@ -1795,13 +1802,13 @@ export class EngineerProjectFlow {
           mensagem += `⏱️ *Prazos (calculados):*\n`;
           mensagem += `  • Prazo interno: ${prazoInterno} dias úteis\n`;
           mensagem += `  • Prazo cliente: ${prazoCliente} dias úteis\n\n`;
-          
+
           if (erros.length > 0) {
             mensagem += `⚠️ *Avisos:*\n`;
             erros.forEach(erro => mensagem += `  • ${erro}\n`);
             mensagem += `\n`;
           }
-          
+
           mensagem += `_✅ Dados salvos no banco de dados_\n`;
           mensagem += `_🔄 Planilhas serão atualizadas automaticamente (até 5min)_`;
 
@@ -1809,31 +1816,31 @@ export class EngineerProjectFlow {
         } else {
           // Fallback: salvar na planilha se Supabase não configurado
           console.log('⚠️ Supabase não configurado, salvando apenas na planilha...');
-        const result = await this.sheetService.createProject(this.state.projectData as ProjectData);
-        
-        if (result.success) {
-          let mensagem = `✅ *Projeto criado com sucesso!*\n\n`;
-          mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
-          mensagem += `👤 Cliente: ${this.state.projectData['Cliente']}\n`;
-          mensagem += `🏗️ Obra: ${this.state.projectData['Obra']}\n`;
-          mensagem += `📊 Tipo: ${this.state.projectData['Tipo de Projeto']}\n\n`;
-          mensagem += `📅 *Datas:*\n`;
-          mensagem += `  • Início: ${this.state.projectData['Data de Início']}\n`;
-          mensagem += `  • Previsão interna: ${this.state.projectData['Data de Previsão de entrega (interna)']}\n`;
-          mensagem += `  • Final cliente: ${this.state.projectData['Data Final (acordado com o cliente)']}\n\n`;
-          mensagem += `⏱️ *Prazos (calculados):*\n`;
-          mensagem += `  • Prazo interno: ${prazoInterno} dias úteis\n`;
-          mensagem += `  • Prazo cliente: ${prazoCliente} dias úteis\n\n`;
+          const result = await this.sheetService.createProject(this.state.projectData as ProjectData);
+
+          if (result.success) {
+            let mensagem = `✅ *Projeto criado com sucesso!*\n\n`;
+            mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
+            mensagem += `👤 Cliente: ${this.state.projectData['Cliente']}\n`;
+            mensagem += `🏗️ Obra: ${this.state.projectData['Obra']}\n`;
+            mensagem += `📊 Tipo: ${this.state.projectData['Tipo de Projeto']}\n\n`;
+            mensagem += `📅 *Datas:*\n`;
+            mensagem += `  • Início: ${this.state.projectData['Data de Início']}\n`;
+            mensagem += `  • Previsão interna: ${this.state.projectData['Data de Previsão de entrega (interna)']}\n`;
+            mensagem += `  • Final cliente: ${this.state.projectData['Data Final (acordado com o cliente)']}\n\n`;
+            mensagem += `⏱️ *Prazos (calculados):*\n`;
+            mensagem += `  • Prazo interno: ${prazoInterno} dias úteis\n`;
+            mensagem += `  • Prazo cliente: ${prazoCliente} dias úteis\n\n`;
             mensagem += `_✅ Dados salvos na planilha_\n`;
             mensagem += `_⚠️ Configure Supabase para usar o banco de dados_`;
 
-          return { mensagem, finalizado: true };
-        } else {
-          return {
+            return { mensagem, finalizado: true };
+          } else {
+            return {
               mensagem: `❌ Erro ao criar projeto: ${result.error || 'Erro desconhecido'}`,
-            finalizado: true,
-            erro: result.error
-          };
+              finalizado: true,
+              erro: result.error
+            };
           }
         }
       } else {
@@ -1881,13 +1888,13 @@ export class EngineerProjectFlow {
               morningData['Previsão para o dia'],
               statusCodigo
             );
-              
+
             if (previsao) {
               salvouSupabase = true;
-            mensagem = `✅ *Atualização matinal salva com sucesso!*\n\n`;
-            mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
-            mensagem += `📊 Status: ${morningData['Status do projeto']}\n`;
-            mensagem += `📝 Previsão: ${morningData['Previsão para o dia']}\n\n`;
+              mensagem = `✅ *Atualização matinal salva com sucesso!*\n\n`;
+              mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
+              mensagem += `📊 Status: ${morningData['Status do projeto']}\n`;
+              mensagem += `📝 Previsão: ${morningData['Previsão para o dia']}\n\n`;
               mensagem += `_✅ Salvo no banco de dados_\n`;
               mensagem += `_🔄 Planilhas serão atualizadas automaticamente_`;
             } else {
@@ -1925,7 +1932,7 @@ export class EngineerProjectFlow {
               nightData['Necessitou de retrabalho?'] === 'sim',
               nightData['motivo da revisão']
             );
-              
+
             if (feito) {
               salvouSupabase = true;
               mensagem = `✅ *Atualização noturna salva com sucesso!*\n\n`;
@@ -1965,11 +1972,11 @@ export class EngineerProjectFlow {
             mensagem += `🆔 Código: *${this.state.projectCode}*\n`;
             mensagem += `📊 Status: ${dailyData['Status do projeto']}\n`;
             mensagem += `📍 Etapa: ${dailyData['Etapa']}\n`;
-            
+
             if (dailyData['Necessitou de retrabalho?'] === 'sim') {
               mensagem += `⚠️ Retrabalho: ${dailyData['motivo da revisão']}\n`;
             }
-            
+
             mensagem += `\n_Dados salvos na planilha de engenheiros_`;
           }
         }
@@ -2004,10 +2011,10 @@ export class EngineerProjectFlow {
       const supabase = getSupabaseService();
 
       // ESTRATÉGIA: Salvar APENAS no Supabase (planilhas são atualizadas por sincronização)
-      
+
       if (supabase.isConnected()) {
         console.log('💾 Salvando edição no Supabase...');
-        
+
         // Atualizar campo no Supabase
         const result = await supabase.atualizarCampoProjeto(
           this.state.projectCode!,
@@ -2017,7 +2024,7 @@ export class EngineerProjectFlow {
 
         if (result.success) {
           console.log('✅ Edição salva no Supabase');
-          
+
           let mensagem = `✅ *Campo atualizado com sucesso!*\n\n`;
           mensagem += `Projeto: *${this.state.projectCode}*\n`;
           mensagem += `Campo: *${campo}*\n`;
@@ -2040,7 +2047,7 @@ export class EngineerProjectFlow {
       } else {
         // Fallback: Supabase não conectado, salvar direto na planilha
         console.log('⚠️ Supabase não conectado, salvando direto na planilha...');
-        
+
         const result = await this.sheetService.updateProjectField(
           this.state.projectCode!,
           campo,
@@ -2096,7 +2103,7 @@ export class EngineerProjectFlow {
       summary += `👤 *Cliente:* ${this.state.projectData['Cliente']}\n`;
       summary += `📞 *Contato:* ${this.state.projectData['Contato']}\n`;
       summary += `🏗️ *Obra:* ${this.state.projectData['Obra']}\n`;
-      
+
       // Mostrar áreas selecionadas
       const areasSelecionadas = (this.state as any).areasSelecionadas || [];
       if (areasSelecionadas.length > 0) {
@@ -2111,7 +2118,7 @@ export class EngineerProjectFlow {
       } else {
         summary += `🏢 *Área:* ${this.state.projectData['Área'] || 'N/A'}\n`;
       }
-      
+
       summary += `📊 *Tipo:* ${this.state.projectData['Tipo de Projeto']}\n`;
       summary += `📝 *Descrição:* ${this.state.projectData['Descrição do projeto']}\n`;
       summary += `📅 *Data início projeto:* ${this.state.projectData['Data de Início']}\n`;
@@ -2144,7 +2151,7 @@ export class EngineerProjectFlow {
 
   private async stepEscolherProjetoManha(msg: string): Promise<FlowResult> {
     const atribuicoes = await this.buscarAtribuicoesEngenheiro();
-    
+
     if (atribuicoes.length === 0) {
       return {
         mensagem: '❌ Você não tem projetos atribuídos.\n\nContate o dono da empresa.',
@@ -2154,10 +2161,10 @@ export class EngineerProjectFlow {
 
     this.state.availableAtribuicoes = atribuicoes;
     this.state.step = 'escolher_area_manha'; // Avançar step para receber escolha
-    
+
     let mensagem = `🌅 *Notificação Matinal*\n\n`;
     mensagem += `📋 Escolha o projeto:\n\n`;
-    
+
     atribuicoes.forEach((atrib, index) => {
       mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}\n`;
       mensagem += `   Área: ${atrib.area}\n`;
@@ -2170,7 +2177,7 @@ export class EngineerProjectFlow {
 
   private async stepEscolherAreaManha(msg: string): Promise<FlowResult> {
     const escolha = parseInt(msg.trim()) - 1;
-    
+
     if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.availableAtribuicoes?.length || 0)) {
       return {
         mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.availableAtribuicoes?.length || 0}.`,
@@ -2191,16 +2198,16 @@ export class EngineerProjectFlow {
     if (msg === '') {
       // Primeira vez, mostrar lista de status
       const statusList = await this.supabase.listarStatus();
-      
+
       let mensagem = `📊 *Status Atual do Projeto*\n\n`;
       mensagem += `Qual o status atual?\n\n`;
-      
+
       statusList.forEach((status, index) => {
         mensagem += `${index + 1}️⃣ ${status.descricao}\n`;
       });
-      
+
       mensagem += `\n_Digite o número do status_`;
-      
+
       // Armazenar lista para referência
       (this.state as any).statusList = statusList;
       return { mensagem, finalizado: false };
@@ -2208,7 +2215,7 @@ export class EngineerProjectFlow {
 
     const escolha = parseInt(msg.trim()) - 1;
     const statusList = (this.state as any).statusList || [];
-    
+
     if (isNaN(escolha) || escolha < 0 || escolha >= statusList.length) {
       return {
         mensagem: `❌ Opção inválida. Digite um número entre 1 e ${statusList.length}.`,
@@ -2218,7 +2225,7 @@ export class EngineerProjectFlow {
 
     this.state.statusAtual = statusList[escolha].status_id;
     this.state.step = 'previsao_dia';
-    
+
     return {
       mensagem: `✅ Status: ${statusList[escolha].descricao}\n\n📝 *O que você pretende fazer hoje?*\n\n_Descreva brevemente a previsão para o dia_`,
       finalizado: false
@@ -2227,7 +2234,7 @@ export class EngineerProjectFlow {
 
   private async stepPrevisaoDia(msg: string): Promise<FlowResult> {
     const previsao = msg.trim();
-    
+
     if (previsao.length < 5) {
       return {
         mensagem: '❌ Previsão muito curta. Digite pelo menos 5 caracteres.',
@@ -2236,7 +2243,7 @@ export class EngineerProjectFlow {
     }
 
     this.state.previsaoTexto = previsao;
-    
+
     // Salvar no Supabase
     const sucesso = await this.supabase.registrarPrevisaoDia(
       this.state.selectedAtribuicaoId!,
@@ -2265,7 +2272,7 @@ export class EngineerProjectFlow {
 
   private async stepEscolherProjetoNoite(msg: string): Promise<FlowResult> {
     const atribuicoes = await this.buscarAtribuicoesEngenheiro();
-    
+
     if (atribuicoes.length === 0) {
       return {
         mensagem: '❌ Você não tem projetos atribuídos.\n\nContate o dono da empresa.',
@@ -2275,10 +2282,10 @@ export class EngineerProjectFlow {
 
     this.state.availableAtribuicoes = atribuicoes;
     this.state.step = 'escolher_area_noite'; // Avançar step para receber escolha
-    
+
     let mensagem = `🌙 *Notificação Noturna*\n\n`;
     mensagem += `📋 Escolha o projeto:\n\n`;
-    
+
     atribuicoes.forEach((atrib, index) => {
       mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}\n`;
       mensagem += `   Área: ${atrib.area}\n`;
@@ -2291,7 +2298,7 @@ export class EngineerProjectFlow {
 
   private async stepEscolherAreaNoite(msg: string): Promise<FlowResult> {
     const escolha = parseInt(msg.trim()) - 1;
-    
+
     if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.availableAtribuicoes?.length || 0)) {
       return {
         mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.availableAtribuicoes?.length || 0}.`,
@@ -2305,7 +2312,7 @@ export class EngineerProjectFlow {
 
     // Prosseguir para feito do dia
     this.state.step = 'feito_dia';
-    
+
     return {
       mensagem: `✅ Projeto: *${atribuicao.codigo}*\n\n✔️ *O que foi feito hoje?*\n\n_Descreva o trabalho realizado no dia_`,
       finalizado: false
@@ -2314,7 +2321,7 @@ export class EngineerProjectFlow {
 
   private async stepFeitoDia(msg: string): Promise<FlowResult> {
     const feito = msg.trim();
-    
+
     if (feito.length < 5) {
       return {
         mensagem: '❌ Descrição muito curta. Digite pelo menos 5 caracteres.',
@@ -2324,7 +2331,7 @@ export class EngineerProjectFlow {
 
     this.state.feitoTexto = feito;
     this.state.step = 'retrabalho_pergunta';
-    
+
     return {
       mensagem: `✅ Feito registrado!\n\n🔄 *Teve retrabalho hoje?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
       finalizado: false
@@ -2333,12 +2340,12 @@ export class EngineerProjectFlow {
 
   private async stepRetrabalhoPergunta(msg: string): Promise<FlowResult> {
     const resposta = msg.trim();
-    
+
     if (resposta === '1') {
       // Teve retrabalho
       this.state.teveRetrabalho = true;
       this.state.step = 'retrabalho_motivo';
-      
+
       let mensagem = `⚠️ *Motivo do Retrabalho*\n\n`;
       mensagem += `1️⃣ Erro de dimensionamento\n`;
       mensagem += `2️⃣ Mudança de requisitos\n`;
@@ -2346,27 +2353,27 @@ export class EngineerProjectFlow {
       mensagem += `4️⃣ Erro de comunicação\n`;
       mensagem += `5️⃣ Outro\n\n`;
       mensagem += `_Digite o número do motivo_`;
-      
+
       return { mensagem, finalizado: false };
-      
+
     } else if (resposta === '2') {
       // Não teve retrabalho
       this.state.teveRetrabalho = false;
-      
+
       // Registrar dia SEM retrabalho (importante para calcular a taxa corretamente!)
       await this.supabase.registrarRetrabalho(
         this.state.selectedAtribuicaoId!,
         false, // necessitou_retrabalho = false
         null   // sem motivo
       );
-      
+
       this.state.step = 'observacoes_pergunta';
-      
+
       return {
         mensagem: `✅ Sem retrabalho!\n\n📝 *Quer adicionar observações?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
         finalizado: false
       };
-      
+
     } else {
       return {
         mensagem: '❌ Opção inválida. Digite *1* para Sim ou *2* para Não.',
@@ -2383,9 +2390,9 @@ export class EngineerProjectFlow {
       'Erro de comunicação',
       'Outro'
     ];
-    
+
     const escolha = parseInt(msg.trim()) - 1;
-    
+
     if (isNaN(escolha) || escolha < 0 || escolha >= motivos.length) {
       return {
         mensagem: `❌ Opção inválida. Digite um número entre 1 e ${motivos.length}.`,
@@ -2394,16 +2401,16 @@ export class EngineerProjectFlow {
     }
 
     this.state.motivoRetrabalho = motivos[escolha];
-    
+
     // Registrar retrabalho no Supabase
     await this.supabase.registrarRetrabalho(
       this.state.selectedAtribuicaoId!,
       true,
       motivos[escolha]
     );
-    
+
     this.state.step = 'observacoes_pergunta';
-    
+
     return {
       mensagem: `✅ Motivo registrado: ${motivos[escolha]}\n\n📝 *Quer adicionar observações?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
       finalizado: false
@@ -2412,23 +2419,23 @@ export class EngineerProjectFlow {
 
   private async stepObservacoesPergunta(msg: string): Promise<FlowResult> {
     const resposta = msg.trim();
-    
+
     if (resposta === '1') {
       // Quer adicionar observações
       this.state.step = 'observacoes_texto';
-      
+
       return {
         mensagem: `📝 *Observações*\n\n_Digite suas observações sobre o dia de trabalho_`,
         finalizado: false
       };
-      
+
     } else if (resposta === '2') {
       // Não quer observações
       this.state.observacoesTexto = undefined;
-      
+
       // Salvar tudo e finalizar
       return await this.salvarNotificacaoNoturna();
-      
+
     } else {
       return {
         mensagem: '❌ Opção inválida. Digite *1* para Sim ou *2* para Não.',
@@ -2439,7 +2446,7 @@ export class EngineerProjectFlow {
 
   private async stepObservacoesTexto(msg: string): Promise<FlowResult> {
     const obs = msg.trim();
-    
+
     if (obs.length < 3) {
       return {
         mensagem: '❌ Observação muito curta. Digite pelo menos 3 caracteres.',
@@ -2448,7 +2455,7 @@ export class EngineerProjectFlow {
     }
 
     this.state.observacoesTexto = obs;
-    
+
     // Salvar tudo e finalizar
     return await this.salvarNotificacaoNoturna();
   }
@@ -2471,17 +2478,17 @@ export class EngineerProjectFlow {
     let mensagem = `✅ *Notificação Noturna Registrada!*\n\n`;
     mensagem += `📊 Projeto: ${this.state.projectCode}\n`;
     mensagem += `✔️ Feito: ${this.state.feitoTexto}\n`;
-    
+
     if (this.state.teveRetrabalho) {
       mensagem += `🔄 Retrabalho: Sim (${this.state.motivoRetrabalho})\n`;
     } else {
       mensagem += `🔄 Retrabalho: Não\n`;
     }
-    
+
     if (this.state.observacoesTexto) {
       mensagem += `📝 Observações: ${this.state.observacoesTexto}\n`;
     }
-    
+
     mensagem += `\nDescanse bem! 🌙`;
 
     return { mensagem, finalizado: true };
@@ -2495,7 +2502,7 @@ export class EngineerProjectFlow {
     if (msg === '') {
       // Primeira vez, buscar projetos
       const atribuicoes = await this.buscarAtribuicoesEngenheiro();
-      
+
       if (atribuicoes.length === 0) {
         return {
           mensagem: '❌ Você não tem projetos atribuídos.\n\nContate o dono da empresa.',
@@ -2505,10 +2512,10 @@ export class EngineerProjectFlow {
 
       this.state.availableAtribuicoes = atribuicoes;
       // Não muda o step aqui, a próxima mensagem será processada aqui mesmo
-      
+
       let mensagem = `✏️ *Editar Projeto*\n\n`;
       mensagem += `📋 Escolha o projeto:\n\n`;
-      
+
       atribuicoes.forEach((atrib, index) => {
         mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}\n`;
         mensagem += `   Área: ${atrib.area}\n`;
@@ -2521,7 +2528,7 @@ export class EngineerProjectFlow {
 
     // Processar a escolha do projeto
     const escolha = parseInt(msg.trim()) - 1;
-    
+
     if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.availableAtribuicoes?.length || 0)) {
       return {
         mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.availableAtribuicoes?.length || 0}.`,
@@ -2555,14 +2562,14 @@ export class EngineerProjectFlow {
       mensagem += `4️⃣ Data prevista de conclusão\n`;
       mensagem += `5️⃣ Observações\n\n`;
       mensagem += `_Digite o número do campo_`;
-      
+
       return { mensagem, finalizado: false };
     }
 
     const campos = ['status_id', 'percentual_andamento', 'data_inicio', 'data_prevista', 'observacoes'];
     const nomeCampos = ['Status', 'Percentual', 'Data início', 'Data prevista', 'Observações'];
     const escolha = parseInt(msg.trim()) - 1;
-    
+
     if (isNaN(escolha) || escolha < 0 || escolha >= campos.length) {
       return {
         mensagem: `❌ Opção inválida. Digite um número entre 1 e ${campos.length}.`,
@@ -2573,91 +2580,91 @@ export class EngineerProjectFlow {
     this.state.editField = campos[escolha];
     (this.state as any).editFieldName = nomeCampos[escolha];
     this.state.step = 'novo_valor';
-    
+
     return await this.stepNovoValor('');
   }
 
   private async stepNovoValor(msg: string): Promise<FlowResult> {
     const campo = this.state.editField!;
-    
+
     if (msg === '') {
       // Primeira vez, pedir o novo valor
       let mensagem = `✏️ *Editar: ${(this.state as any).editFieldName}*\n\n`;
-      
+
       if (campo === 'status_id') {
         const statusList = await this.supabase.listarStatus();
         (this.state as any).statusList = statusList;
-        
+
         mensagem += `Escolha o novo status:\n\n`;
         statusList.forEach((status, index) => {
           mensagem += `${index + 1}️⃣ ${status.descricao}\n`;
         });
         mensagem += `\n_Digite o número do status_`;
-        
+
       } else if (campo === 'percentual_andamento') {
         mensagem += `Digite o novo percentual (0-100):\n\n`;
         mensagem += `_Digite apenas o número (ex: 75)_`;
-        
+
       } else if (campo === 'data_inicio' || campo === 'data_prevista') {
         mensagem += `Digite a nova data:\n\n`;
         mensagem += `_Formato: DD/MM/AAAA (ex: 25/01/2026)_`;
-        
+
       } else if (campo === 'observacoes') {
         mensagem += `Digite as novas observações:\n\n`;
         mensagem += `_Texto livre_`;
       }
-      
+
       return { mensagem, finalizado: false };
     }
 
     // Validar e processar o valor
     let novoValor: any;
     let valorFormatado: string;
-    
+
     if (campo === 'status_id') {
       const statusList = (this.state as any).statusList || [];
       const escolha = parseInt(msg.trim()) - 1;
-      
+
       if (isNaN(escolha) || escolha < 0 || escolha >= statusList.length) {
         return {
           mensagem: `❌ Opção inválida. Digite um número entre 1 e ${statusList.length}.`,
           finalizado: false
         };
       }
-      
+
       novoValor = statusList[escolha].status_id;
       valorFormatado = statusList[escolha].descricao;
-      
+
     } else if (campo === 'percentual_andamento') {
       const percentual = parseFloat(msg.trim());
-      
+
       if (isNaN(percentual) || percentual < 0 || percentual > 100) {
         return {
           mensagem: '❌ Percentual inválido. Digite um número entre 0 e 100.',
           finalizado: false
         };
       }
-      
+
       novoValor = percentual;
       valorFormatado = `${percentual}%`;
-      
+
     } else if (campo === 'data_inicio' || campo === 'data_prevista') {
       // Validar formato DD/MM/AAAA
       const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
       const match = msg.trim().match(regex);
-      
+
       if (!match) {
         return {
           mensagem: '❌ Data inválida. Use o formato DD/MM/AAAA (ex: 25/01/2026).',
           finalizado: false
         };
       }
-      
+
       // Converter para YYYY-MM-DD
       const [_, dia, mes, ano] = match;
       novoValor = `${ano}-${mes}-${dia}`;
       valorFormatado = msg.trim();
-      
+
     } else if (campo === 'observacoes') {
       if (msg.trim().length < 3) {
         return {
@@ -2665,7 +2672,7 @@ export class EngineerProjectFlow {
           finalizado: false
         };
       }
-      
+
       novoValor = msg.trim();
       valorFormatado = msg.trim();
     }
@@ -2673,7 +2680,7 @@ export class EngineerProjectFlow {
     (this.state as any).novoValor = novoValor;
     (this.state as any).valorFormatado = valorFormatado;
     this.state.step = 'confirmacao';
-    
+
     let mensagem = `✅ *Confirmação*\n\n`;
     mensagem += `📊 Projeto: ${this.state.projectCode}\n`;
     mensagem += `✏️ Campo: ${(this.state as any).editFieldName}\n`;
@@ -2682,20 +2689,20 @@ export class EngineerProjectFlow {
     mensagem += `1️⃣ Sim\n`;
     mensagem += `2️⃣ Não\n\n`;
     mensagem += `_Digite 1 ou 2_`;
-    
+
     return { mensagem, finalizado: false };
   }
 
   private async stepConfirmacao(msg: string): Promise<FlowResult> {
     const resposta = msg.trim();
-    
+
     if (resposta === '1') {
       // Confirmar e salvar
       const campo = this.state.editField!;
       const novoValor = (this.state as any).novoValor;
-      
+
       let sucesso = false;
-      
+
       if (campo === 'status_id') {
         // Usar método específico para status
         const statusList = (this.state as any).statusList || [];
@@ -2727,14 +2734,14 @@ export class EngineerProjectFlow {
       mensagem += `Projeto atualizado com sucesso! 🎉`;
 
       return { mensagem, finalizado: true };
-      
+
     } else if (resposta === '2') {
       // Cancelar
       return {
         mensagem: '❌ Alteração cancelada.\n\nNenhuma modificação foi feita.',
         finalizado: true
       };
-      
+
     } else {
       return {
         mensagem: '❌ Opção inválida. Digite *1* para confirmar ou *2* para cancelar.',
@@ -2820,7 +2827,7 @@ export class EngineerProjectFlow {
     if (atribuicao.data_inicio || atribuicao.data_prevista || atribuicao.data_conclusao) {
       msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
       msg += `📅 *Datas*\n\n`;
-      
+
       if (atribuicao.data_inicio) {
         const data = new Date(atribuicao.data_inicio).toLocaleDateString('pt-BR');
         msg += `📅 Início: ${data}\n`;

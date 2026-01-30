@@ -474,7 +474,7 @@ export class SupabaseService {
       }
 
       console.log(`✅ Projeto criado: ${codigo}`);
-      
+
       // Retornar projeto criado
       return await this.buscarProjetoPorId(data.projeto_id);
     } catch (error: any) {
@@ -1024,7 +1024,7 @@ export class SupabaseService {
    */
   async listarProjetosEngenheiro(engenheiroId: string): Promise<ProjetoLegacy[]> {
     const atribuicoes = await this.listarAtribuicoesEngenheiro(engenheiroId);
-    
+
     // Agrupar por projeto e converter para formato legado
     const projetosMap = new Map<string, ProjetoLegacy>();
 
@@ -1422,8 +1422,8 @@ export class SupabaseService {
         p_data_inicio_projeto: this.formatarDataParaDB(data_inicio_projeto),
         p_prazo_final_eng: this.formatarDataParaDB(prazo_final_eng),
         p_prazo_final_cliente: this.formatarDataParaDB(prazo_final_cliente),
-        p_data_inicio_esperada_cliente: data_inicio_esperada_cliente 
-          ? this.formatarDataParaDB(data_inicio_esperada_cliente) 
+        p_data_inicio_esperada_cliente: data_inicio_esperada_cliente
+          ? this.formatarDataParaDB(data_inicio_esperada_cliente)
           : null,
         p_observacoes: observacoes || null,
       });
@@ -1468,6 +1468,10 @@ export class SupabaseService {
       return [];
     }
   }
+
+  // =====================================================
+  // AUTENTICAÇÃO - TELEFONE
+  // =====================================================
 
   // =====================================================
   // AUTENTICAÇÃO - TELEFONE
