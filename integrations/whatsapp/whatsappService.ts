@@ -1,9 +1,10 @@
 // =====================================================
 // WhatsApp Service - Abstração para múltiplos providers
 // =====================================================
-// Suporta dois modos:
+// Suporta três modos:
 // - Development: Apenas logs no console
 // - Meta API: Envio real via WhatsApp Business API
+// - Twilio API: Envio real via Twilio WhatsApp API
 // =====================================================
 
 import dotenv from 'dotenv';
@@ -112,6 +113,92 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
 }
 
 // =====================================================
+// PROVIDER: Twilio WhatsApp API
+// =====================================================
+
+class TwilioWhatsAppProvider implements WhatsAppProvider {
+  private accountSid: string;
+  private authToken: string;
+  private fromNumber: string;
+  private baseUrl: string;
+
+  constructor() {
+    this.accountSid = process.env.TWILIO_ACCOUNT_SID || '';
+    this.authToken = process.env.TWILIO_AUTH_TOKEN || '';
+    this.fromNumber = process.env.TWILIO_PHONE_NUMBER || '';
+    this.baseUrl = `https://api.twilio.com/2010-04-01/Accounts/${this.accountSid}/Messages.json`;
+
+    if (!this.accountSid || !this.authToken || !this.fromNumber) {
+      console.warn('⚠️  Twilio API não configurada corretamente. Configure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN e TWILIO_PHONE_NUMBER no .env');
+    }
+  }
+
+  async sendMessage(to: string, message: string): Promise<boolean> {
+    if (!this.accountSid || !this.authToken || !this.fromNumber) {
+      console.error('❌ Twilio API não configurada. Mensagem não enviada.');
+      return false;
+    }
+
+    try {
+      // Normalizar número: garantir formato whatsapp:+5511999999999
+      let toNumber = to.trim();
+      if (!toNumber.startsWith('whatsapp:')) {
+        // Se não tem prefixo whatsapp:, adicionar
+        if (!toNumber.startsWith('+')) {
+          toNumber = '+' + toNumber;
+        }
+        toNumber = 'whatsapp:' + toNumber;
+      }
+
+      let fromNumber = this.fromNumber;
+      if (!fromNumber.startsWith('whatsapp:')) {
+        if (!fromNumber.startsWith('+')) {
+          fromNumber = '+' + fromNumber;
+        }
+        fromNumber = 'whatsapp:' + fromNumber;
+      }
+
+      // Criar credenciais Base64 para autenticação
+      const credentials = Buffer.from(`${this.accountSid}:${this.authToken}`).toString('base64');
+
+      // Preparar dados do form
+      const formData = new URLSearchParams();
+      formData.append('From', fromNumber);
+      formData.append('To', toNumber);
+      formData.append('Body', message);
+
+      const response = await fetch(this.baseUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: formData.toString()
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Erro ao enviar mensagem via Twilio:', errorData);
+        return false;
+      }
+
+      const data = await response.json();
+      console.log(`✅ Mensagem enviada via Twilio para ${to}`);
+      console.log(`   Message SID: ${data.sid || 'N/A'}`);
+      return true;
+
+    } catch (error: any) {
+      console.error('❌ Erro ao enviar mensagem via Twilio:', error.message);
+      return false;
+    }
+  }
+
+  getProviderName(): string {
+    return 'Twilio WhatsApp API';
+  }
+}
+
+// =====================================================
 // SERVICE: WhatsAppService (Singleton)
 // =====================================================
 
@@ -126,6 +213,8 @@ export class WhatsAppService {
       this.provider = provider;
     } else if (providerType === 'meta') {
       this.provider = new MetaWhatsAppProvider();
+    } else if (providerType === 'twilio') {
+      this.provider = new TwilioWhatsAppProvider();
     } else {
       this.provider = new DevWhatsAppProvider();
     }
