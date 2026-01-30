@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "ts-node --esm src/server-twilio.ts",
-    "dev": "nodemon --exec ts-node --esm src/server-twilio.ts",
-    "dev:whatsapp-web": "nodemon --exec ts-node --esm src/index.ts",
+    "start": "tsx src/server-twilio.ts",
+    "dev": "nodemon --exec tsx src/server-twilio.ts",
+    "dev:whatsapp-web": "nodemon --exec tsx src/index.ts",
     "dev:terminal": "ts-node --esm tests/test-bot-completo.ts",
     "build": "tsc",
     "test:bot": "ts-node --esm tests/test-bot-terminal.ts",
@@ -47,6 +47,7 @@
     "node-cron": "^3.0.3",
     "openai": "^4.20.0",
     "qrcode-terminal": "^0.12.0",
+    "tsx": "^4.21.0",
     "twilio": "^5.12.0",
     "whatsapp-web.js": "^1.34.2"
   },

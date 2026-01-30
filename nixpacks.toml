@@ -11,4 +11,4 @@ cmds = ["npm ci"]
 cmds = []
 
 [start]
-cmd = "npx ts-node --esm src/server-twilio.ts"
+cmd = "npx tsx src/server-twilio.ts"
