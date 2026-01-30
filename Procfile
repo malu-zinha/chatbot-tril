@@ -1,1 +1,1 @@
-web: npx ts-node --esm src/server-twilio.ts
+web: npx tsx src/server-twilio.ts
