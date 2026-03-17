@@ -1,0 +1,14 @@
+# Nixpacks Configuration for Railway
+# Forces Node.js detection instead of Deno
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = []
+
+[start]
+cmd = "npx tsx src/server-twilio.ts"

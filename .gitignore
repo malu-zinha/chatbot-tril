@@ -1,0 +1,29 @@
+# Environment variables
+.env
+
+# macOS
+.DS_Store
+
+# VSCode
+.vscode/
+
+# Node modules
+node_modules/
+
+# Build
+dist/
+*.log
+
+# WhatsApp session
+.wwebjs_auth/
+.wwebjs_cache/
+
+# Google Credentials (IMPORTANTE: nunca commitar!)
+credentials.json
+*-credentials.json
+
+# Temporary audio files
+temp/
+*.ogg
+*.mp3
+*.wav
