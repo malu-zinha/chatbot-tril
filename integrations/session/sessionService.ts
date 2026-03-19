@@ -20,13 +20,9 @@ export interface PersistedSession {
     whatsapp: string;
     tipo_usuario?: 'engenheiro' | 'dono' | 'nao_cadastrado';
     user_id?: string;
-    fluxo_ativo?: 'engineer_project' | 'notif_matinal' | 'notif_noturna' | 'owner' | null;
-    fluxo_state?: any; // Estado interno do fluxo
-    state_stack: StateSnapshot[]; // Pilha de estados para "voltar"
-    notificacao_contexto?: {
-        projectCode: string;
-        tipo: 'matinal' | 'noturna';
-    };
+    fluxo_ativo?: 'engineer_project' | 'owner' | null;
+    fluxo_state?: any;
+    state_stack: StateSnapshot[];
     created_at: number;
     updated_at: number;
 }

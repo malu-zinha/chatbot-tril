@@ -10,7 +10,6 @@
 
 // Flows ativos
 import { EngineerProjectFlow } from '../flows/engineerProjectFlow.ts';
-import { NotificacaoMatinalFlow, NotificacaoNoturnaFlow } from '../flows/notificationFlows.ts';
 import { OwnerFlow } from '../flows/ownerFlow.ts';
 
 // Supabase para autenticação (lazy loading para evitar problemas com dotenv)
@@ -25,11 +24,6 @@ function getSupabase(): SupabaseService {
   return supabaseServiceInstance;
 }
 
-// Flows arquivados (não usados):
-// import { RegisterProgressFlow } from '../flows/_archived/registerProgress.ts';
-// import { RegisterReworkFlow } from '../flows/_archived/registerRework.ts';
-// import { CheckStatusFlow } from '../flows/_archived/checkStatus.ts';
-
 // =====================================================
 // TIPOS E INTERFACES
 // =====================================================
@@ -40,12 +34,8 @@ export interface UserSession {
   whatsapp: string;
   tipo_usuario?: TipoUsuario;
   user_id?: string; // eng_id ou dono_id
-  fluxo_ativo?: 'engineer_project' | 'notif_matinal' | 'notif_noturna' | 'owner' | null;
+  fluxo_ativo?: 'engineer_project' | 'owner' | null;
   instancia_fluxo?: any;
-  notificacao_contexto?: {
-    projectCode: string;
-    tipo: 'matinal' | 'noturna';
-  };
   ultima_interacao: Date;
 }
 
@@ -151,32 +141,6 @@ export class MessageHandler {
       if (comandoGlobal) {
         console.log(`   ✅ Comando global processado\n`);
         return { resposta: comandoGlobal };
-      }
-
-      // Verificar se é resposta a notificação automática (apenas para engenheiros)
-      if (sessao.tipo_usuario === 'engenheiro' && sessao.notificacao_contexto && !sessao.fluxo_ativo) {
-        const { projectCode, tipo } = sessao.notificacao_contexto;
-
-        if (tipo === 'matinal') {
-          sessao.fluxo_ativo = 'notif_matinal';
-          sessao.instancia_fluxo = new NotificacaoMatinalFlow(whatsappNormalizado, projectCode);
-        } else if (tipo === 'noturna') {
-          sessao.fluxo_ativo = 'notif_noturna';
-          sessao.instancia_fluxo = new NotificacaoNoturnaFlow(whatsappNormalizado, projectCode);
-        }
-
-        // Limpar contexto de notificação após iniciar fluxo
-        sessao.notificacao_contexto = undefined;
-
-        // Processar primeira mensagem do fluxo
-        const resultado = await sessao.instancia_fluxo.processarMensagem(mensagem);
-
-        if (resultado.finalizado) {
-          sessao.fluxo_ativo = null;
-          sessao.instancia_fluxo = null;
-        }
-
-        return { resposta: resultado.mensagem, erro: resultado.erro };
       }
 
       // Se há fluxo ativo, continuar nele
@@ -633,39 +597,6 @@ Digite *menu* para ver as opções disponíveis`;
     if (sessoesARemover.length > 0) {
       console.log(`${sessoesARemover.length} sessões antigas removidas`);
     }
-  }
-
-  // =====================================================
-  // NOTIFICAÇÕES - Gerenciamento de Contexto
-  // =====================================================
-
-  /**
-   * Define contexto de notificação para um usuário
-   * Usado pelo NotificationService quando envia notificação
-   */
-  setNotificationContext(
-    whatsapp: string,
-    context: { projectCode: string; tipo: 'matinal' | 'noturna' }
-  ): void {
-    const whatsappNormalizado = this.normalizarWhatsapp(whatsapp);
-
-    // Obter ou criar sessão
-    let sessao = this.sessoes.get(whatsappNormalizado);
-
-    if (!sessao) {
-      sessao = {
-        whatsapp: whatsappNormalizado,
-        fluxo_ativo: null,
-        ultima_interacao: new Date(),
-      };
-      this.sessoes.set(whatsappNormalizado, sessao);
-    }
-
-    // Definir contexto de notificação
-    sessao.notificacao_contexto = context;
-    sessao.ultima_interacao = new Date();
-
-    console.log(`📌 Contexto de notificação definido: ${whatsapp} → ${context.tipo} (${context.projectCode})`);
   }
 
   // =====================================================
