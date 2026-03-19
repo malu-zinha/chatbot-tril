@@ -576,7 +576,14 @@ export class OwnerFlow {
     msg += `👷 *Engenheiro:* ${info.engenheiro_nome}\n\n`;
     
     msg += `📈 *Status:* ${info.status_descricao || 'N/A'}\n`;
-    msg += `⚡ *Andamento:* ${info.percentual_andamento}%\n\n`;
+    msg += `⚡ *Andamento:* ${info.percentual_andamento}%\n`;
+
+    // Progresso ponderado (se configurado)
+    const progressoPonderado = await getSupabase().buscarProgressoPonderado(info.projeto_id);
+    if (progressoPonderado !== null && progressoPonderado > 0) {
+      msg += `📐 *Progresso ponderado:* ${progressoPonderado}%\n`;
+    }
+    msg += `\n`;
     
     msg += `📅 *Data Início:* ${info.data_inicio || 'N/A'}\n`;
     msg += `⏰ *Data Prevista:* ${info.data_prevista || 'N/A'}\n`;
