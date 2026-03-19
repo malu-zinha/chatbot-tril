@@ -6,12 +6,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// ARCHIVED: Componentes de IA (para reativar no futuro, descomente abaixo):
-// import { getGoogleSheetsService } from '../../integrations/sheets/googleSheetsService.ts';
-// import { QueryService } from './_archived/queryService.ts';
-// import { CommandService } from './_archived/commandService.ts';
-// import { SheetSyncService } from '../../integrations/sheets/sheetSyncService.ts';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
