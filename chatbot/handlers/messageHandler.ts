@@ -168,9 +168,9 @@ export class MessageHandler {
             return await this.iniciarFluxoDono(sessao);
           }
 
-          // Se for comando direto de menu (1, 2, 3, 4, 5), processar diretamente
+          // Se for comando direto de menu (1, 2, 3, 4), processar diretamente
           const mensagemNorm = mensagem.trim();
-          if (mensagemNorm === '1' || mensagemNorm === '2' || mensagemNorm === '3' || mensagemNorm === '4' || mensagemNorm === '5') {
+          if (mensagemNorm === '1' || mensagemNorm === '2' || mensagemNorm === '3' || mensagemNorm === '4') {
             console.log(`   ✅ Opção do menu detectada: ${mensagemNorm}`);
             // Iniciar fluxo e processar a escolha imediatamente
             const flow = new EngineerProjectFlow(sessao.whatsapp);
@@ -295,20 +295,14 @@ export class MessageHandler {
     const mensagemLower = mensagem.toLowerCase().trim();
 
     // Atalhos numéricos do menu
-    if (mensagemLower === '1' || mensagemLower === '2' || mensagemLower === '3' || mensagemLower === '4' || mensagemLower === '5') {
-      return 'gerenciar_projeto'; // Opções 1, 2, 3, 4, 5 = Gestão de projetos
+    if (mensagemLower === '1' || mensagemLower === '2' || mensagemLower === '3' || mensagemLower === '4') {
+      return 'gerenciar_projeto'; // Opções 1, 2, 3, 4 = Gestão de projetos
     }
 
     // Palavras-chave para MODIFICAR projetos (Engenheiros)
     const keywordsModificar = [
       'projeto',
-      'cadastrar',
-      'novo',
       'atualizar',
-      'criar',
-      'modificar',
-      'editar',
-      'adicionar',
       'registrar',
     ];
 
@@ -391,7 +385,7 @@ export class MessageHandler {
 
   private mensagemMenu(tipoUsuario?: TipoUsuario): string {
     if (tipoUsuario === 'dono') {
-      return `👔 *Menu do Dono*
+      return `📋 *Menu do Dono*
 
 📊 *Gestão da Empresa*
 1️⃣ Distribuir tarefa para engenheiro
@@ -405,16 +399,15 @@ _Digite o número da opção desejada_`;
     }
 
     // Menu de engenheiro (padrão)
-    return `🤖 *Menu do Engenheiro*
+    return `📋 *Menu do Engenheiro*
 
-📋 *Atualizações Diárias*
+🔔 *Atualizações Diárias*
 1️⃣ Notificação Matinal
 2️⃣ Notificação Noturna
 
-✏️ *Gestão*
-3️⃣ Editar projeto
-4️⃣ Visualizar Meus Projetos
-5️⃣ Marcar Etapa Concluída
+📊 *Gestão*
+3️⃣ Visualizar Meus Projetos
+4️⃣ Marcar Etapa Concluída
 
 ❓ *Ajuda*
 Digite "ajuda" para instruções
@@ -424,80 +417,61 @@ _Digite o número da opção desejada_`;
 
   private mensagemAjuda(tipoUsuario?: TipoUsuario): string {
     if (tipoUsuario === 'dono') {
-      return `ℹ️ *Ajuda - Dono da Empresa*
+      return `❓ *Ajuda - Dono da Empresa*
 
-*📊 DISTRIBUIR TAREFAS*
-Fluxo guiado para atribuir projetos aos engenheiros:
-• Escolher engenheiro
-• Definir área e tipo de projeto
-• Configurar prazos e complexidade
-• Adicionar observações
+1️⃣ *Distribuir tarefa para engenheiro*
+Atribua projetos aos engenheiros: escolha o engenheiro, defina área, prazos e observações.
 
-Digite: *1* no menu principal
+2️⃣ *Verificar status dos projetos*
+Acompanhe o andamento de todos os projetos, consulte prazos e veja a performance da equipe.
 
-*📈 VERIFICAR PROJETOS*
-Acompanhe o status de todos os projetos:
-• Ver projetos em andamento
-• Consultar deadlines
-• Analisar performance da equipe
+3️⃣ *Consultar histórico e relatórios*
+Acesse históricos de retrabalho, projetos concluídos e indicadores por área.
 
-Digite: *2* no menu principal
-
-*📋 RELATÓRIOS*
-Acesse históricos e indicadores:
-• Projetos concluídos
-• Tempo médio por área
-• Taxa de retrabalho
-
-Digite: *3* no menu principal
-
-*🔄 COMANDOS ÚTEIS*
-• *sync* - Força sincronização Supabase → Sheets
-• *cancelar* - Sai do fluxo atual
-• *menu* - Volta ao menu principal
+🔄 *Comandos úteis*
+• *menu* — volta ao menu principal
+• *cancelar* — sai do fluxo atual
+• *sync* — força sincronização
 
 _Digite "menu" para voltar_`;
     }
 
     // Ajuda de engenheiro (padrão)
-    return `ℹ️ *Ajuda - Engenheiro*
+    return `❓ *Ajuda - Engenheiro*
 
-*📊 GERENCIAR PROJETOS*
-Fluxo guiado com menus numerados para:
-• Cadastrar novo projeto (todas as informações)
-• Editar projeto existente
-• Atualizar diariamente em 2 períodos:
+1️⃣ *Notificação Matinal*
+Informe o status atual e a previsão do dia para cada projeto.
 
-🌅 *Manhã:* Status + Previsão do dia
-🌙 *Noite:* Feito + Retrabalho + Observações
+2️⃣ *Notificação Noturna*
+Registre o que foi feito, retrabalho e observações do dia.
 
-Digite: *projeto* ou *menu* para iniciar
+3️⃣ *Visualizar Meus Projetos*
+Veja a lista completa dos seus projetos com status e detalhes.
 
-*🔔 NOTIFICAÇÕES AUTOMÁTICAS*
-Você receberá lembretes automáticos:
-• Manhã (09:00): Para informar status e previsão
-• Noite (17:00): Para registrar o que foi feito
+4️⃣ *Marcar Etapa Concluída*
+Marque etapas de pavimentos como concluídas para atualizar o progresso ponderado.
 
-*🔄 COMANDOS ÚTEIS*
-• *sync* - Força sincronização Supabase → Sheets
-• *cancelar* - Sai do fluxo atual
-• *menu* - Volta ao menu principal
+🔔 *Notificações automáticas*
+• Manhã (09:00): lembrete para informar status
+• Noite (17:00): lembrete para registrar o que foi feito
 
-*💡 Dicas*
-• Use áudio para facilitar 🎤
-• Responda apenas com os números dos menus
+🔄 *Comandos úteis*
+• *menu* — volta ao menu principal
+• *cancelar* — sai do fluxo atual
+• *voltar* ou *0* — volta ao passo anterior
+• *sync* — força sincronização
 
 _Digite "menu" para voltar_`;
   }
 
   private mensagemNaoCadastrado(): string {
-    return `🚫 *Número não cadastrado*
+    return `❌ *Número não cadastrado*
 
 Seu número de WhatsApp não está cadastrado no sistema.
 
 Para obter acesso, entre em contato com o administrador da TecPred.
 
-📞 *Informações necessárias:*
+ℹ️ *Informações necessárias:*
 • Seu nome completo
 • Cargo/função (Engenheiro ou Dono)
 • Número de WhatsApp (este número)
@@ -506,7 +480,7 @@ _Após o cadastro, você receberá acesso automático ao sistema._`;
   }
 
   private mensagemNaoEntendida(): string {
-    return `🤔 Desculpe, não entendi sua mensagem.
+    return `⚠️ Desculpe, não entendi sua mensagem.
 
 Digite *menu* para ver as opções disponíveis`;
   }

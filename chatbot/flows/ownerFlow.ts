@@ -168,7 +168,7 @@ export class OwnerFlow {
     this.stepAtual = 'escolher_acao';
     
     return {
-      mensagem: `👔 *Bem-vindo, Dono!*\n\n` +
+      mensagem: `📋 *Bem-vindo, Dono!*\n\n` +
                 `O que deseja fazer?\n\n` +
                 `1️⃣ Visualizar informações\n` +
                 `2️⃣ Distribuir projeto para engenheiro\n` +
@@ -203,7 +203,7 @@ export class OwnerFlow {
         this.contexto.modo = 'criar';
         this.stepAtual = 'criar_codigo';
         return {
-          mensagem: `🆕 *Criar Novo Projeto*\n\n` +
+          mensagem: `🏗️ *Criar Novo Projeto*\n\n` +
                     `Digite o código do projeto\n` +
                     `(ex: PRJ-009, RES-2024-15)\n\n` +
                     `_Digite o código_`,
@@ -355,7 +355,7 @@ export class OwnerFlow {
     this.contexto.engenheiros = resultado.data;
     this.stepAtual = 'viz_escolher_engenheiro';
 
-    let msg = `👨‍💼 *Escolha o Engenheiro:*\n\n`;
+    let msg = `👤 *Escolha o Engenheiro:*\n\n`;
     resultado.data.forEach((eng: any, idx: number) => {
       msg += `${idx + 1}️⃣ ${eng.nome}\n`;
     });
@@ -512,7 +512,7 @@ export class OwnerFlow {
       msg += `📋 ${ret.codigo_projeto} - ${ret.area_descricao}\n`;
       msg += `❗ Motivo: ${ret.motivo_retrabalho}\n`;
       if (ret.tipo_retrabalho) {
-        msg += `🔖 Tipo: ${ret.tipo_retrabalho}\n`;
+        msg += `📊 Tipo: ${ret.tipo_retrabalho}\n`;
       }
       msg += `\n`;
     });
@@ -575,7 +575,7 @@ export class OwnerFlow {
     msg += `📦 *Área:* ${info.area_descricao}\n`;
     msg += `👷 *Engenheiro:* ${info.engenheiro_nome}\n\n`;
     
-    msg += `📈 *Status:* ${info.status_descricao || 'N/A'}\n`;
+    msg += `📊 *Status:* ${info.status_descricao || 'N/A'}\n`;
     msg += `⚡ *Andamento:* ${info.percentual_andamento}%\n`;
 
     // Progresso ponderado (se configurado)
@@ -661,7 +661,7 @@ export class OwnerFlow {
     this.contexto.engenheiros = resultado.data;
     this.stepAtual = 'dist_escolher_engenheiro';
 
-    let msg = `👨‍💼 *Escolha o Engenheiro:*\n\n`;
+    let msg = `👤 *Escolha o Engenheiro:*\n\n`;
     resultado.data.forEach((eng: any, idx: number) => {
       msg += `${idx + 1}️⃣ ${eng.nome}\n`;
     });
@@ -891,7 +891,7 @@ export class OwnerFlow {
     this.stepAtual = 'dist_prazo_cliente';
 
     return {
-      mensagem: `📆 *Prazo Final para o Cliente*\n\n` +
+      mensagem: `📅 *Prazo Final para o Cliente*\n\n` +
                 `Digite o prazo final para o cliente\n` +
                 `Formato: DD/MM/AAAA\n\n` +
                 `_Digite a data_`,
@@ -963,7 +963,7 @@ export class OwnerFlow {
       resumo += `📅 *Início Cliente:* ${this.contexto.dist_data_inicio_cliente}\n`;
     }
     resumo += `⏰ *Prazo Interno:* ${this.contexto.dist_prazo_eng}\n`;
-    resumo += `📆 *Prazo Cliente:* ${this.contexto.dist_prazo_cliente}\n`;
+    resumo += `📅 *Prazo Cliente:* ${this.contexto.dist_prazo_cliente}\n`;
     if (this.contexto.dist_observacoes) {
       resumo += `📝 *Observações:* ${this.contexto.dist_observacoes}\n`;
     }
@@ -1094,7 +1094,7 @@ export class OwnerFlow {
     this.stepAtual = 'criar_confirmar';
     
     let resumo = `✅ *Confirmar Criação de Projeto*\n\n`;
-    resumo += `🔢 *Código:* ${this.contexto.criar_codigo}\n`;
+    resumo += `🏗️ *Código:* ${this.contexto.criar_codigo}\n`;
     resumo += `👤 *Cliente:* ${this.contexto.criar_cliente}\n`;
     resumo += `📝 *Descrição:* ${this.contexto.criar_descricao}\n\n`;
     resumo += `1️⃣ Confirmar\n`;
@@ -1142,7 +1142,7 @@ export class OwnerFlow {
     const resposta = resultado.data;
     
     let msg = `✅ ${resposta.mensagem || 'Projeto criado com sucesso!'}\n\n`;
-    msg += `🔢 *Código:* ${resposta.codigo || this.contexto.criar_codigo}\n`;
+    msg += `🏗️ *Código:* ${resposta.codigo || this.contexto.criar_codigo}\n`;
     msg += `👤 *Cliente:* ${resposta.cliente || this.contexto.criar_cliente}\n\n`;
     msg += `💡 *Próximo passo:*\n`;
     msg += `Use a opção "2 - Distribuir projeto" no menu principal para atribuir este projeto a um engenheiro.\n\n`;
