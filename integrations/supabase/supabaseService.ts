@@ -2190,6 +2190,171 @@ export class SupabaseService {
       return dataStr;
     }
   }
+
+  // =====================================================
+  // PROGRESSO PONDERADO (PAVIMENTOS / ETAPAS)
+  // =====================================================
+
+  /**
+   * Busca todos os pavimentos de um projeto com suas etapas aninhadas
+   */
+  async buscarPavimentosComEtapas(projetoId: string): Promise<any[]> {
+    if (!this.connected) return [];
+
+    try {
+      // Buscar pavimentos
+      const { data: pavimentos, error: pavError } = await this.supabase
+        .from('projeto_pavimentos')
+        .select('*')
+        .eq('projeto_id', projetoId)
+        .eq('ativo', true)
+        .order('ordem', { ascending: true });
+
+      if (pavError) {
+        console.error('❌ Erro ao buscar pavimentos:', pavError);
+        return [];
+      }
+
+      if (!pavimentos || pavimentos.length === 0) {
+        return [];
+      }
+
+      // Buscar etapas de todos os pavimentos de uma vez
+      const pavimentoIds = pavimentos.map((p: any) => p.pavimento_id);
+      const { data: etapas, error: etapaError } = await this.supabase
+        .from('pavimento_etapas')
+        .select('*')
+        .in('pavimento_id', pavimentoIds)
+        .eq('ativo', true)
+        .order('created_at', { ascending: true });
+
+      if (etapaError) {
+        console.error('❌ Erro ao buscar etapas dos pavimentos:', etapaError);
+        // Retorna pavimentos sem etapas em vez de falhar completamente
+        return pavimentos.map((p: any) => ({ ...p, etapas: [] }));
+      }
+
+      // Aninhar etapas dentro dos pavimentos
+      const etapasPorPavimento = new Map<string, any[]>();
+      (etapas || []).forEach((e: any) => {
+        const lista = etapasPorPavimento.get(e.pavimento_id) || [];
+        lista.push(e);
+        etapasPorPavimento.set(e.pavimento_id, lista);
+      });
+
+      return pavimentos.map((p: any) => ({
+        ...p,
+        etapas: etapasPorPavimento.get(p.pavimento_id) || [],
+      }));
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar pavimentos com etapas:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Busca todas as etapas globais de um projeto
+   */
+  async buscarEtapasGlobais(projetoId: string): Promise<any[]> {
+    if (!this.connected) return [];
+
+    try {
+      const { data, error } = await this.supabase
+        .from('projeto_etapas_globais')
+        .select('*')
+        .eq('projeto_id', projetoId)
+        .eq('ativo', true)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('❌ Erro ao buscar etapas globais:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar etapas globais:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Marca uma etapa de pavimento como concluída ou não concluída
+   */
+  async marcarEtapaConcluida(etapaId: string, concluida: boolean): Promise<boolean> {
+    if (!this.connected) return false;
+
+    try {
+      const { error } = await this.supabase
+        .from('pavimento_etapas')
+        .update({ concluida })
+        .eq('etapa_id', etapaId)
+        .eq('ativo', true);
+
+      if (error) {
+        console.error('❌ Erro ao marcar etapa:', error);
+        return false;
+      }
+
+      console.log(`✅ Etapa ${etapaId} marcada como ${concluida ? 'concluída' : 'pendente'}`);
+      return true;
+    } catch (error: any) {
+      console.error('❌ Erro ao marcar etapa:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Marca uma etapa global como concluída ou não concluída
+   */
+  async marcarEtapaGlobalConcluida(etapaGlobalId: string, concluida: boolean): Promise<boolean> {
+    if (!this.connected) return false;
+
+    try {
+      const { error } = await this.supabase
+        .from('projeto_etapas_globais')
+        .update({ concluida })
+        .eq('etapa_global_id', etapaGlobalId)
+        .eq('ativo', true);
+
+      if (error) {
+        console.error('❌ Erro ao marcar etapa global:', error);
+        return false;
+      }
+
+      console.log(`✅ Etapa global ${etapaGlobalId} marcada como ${concluida ? 'concluída' : 'pendente'}`);
+      return true;
+    } catch (error: any) {
+      console.error('❌ Erro ao marcar etapa global:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Busca o percentual_ponderado cacheado de um projeto
+   */
+  async buscarProgressoPonderado(projetoId: string): Promise<number | null> {
+    if (!this.connected) return null;
+
+    try {
+      const { data, error } = await this.supabase
+        .from('projetos')
+        .select('percentual_ponderado')
+        .eq('projeto_id', projetoId)
+        .eq('ativo', true)
+        .single();
+
+      if (error) {
+        console.error('❌ Erro ao buscar progresso ponderado:', error);
+        return null;
+      }
+
+      return (data as any)?.percentual_ponderado ?? null;
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar progresso ponderado:', error.message);
+      return null;
+    }
+  }
 }
 
 // =====================================================

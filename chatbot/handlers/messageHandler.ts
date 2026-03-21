@@ -168,9 +168,9 @@ export class MessageHandler {
             return await this.iniciarFluxoDono(sessao);
           }
 
-          // Se for comando direto de menu (1, 2, 3, 4), processar diretamente
+          // Se for comando direto de menu (1, 2, 3, 4, 5), processar diretamente
           const mensagemNorm = mensagem.trim();
-          if (mensagemNorm === '1' || mensagemNorm === '2' || mensagemNorm === '3' || mensagemNorm === '4') {
+          if (mensagemNorm === '1' || mensagemNorm === '2' || mensagemNorm === '3' || mensagemNorm === '4' || mensagemNorm === '5') {
             console.log(`   ✅ Opção do menu detectada: ${mensagemNorm}`);
             // Iniciar fluxo e processar a escolha imediatamente
             const flow = new EngineerProjectFlow(sessao.whatsapp);
@@ -295,8 +295,8 @@ export class MessageHandler {
     const mensagemLower = mensagem.toLowerCase().trim();
 
     // Atalhos numéricos do menu
-    if (mensagemLower === '1' || mensagemLower === '2' || mensagemLower === '3' || mensagemLower === '4') {
-      return 'gerenciar_projeto'; // Opções 1, 2, 3, 4 = Gestão de projetos
+    if (mensagemLower === '1' || mensagemLower === '2' || mensagemLower === '3' || mensagemLower === '4' || mensagemLower === '5') {
+      return 'gerenciar_projeto'; // Opções 1, 2, 3, 4, 5 = Gestão de projetos
     }
 
     // Palavras-chave para MODIFICAR projetos (Engenheiros)
@@ -414,6 +414,7 @@ _Digite o número da opção desejada_`;
 ✏️ *Gestão*
 3️⃣ Editar projeto
 4️⃣ Visualizar Meus Projetos
+5️⃣ Marcar Etapa Concluída
 
 ❓ *Ajuda*
 Digite "ajuda" para instruções

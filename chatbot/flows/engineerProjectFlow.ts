@@ -86,6 +86,17 @@ type FlowStep =
   | 'escolher_projeto_viz'
   | 'mostrar_detalhes_projeto'
 
+  // Progresso Ponderado
+  | 'progresso_escolher_projeto'
+  | 'progresso_escolher_pavimento'
+  | 'progresso_escolher_etapa'
+
+  // Progresso Ponderado (integrado na noite)
+  | 'noite_etapa_pergunta'
+  | 'noite_etapa_pavimento'
+  | 'noite_etapa_escolher'
+  | 'noite_etapa_mais'
+
   | 'fim';
 
 interface FlowState {
@@ -108,6 +119,13 @@ interface FlowState {
   engineerName?: string;
   editField?: string;
   originalValue?: string;
+  // Dados temporarios do progresso ponderado
+  selectedProjetoId?: string;
+  selectedProjetoCodigo?: string;
+  pavimentosDisponiveis?: any[];
+  etapasDisponiveis?: any[];
+  selectedPavimentoId?: string;
+  selectedPavimentoNome?: string;
   // Dados temporarios das notificacoes
   statusAtual?: number;  // status_id
   previsaoTexto?: string;
@@ -327,6 +345,24 @@ export class EngineerProjectFlow {
         case 'mostrar_detalhes_projeto':
           return { mensagem: 'Digite "menu" para voltar', finalizado: true };
 
+        // Progresso Ponderado
+        case 'progresso_escolher_projeto':
+          return await this.stepProgressoEscolherProjeto(msg);
+        case 'progresso_escolher_pavimento':
+          return await this.stepProgressoEscolherPavimento(msg);
+        case 'progresso_escolher_etapa':
+          return await this.stepProgressoEscolherEtapa(msg);
+
+        // Progresso ponderado integrado na noite
+        case 'noite_etapa_pergunta':
+          return await this.stepNoiteEtapaPergunta(msg);
+        case 'noite_etapa_pavimento':
+          return await this.stepNoiteEtapaPavimento(msg);
+        case 'noite_etapa_escolher':
+          return await this.stepNoiteEtapaEscolher(msg);
+        case 'noite_etapa_mais':
+          return await this.stepNoiteEtapaMais(msg);
+
         default:
           return {
             mensagem: '❌ Estado inválido do fluxo.',
@@ -383,9 +419,14 @@ export class EngineerProjectFlow {
       this.state.step = 'visualizar_projetos';
       return await this.stepVisualizarProjetos();
 
+    } else if (opcao === '5') {
+      // Marcar etapa concluída (progresso ponderado)
+      this.state.step = 'progresso_escolher_projeto';
+      return await this.stepProgressoEscolherProjeto('');
+
     } else {
       return {
-        mensagem: '❌ Opção inválida. Digite *1*, *2*, *3* ou *4*.',
+        mensagem: '❌ Opção inválida. Digite *1*, *2*, *3*, *4* ou *5*.',
         finalizado: false
       };
     }
@@ -2309,6 +2350,8 @@ export class EngineerProjectFlow {
     const atribuicao = this.state.availableAtribuicoes![escolha];
     this.state.selectedAtribuicaoId = atribuicao.id;
     this.state.projectCode = atribuicao.codigo;
+    this.state.selectedProjetoId = atribuicao.projeto_id;
+    this.state.selectedProjetoCodigo = atribuicao.codigo;
 
     // Prosseguir para feito do dia
     this.state.step = 'feito_dia';
@@ -2487,6 +2530,30 @@ export class EngineerProjectFlow {
 
     if (this.state.observacoesTexto) {
       mensagem += `📝 Observações: ${this.state.observacoesTexto}\n`;
+    }
+
+    // Verificar se o projeto tem pavimentos com etapas pendentes
+    if (this.state.selectedProjetoId) {
+      try {
+        const pavimentos = await this.supabase.buscarPavimentosComEtapas(this.state.selectedProjetoId);
+        const pavimentosComPendencias = pavimentos.filter(
+          (p: any) => p.etapas.some((e: any) => !e.concluida)
+        );
+
+        if (pavimentosComPendencias.length > 0) {
+          this.state.pavimentosDisponiveis = pavimentosComPendencias;
+          this.state.step = 'noite_etapa_pergunta';
+
+          mensagem += `\n📐 *Alguma etapa foi concluída hoje?*\n\n`;
+          mensagem += `1️⃣ Sim\n`;
+          mensagem += `2️⃣ Não\n\n`;
+          mensagem += `_Digite 1 ou 2_`;
+
+          return { mensagem, finalizado: false };
+        }
+      } catch (error) {
+        console.error('Erro ao verificar pavimentos:', error);
+      }
     }
 
     mensagem += `\nDescanse bem! 🌙`;
@@ -2770,17 +2837,22 @@ export class EngineerProjectFlow {
 
     let mensagem = `📊 *Meus Projetos (${atribuicoes.length})*\n\n`;
 
-    atribuicoes.forEach((proj, idx) => {
+    for (let idx = 0; idx < atribuicoes.length; idx++) {
+      const proj = atribuicoes[idx];
       mensagem += `${idx + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
       mensagem += `   📦 Área: ${proj.area}\n`;
       mensagem += `   📈 Status: ${proj.status}\n`;
       mensagem += `   ⚡ Andamento: ${proj.percentual || 0}%\n`;
+      const ponderado = await this.supabase.buscarProgressoPonderado(proj.projeto_id);
+      if (ponderado !== null) {
+        mensagem += `   📐 Progresso ponderado: ${ponderado}%\n`;
+      }
       if (proj.data_prevista) {
         const data = new Date(proj.data_prevista).toLocaleDateString('pt-BR');
         mensagem += `   📅 Previsto: ${data}\n`;
       }
       mensagem += `\n`;
-    });
+    }
 
     mensagem += `_Digite o número para ver detalhes completos_\n`;
     mensagem += `_Ou "menu" para voltar_`;
@@ -2822,7 +2894,12 @@ export class EngineerProjectFlow {
     msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
     msg += `📈 *Status Atual*\n\n`;
     msg += `📊 Status: ${atribuicao.status}\n`;
-    msg += `⚡ Andamento: ${atribuicao.percentual || 0}%\n\n`;
+    msg += `⚡ Andamento: ${atribuicao.percentual || 0}%\n`;
+    const ponderado = await this.supabase.buscarProgressoPonderado(atribuicao.projeto_id);
+    if (ponderado !== null) {
+      msg += `📐 Progresso ponderado: ${ponderado}%\n`;
+    }
+    msg += `\n`;
 
     if (atribuicao.data_inicio || atribuicao.data_prevista || atribuicao.data_conclusao) {
       msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -2849,5 +2926,333 @@ export class EngineerProjectFlow {
     this.state.step = 'mostrar_detalhes_projeto';
 
     return { mensagem: msg, finalizado: true };
+  }
+
+  // =====================================================
+  // STEPS: PROGRESSO PONDERADO (MARCAR ETAPAS)
+  // =====================================================
+
+  /**
+   * STEP: Escolher projeto para marcar etapa concluída
+   * Lista projetos que possuem pavimentos configurados
+   */
+  private async stepProgressoEscolherProjeto(msg: string): Promise<FlowResult> {
+    // Primeira chamada (msg vazio): listar projetos
+    if (!msg) {
+      const atribuicoes = await this.buscarAtribuicoesEngenheiro();
+
+      if (atribuicoes.length === 0) {
+        return {
+          mensagem: '📭 Você não tem projetos atribuídos no momento.',
+          finalizado: true
+        };
+      }
+
+      // Filtrar projetos únicos (pode ter múltiplas áreas)
+      const projetosUnicos = new Map<string, typeof atribuicoes[0]>();
+      atribuicoes.forEach(a => {
+        if (!projetosUnicos.has(a.projeto_id)) {
+          projetosUnicos.set(a.projeto_id, a);
+        }
+      });
+
+      const projetos = Array.from(projetosUnicos.values());
+      this.state.availableAtribuicoes = projetos;
+
+      let mensagem = `📐 *Marcar Etapa Concluída*\n\n`;
+      mensagem += `📋 Escolha o projeto:\n\n`;
+
+      projetos.forEach((proj, idx) => {
+        mensagem += `${idx + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
+      });
+
+      mensagem += `\n_Digite o número do projeto_`;
+
+      this.state.step = 'progresso_escolher_projeto';
+      return { mensagem, finalizado: false };
+    }
+
+    // Segunda chamada: processar escolha
+    const escolha = parseInt(msg.trim()) - 1;
+
+    if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.availableAtribuicoes?.length || 0)) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.availableAtribuicoes?.length || 0}`,
+        finalizado: false
+      };
+    }
+
+    const projeto = this.state.availableAtribuicoes![escolha];
+    this.state.selectedProjetoId = projeto.projeto_id;
+    this.state.selectedProjetoCodigo = projeto.codigo;
+
+    // Buscar pavimentos do projeto
+    const pavimentos = await this.supabase.buscarPavimentosComEtapas(projeto.projeto_id);
+
+    if (pavimentos.length === 0) {
+      return {
+        mensagem: `⚠️ O projeto *${projeto.codigo}* ainda não tem pavimentos configurados.\n\nPeça ao gestor para configurar os pavimentos e etapas pelo dashboard.\n\n_Digite "menu" para voltar_`,
+        finalizado: true
+      };
+    }
+
+    // Filtrar pavimentos que ainda têm etapas pendentes
+    const pavimentosComPendencias = pavimentos.filter(
+      (p: any) => p.etapas.some((e: any) => !e.concluida)
+    );
+
+    if (pavimentosComPendencias.length === 0) {
+      const progresso = await this.supabase.buscarProgressoPonderado(projeto.projeto_id);
+      return {
+        mensagem: `✅ Todas as etapas do projeto *${projeto.codigo}* já estão concluídas!\n\n📊 Progresso ponderado: ${progresso ?? 0}%\n\n_Digite "menu" para voltar_`,
+        finalizado: true
+      };
+    }
+
+    this.state.pavimentosDisponiveis = pavimentosComPendencias;
+    this.state.step = 'progresso_escolher_pavimento';
+
+    let mensagem = `📐 *${projeto.codigo}* - Pavimentos\n\n`;
+
+    pavimentosComPendencias.forEach((pav: any, idx: number) => {
+      const totalEtapas = pav.etapas.length;
+      const concluidas = pav.etapas.filter((e: any) => e.concluida).length;
+      mensagem += `${idx + 1}️⃣ *${pav.nome}* (peso ${pav.peso}%)\n`;
+      mensagem += `   ${concluidas}/${totalEtapas} etapas concluídas\n\n`;
+    });
+
+    mensagem += `_Digite o número do pavimento_`;
+
+    return { mensagem, finalizado: false };
+  }
+
+  /**
+   * STEP: Escolher pavimento e listar etapas pendentes
+   */
+  private async stepProgressoEscolherPavimento(msg: string): Promise<FlowResult> {
+    const escolha = parseInt(msg.trim()) - 1;
+
+    if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.pavimentosDisponiveis?.length || 0)) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.pavimentosDisponiveis?.length || 0}`,
+        finalizado: false
+      };
+    }
+
+    const pavimento = this.state.pavimentosDisponiveis![escolha];
+    this.state.selectedPavimentoId = pavimento.pavimento_id;
+    this.state.selectedPavimentoNome = pavimento.nome;
+
+    // Filtrar etapas pendentes
+    const etapasPendentes = pavimento.etapas.filter((e: any) => !e.concluida);
+    this.state.etapasDisponiveis = etapasPendentes;
+    this.state.step = 'progresso_escolher_etapa';
+
+    let mensagem = `📐 *${this.state.selectedProjetoCodigo}* > *${pavimento.nome}*\n\n`;
+    mensagem += `📋 Etapas pendentes:\n\n`;
+
+    etapasPendentes.forEach((etapa: any, idx: number) => {
+      mensagem += `${idx + 1}️⃣ ${etapa.nome} (peso ${etapa.peso}%)\n`;
+    });
+
+    mensagem += `\n_Digite o número da etapa para marcar como concluída_`;
+
+    return { mensagem, finalizado: false };
+  }
+
+  /**
+   * STEP: Marcar etapa como concluída e mostrar resultado
+   */
+  private async stepProgressoEscolherEtapa(msg: string): Promise<FlowResult> {
+    const escolha = parseInt(msg.trim()) - 1;
+
+    if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.etapasDisponiveis?.length || 0)) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.etapasDisponiveis?.length || 0}`,
+        finalizado: false
+      };
+    }
+
+    const etapa = this.state.etapasDisponiveis![escolha];
+
+    // Marcar como concluída
+    const sucesso = await this.supabase.marcarEtapaConcluida(etapa.etapa_id, true);
+
+    if (!sucesso) {
+      return {
+        mensagem: `❌ Erro ao marcar etapa. Tente novamente ou digite "menu".`,
+        finalizado: false
+      };
+    }
+
+    // Buscar progresso atualizado (trigger já recalculou)
+    const progresso = await this.supabase.buscarProgressoPonderado(this.state.selectedProjetoId!);
+
+    let mensagem = `✅ Etapa marcada como concluída!\n\n`;
+    mensagem += `📐 *${this.state.selectedProjetoCodigo}*\n`;
+    mensagem += `🏗️ Pavimento: ${this.state.selectedPavimentoNome}\n`;
+    mensagem += `✔️ Etapa: ${etapa.nome}\n\n`;
+    mensagem += `📊 *Progresso ponderado: ${progresso ?? 0}%*\n\n`;
+    mensagem += `_Digite "menu" para voltar ao menu principal_`;
+
+    this.state.step = 'fim';
+
+    return { mensagem, finalizado: true };
+  }
+
+  // =====================================================
+  // STEPS: PROGRESSO PONDERADO INTEGRADO NA NOITE
+  // =====================================================
+
+  private async stepNoiteEtapaPergunta(msg: string): Promise<FlowResult> {
+    const resposta = msg.trim();
+
+    if (resposta === '1') {
+      // Sim, concluiu etapa — mostrar pavimentos
+      const pavimentos = this.state.pavimentosDisponiveis!;
+
+      let mensagem = `📐 *${this.state.projectCode}* - Pavimentos\n\n`;
+
+      pavimentos.forEach((pav: any, idx: number) => {
+        const totalEtapas = pav.etapas.length;
+        const concluidas = pav.etapas.filter((e: any) => e.concluida).length;
+        mensagem += `${idx + 1}️⃣ *${pav.nome}* (peso ${pav.peso}%)\n`;
+        mensagem += `   ${concluidas}/${totalEtapas} etapas concluídas\n\n`;
+      });
+
+      mensagem += `_Digite o número do pavimento_`;
+
+      this.state.step = 'noite_etapa_pavimento';
+      return { mensagem, finalizado: false };
+
+    } else if (resposta === '2') {
+      // Não concluiu etapa — finalizar
+      return {
+        mensagem: 'Descanse bem! 🌙',
+        finalizado: true
+      };
+
+    } else {
+      return {
+        mensagem: '❌ Opção inválida. Digite *1* para Sim ou *2* para Não.',
+        finalizado: false
+      };
+    }
+  }
+
+  private async stepNoiteEtapaPavimento(msg: string): Promise<FlowResult> {
+    const escolha = parseInt(msg.trim()) - 1;
+
+    if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.pavimentosDisponiveis?.length || 0)) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.pavimentosDisponiveis?.length || 0}.`,
+        finalizado: false
+      };
+    }
+
+    const pavimento = this.state.pavimentosDisponiveis![escolha];
+    this.state.selectedPavimentoId = pavimento.pavimento_id;
+    this.state.selectedPavimentoNome = pavimento.nome;
+
+    // Filtrar etapas pendentes
+    const etapasPendentes = pavimento.etapas.filter((e: any) => !e.concluida);
+    this.state.etapasDisponiveis = etapasPendentes;
+    this.state.step = 'noite_etapa_escolher';
+
+    let mensagem = `📐 *${this.state.projectCode}* > *${pavimento.nome}*\n\n`;
+    mensagem += `📋 Etapas pendentes:\n\n`;
+
+    etapasPendentes.forEach((etapa: any, idx: number) => {
+      mensagem += `${idx + 1}️⃣ ${etapa.nome} (peso ${etapa.peso}%)\n`;
+    });
+
+    mensagem += `\n_Digite o número da etapa para marcar como concluída_`;
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepNoiteEtapaEscolher(msg: string): Promise<FlowResult> {
+    const escolha = parseInt(msg.trim()) - 1;
+
+    if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.etapasDisponiveis?.length || 0)) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.state.etapasDisponiveis?.length || 0}.`,
+        finalizado: false
+      };
+    }
+
+    const etapa = this.state.etapasDisponiveis![escolha];
+
+    // Marcar etapa como concluída
+    const sucesso = await this.supabase.marcarEtapaConcluida(etapa.etapa_id, true);
+
+    if (!sucesso) {
+      return {
+        mensagem: '❌ Erro ao marcar etapa. Tente novamente ou digite "menu".',
+        finalizado: false
+      };
+    }
+
+    // Buscar progresso atualizado (trigger já recalculou)
+    const progresso = await this.supabase.buscarProgressoPonderado(this.state.selectedProjetoId!);
+
+    let mensagem = `✅ Etapa marcada como concluída!\n\n`;
+    mensagem += `🏗️ Pavimento: ${this.state.selectedPavimentoNome}\n`;
+    mensagem += `✔️ Etapa: ${etapa.nome}\n`;
+    mensagem += `📊 *Progresso ponderado: ${progresso ?? 0}%*\n\n`;
+    mensagem += `Deseja marcar outra etapa?\n\n`;
+    mensagem += `1️⃣ Sim\n`;
+    mensagem += `2️⃣ Não\n\n`;
+    mensagem += `_Digite 1 ou 2_`;
+
+    this.state.step = 'noite_etapa_mais';
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepNoiteEtapaMais(msg: string): Promise<FlowResult> {
+    const resposta = msg.trim();
+
+    if (resposta === '1') {
+      // Recarregar pavimentos com etapas pendentes atualizadas
+      const pavimentos = await this.supabase.buscarPavimentosComEtapas(this.state.selectedProjetoId!);
+      const pavimentosComPendencias = pavimentos.filter(
+        (p: any) => p.etapas.some((e: any) => !e.concluida)
+      );
+
+      if (pavimentosComPendencias.length === 0) {
+        const progresso = await this.supabase.buscarProgressoPonderado(this.state.selectedProjetoId!);
+        return {
+          mensagem: `✅ Todas as etapas do projeto estão concluídas!\n\n📊 *Progresso ponderado: ${progresso ?? 0}%*\n\nDescanse bem! 🌙`,
+          finalizado: true
+        };
+      }
+
+      this.state.pavimentosDisponiveis = pavimentosComPendencias;
+
+      let mensagem = `📐 *${this.state.projectCode}* - Pavimentos\n\n`;
+
+      pavimentosComPendencias.forEach((pav: any, idx: number) => {
+        const totalEtapas = pav.etapas.length;
+        const concluidas = pav.etapas.filter((e: any) => e.concluida).length;
+        mensagem += `${idx + 1}️⃣ *${pav.nome}* (peso ${pav.peso}%)\n`;
+        mensagem += `   ${concluidas}/${totalEtapas} etapas concluídas\n\n`;
+      });
+
+      mensagem += `_Digite o número do pavimento_`;
+
+      this.state.step = 'noite_etapa_pavimento';
+      return { mensagem, finalizado: false };
+
+    } else if (resposta === '2') {
+      return {
+        mensagem: 'Descanse bem! 🌙',
+        finalizado: true
+      };
+
+    } else {
+      return {
+        mensagem: '❌ Opção inválida. Digite *1* para Sim ou *2* para Não.',
+        finalizado: false
+      };
+    }
   }
 }
