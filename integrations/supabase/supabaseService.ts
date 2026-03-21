@@ -2349,7 +2349,7 @@ export class SupabaseService {
         return null;
       }
 
-      return data?.percentual_ponderado ?? null;
+      return (data as any)?.percentual_ponderado ?? null;
     } catch (error: any) {
       console.error('❌ Erro ao buscar progresso ponderado:', error.message);
       return null;
