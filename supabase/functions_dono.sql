@@ -305,27 +305,9 @@ BEGIN
         NOW()
     );
     
-    -- 4. Cria notificação WhatsApp
-    INSERT INTO notificacoes_whatsapp (
-        eng_id,
-        telefone,
-        tipo,
-        titulo,
-        mensagem,
-        projeto_id
-    ) VALUES (
-        p_eng_id,
-        (SELECT telefone FROM engenheiros WHERE eng_id = p_eng_id),
-        'NOVA_TAREFA',
-        '🆕 Novo Projeto Atribuído!',
-        '📋 Projeto: ' || v_codigo_projeto || 
-        E'\n📦 Área: ' || v_area_descricao ||
-        E'\n📅 Início: ' || p_data_inicio ||
-        E'\n⏰ Prazo interno: ' || p_prazo_final_eng ||
-        E'\n📆 Prazo cliente: ' || p_prazo_final_cliente,
-        p_projeto_id
-    );
-    
+    -- 4. Notificação WhatsApp é criada automaticamente pelo trigger
+    -- trg_notificar_novo_projeto (AFTER INSERT em engenheiros_projetos)
+
     RETURN json_build_object(
         'sucesso', true,
         'mensagem', format('✅ Projeto distribuído para %s com prazos cadastrados!', v_eng_nome),

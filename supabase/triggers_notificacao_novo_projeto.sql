@@ -14,36 +14,26 @@ DECLARE
     v_cliente VARCHAR(255);
     v_descricao TEXT;
     v_area_desc VARCHAR(255);
-    v_data_inicio DATE;
-    v_prazo_final DATE;
-    v_prazo_cliente DATE;
     v_mensagem TEXT;
 BEGIN
     -- Buscar informações completas
-    SELECT 
+    SELECT
         e.telefone,
         e.nome,
         p.codigo_projeto,
         p.cliente,
         p.descricao,
-        a.descricao,
-        NEW.data_inicio,
-        pr.prazo_final_eng,
-        pr.prazo_final_cliente
-    INTO 
+        a.descricao
+    INTO
         v_eng_telefone,
         v_eng_nome,
         v_projeto_codigo,
         v_cliente,
         v_descricao,
-        v_area_desc,
-        v_data_inicio,
-        v_prazo_final,
-        v_prazo_cliente
+        v_area_desc
     FROM engenheiros e
     JOIN projetos p ON p.projeto_id = NEW.projeto_id
     JOIN areas a ON a.area_id = NEW.area_id
-    LEFT JOIN prazos pr ON pr.eng_projeto_id = NEW.id
     WHERE e.eng_id = NEW.eng_id;
     
     -- Extrair primeiro nome
@@ -60,17 +50,13 @@ BEGIN
     END IF;
     
     v_mensagem := v_mensagem || '📦 *Área:* ' || v_area_desc || E'\n\n';
-    
-    IF v_data_inicio IS NOT NULL THEN
-        v_mensagem := v_mensagem || '📅 *Início:* ' || TO_CHAR(v_data_inicio, 'DD/MM/YYYY') || E'\n';
+
+    IF NEW.data_inicio IS NOT NULL THEN
+        v_mensagem := v_mensagem || '📅 *Início:* ' || TO_CHAR(NEW.data_inicio, 'DD/MM/YYYY') || E'\n';
     END IF;
-    
-    IF v_prazo_final IS NOT NULL THEN
-        v_mensagem := v_mensagem || '⏰ *Prazo Interno:* ' || TO_CHAR(v_prazo_final, 'DD/MM/YYYY') || E'\n';
-    END IF;
-    
-    IF v_prazo_cliente IS NOT NULL THEN
-        v_mensagem := v_mensagem || '📆 *Prazo Cliente:* ' || TO_CHAR(v_prazo_cliente, 'DD/MM/YYYY') || E'\n';
+
+    IF NEW.data_prevista IS NOT NULL THEN
+        v_mensagem := v_mensagem || '⏰ *Prazo:* ' || TO_CHAR(NEW.data_prevista, 'DD/MM/YYYY') || E'\n';
     END IF;
     
     v_mensagem := v_mensagem || E'\n';
