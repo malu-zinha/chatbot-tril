@@ -761,35 +761,6 @@ export class EngineerSheetService {
   }
 
   // =====================================================
-  // GERAR PRÓXIMO CÓDIGO DE PROJETO
-  // =====================================================
-
-  async generateNextProjectCode(): Promise<string> {
-    try {
-      const fullRange = `${this.sheetName}!${this.range}`;
-      const data = await this.sheetsService.readSheetAsObjects(this.spreadsheetId, fullRange);
-
-      // Extrair números dos códigos existentes (PRJ-001, PRJ-002, etc)
-      const codes = data
-        .map(row => row['Código do Projeto'])
-        .filter(code => code && code.startsWith('PRJ-'))
-        .map(code => {
-          const match = code.match(/PRJ-(\d+)/);
-          return match ? parseInt(match[1], 10) : 0;
-        });
-
-      const maxCode = codes.length > 0 ? Math.max(...codes) : 0;
-      const nextNumber = maxCode + 1;
-
-      return `PRJ-${String(nextNumber).padStart(3, '0')}`;
-    } catch (error: any) {
-      console.error('Erro ao gerar próximo código:', error.message);
-      // Fallback
-      return `PRJ-${String(Date.now()).slice(-3)}`;
-    }
-  }
-
-  // =====================================================
   // MÉTODOS AUXILIARES - MENUS DINÂMICOS E CÁLCULOS
   // =====================================================
 

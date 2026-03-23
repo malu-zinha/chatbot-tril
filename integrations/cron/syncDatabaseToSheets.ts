@@ -182,11 +182,6 @@ async function syncProjetosParaPlanilha(config: SheetConfig): Promise<void> {
       }
     }
 
-    if (error) {
-      console.error('   ❌ Erro ao buscar atribuições:', error);
-      return;
-    }
-
     if (!atribuicoes || atribuicoes.length === 0) {
       console.log('   ℹ️  Nenhuma atribuição encontrada');
       return;
@@ -313,11 +308,6 @@ async function syncDashboardCEO(): Promise<void> {
         dias_atraso: '0',
         metrica_retrabalho: '0'
       });
-    }
-
-    if (error) {
-      console.error('   ❌ Erro ao buscar dashboard:', error);
-      return;
     }
 
     if (!projetos || projetos.length === 0) {

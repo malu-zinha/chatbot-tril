@@ -43,7 +43,7 @@ interface SyncCEOResult {
 // =====================================================
 
 class CEOSyncService {
-  private supabase: ReturnType<typeof createClient>;
+  private supabase: any;
   private sheets: any;
 
   constructor() {

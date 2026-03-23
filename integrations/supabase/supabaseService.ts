@@ -146,23 +146,12 @@ export interface ProjetoLegacy {
   ativo: boolean;
 }
 
-export interface AtualizacaoDiaria {
-  id: string;
-  projeto_id: string;
-  data: string;
-  previsao_dia?: string;
-  feito_dia?: string;
-  necessitou_retrabalho: boolean;
-  motivo_revisao?: string;
-  observacoes?: string;
-}
-
 // =====================================================
 // SERVIÇO PRINCIPAL
 // =====================================================
 
 export class SupabaseService {
-  private supabase: ReturnType<typeof createClient>;
+  private supabase: any;
   private connected: boolean = false;
 
   constructor() {
@@ -733,99 +722,9 @@ export class SupabaseService {
     }
   }
 
-  /**
-   * Atualiza campo específico de uma atribuição
-   */
-  async atualizarCampoAtribuicao(
-    atribuicao_id: string,
-    campo: string,
-    valor: any
-  ): Promise<{ success: boolean; error?: string }> {
-    if (!this.connected) {
-      return { success: false, error: 'Supabase não conectado' };
-    }
-
-    try {
-      const mapeamento: Record<string, string> = {
-        'data_inicio': 'data_inicio',
-        'data_prevista': 'data_prevista',
-        'data_conclusao': 'data_conclusao',
-        'observacoes': 'observacoes',
-      };
-
-      const colunaBD = mapeamento[campo];
-      if (!colunaBD) {
-        return { success: false, error: `Campo "${campo}" não mapeado` };
-      }
-
-      let valorFormatado = valor;
-      if (campo.includes('data')) {
-        valorFormatado = this.formatarDataParaDB(valor);
-      }
-
-      const { error } = await this.supabase
-        .from('engenheiros_projetos')
-        .update({ [colunaBD]: valorFormatado })
-        .eq('id', atribuicao_id);
-
-      if (error) {
-        return { success: false, error: error.message };
-      }
-
-      return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  }
-
   // =====================================================
   // PREVISÕES E RETRABALHOS
   // =====================================================
-
-  /**
-   * Registra previsão do dia (manhã) usando SQL function
-   */
-  async registrarPrevisaoDia(
-    eng_projeto_id: string,
-    previsao_texto: string,
-    status_codigo?: string,
-    tempo_estimado?: number,
-    nova_data_prevista?: string
-  ): Promise<Previsao | null> {
-    if (!this.connected) return null;
-
-    try {
-      const { data, error } = await this.supabase.rpc('registrar_previsao_dia', {
-        p_atribuicao_id: eng_projeto_id,
-        p_previsao_texto: previsao_texto,
-        p_tempo_estimado: tempo_estimado || null,
-        p_nova_data_prevista: nova_data_prevista ? this.formatarDataParaDB(nova_data_prevista) : null,
-      });
-
-      if (error) {
-        console.error('❌ Erro ao registrar previsão:', error);
-        return null;
-      }
-
-      if (!data || !data.sucesso) {
-        console.error('❌ Erro ao registrar previsão:', data?.mensagem);
-        return null;
-      }
-
-      console.log(`✅ Previsão registrada para ${data.data}`);
-
-      // Atualizar status se fornecido
-      if (status_codigo) {
-        await this.atualizarStatusAtribuicao(eng_projeto_id, status_codigo);
-      }
-
-      // Retornar previsão criada
-      return await this.buscarUltimaPrevisao(eng_projeto_id);
-    } catch (error: any) {
-      console.error('❌ Erro ao registrar previsão:', error.message);
-      return null;
-    }
-  }
 
   /**
    * Registra feito do dia (noite) usando SQL function
@@ -1107,168 +1006,6 @@ export class SupabaseService {
       data_previsao_termino: atribuicao.data_prevista || undefined,
       ativo: projeto.ativo,
     };
-  }
-
-  /**
-   * Atualiza campo de projeto (compatibilidade - atualiza atribuição)
-   */
-  async atualizarCampoProjeto(
-    codigoProjeto: string,
-    campo: string,
-    valor: any
-  ): Promise<{ success: boolean; error?: string }> {
-    // Buscar projeto
-    const projeto = await this.buscarProjetoPorCodigo(codigoProjeto);
-    if (!projeto) {
-      return { success: false, error: 'Projeto não encontrado' };
-    }
-
-    // Buscar primeira atribuição ativa
-    const { data: atribuicao } = await this.supabase
-      .from('engenheiros_projetos')
-      .select('id')
-      .eq('projeto_id', projeto.projeto_id)
-      .eq('ativo', true)
-      .limit(1)
-      .single();
-
-    if (!atribuicao) {
-      return { success: false, error: 'Atribuição não encontrada' };
-    }
-
-    return await this.atualizarCampoAtribuicao(atribuicao.id, campo, valor);
-  }
-
-  /**
-   * Registra atualização manhã (compatibilidade)
-   */
-  async registrarAtualizacaoManha(
-    projetoId: string,
-    dados: { status: string; previsao: string }
-  ): Promise<AtualizacaoDiaria | null> {
-    // Buscar atribuição do projeto
-    const { data: atribuicao } = await this.supabase
-      .from('engenheiros_projetos')
-      .select('id')
-      .eq('projeto_id', projetoId)
-      .eq('ativo', true)
-      .limit(1)
-      .single();
-
-    if (!atribuicao) {
-      return null;
-    }
-
-    // Mapear status string para código
-    const statusMap: Record<string, string> = {
-      'em execução': 'EM_EXECUCAO',
-      'em aprovação': 'EM_APROVACAO',
-      'parado cliente': 'PARADO_CLIENTE',
-      'parado tecpred': 'PARADO_TECPRED',
-      'concluído': 'CONCLUIDO',
-      'aguardando início': 'AGUARDANDO_INICIO',
-      'aguardando inf. cliente': 'AGUARDANDO_INF_CLIENTE',
-    };
-
-    const statusCodigo = statusMap[dados.status.toLowerCase()] || 'EM_EXECUCAO';
-
-    const previsao = await this.registrarPrevisaoDia(
-      atribuicao.id,
-      dados.previsao,
-      statusCodigo
-    );
-
-    if (!previsao) return null;
-
-    return {
-      id: previsao.id,
-      projeto_id: projetoId,
-      data: previsao.data_registro,
-      previsao_dia: previsao.previsao_texto,
-      necessitou_retrabalho: false,
-    };
-  }
-
-  /**
-   * Registra atualização noite (compatibilidade)
-   */
-  async registrarAtualizacaoNoite(
-    projetoId: string,
-    dados: {
-      feito: string;
-      retrabalho: boolean;
-      motivoRetrabalho?: string;
-      etapa: string;
-      percentual: number;
-      observacoes: string;
-    }
-  ): Promise<AtualizacaoDiaria | null> {
-    // Buscar atribuição
-    const { data: atribuicao } = await this.supabase
-      .from('engenheiros_projetos')
-      .select('id')
-      .eq('projeto_id', projetoId)
-      .eq('ativo', true)
-      .limit(1)
-      .single();
-
-    if (!atribuicao) {
-      return null;
-    }
-
-    const previsao = await this.registrarFeitoDia(
-      atribuicao.id,
-      dados.feito,
-      dados.retrabalho,
-      dados.motivoRetrabalho
-    );
-
-    if (!previsao) return null;
-
-    return {
-      id: previsao.id,
-      projeto_id: projetoId,
-      data: previsao.data_registro,
-      feito_dia: previsao.feito_texto,
-      necessitou_retrabalho: dados.retrabalho,
-      motivo_revisao: dados.motivoRetrabalho,
-      observacoes: dados.observacoes,
-    };
-  }
-
-  /**
-   * Atualiza status projeto (compatibilidade)
-   */
-  async atualizarStatusProjeto(
-    projetoId: string,
-    status: string,
-    percentual?: number
-  ): Promise<boolean> {
-    // Buscar atribuição
-    const { data: atribuicao } = await this.supabase
-      .from('engenheiros_projetos')
-      .select('id')
-      .eq('projeto_id', projetoId)
-      .eq('ativo', true)
-      .limit(1)
-      .single();
-
-    if (!atribuicao) {
-      return false;
-    }
-
-    const statusMap: Record<string, string> = {
-      'em execução': 'EM_EXECUCAO',
-      'em aprovação': 'EM_APROVACAO',
-      'parado cliente': 'PARADO_CLIENTE',
-      'parado tecpred': 'PARADO_TECPRED',
-      'concluído': 'CONCLUIDO',
-      'aguardando início': 'AGUARDANDO_INICIO',
-      'aguardando inf. cliente': 'AGUARDANDO_INF_CLIENTE',
-    };
-
-    const statusCodigo = statusMap[status.toLowerCase()] || 'EM_EXECUCAO';
-    return await this.atualizarStatusAtribuicao(atribuicao.id, statusCodigo);
   }
 
   // =====================================================

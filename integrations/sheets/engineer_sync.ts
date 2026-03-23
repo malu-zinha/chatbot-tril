@@ -40,7 +40,7 @@ interface SyncResult {
 // =====================================================
 
 class EngineerSyncService {
-  private supabase: ReturnType<typeof createClient>;
+  private supabase: any;
   private sheets: any;
 
   constructor() {

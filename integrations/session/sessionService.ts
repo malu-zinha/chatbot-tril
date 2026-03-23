@@ -3,6 +3,7 @@
  * Manages user sessions with state stack for "voltar" navigation
  */
 
+// @ts-ignore - ioredis não está em package.json, instalar quando Redis for habilitado
 import Redis from 'ioredis';
 
 // =====================================================
@@ -53,7 +54,7 @@ export class SessionService {
             console.log('✅ SessionService: Conectado ao Redis (local)');
         }
 
-        this.redis.on('error', (err) => {
+        this.redis.on('error', (err: any) => {
             console.error('❌ Redis Error:', err);
         });
     }
@@ -176,7 +177,7 @@ export class SessionService {
      */
     async listActiveSessions(): Promise<string[]> {
         const keys = await this.redis.keys('session:*');
-        return keys.map((k) => k.replace('session:', ''));
+        return keys.map((k: any) => k.replace('session:', ''));
     }
 
     /**

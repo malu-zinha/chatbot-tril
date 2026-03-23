@@ -665,7 +665,7 @@ export class EngineerProjectFlow {
             };
             const statusCodigo = statusMap[statusNome] || 'EM_EXECUCAO';
 
-            const previsao = await supabase.registrarPrevisaoDia(
+            const previsao = await (supabase as any).registrarPrevisaoDia(
               this.state.selectedAtribuicaoId,
               morningData['Previsão para o dia'],
               statusCodigo
