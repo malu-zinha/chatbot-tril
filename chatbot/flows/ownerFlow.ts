@@ -440,15 +440,19 @@ export class OwnerFlow {
         // Ver todos
         return await this.carregarRetrabalhos();
       
-      case '2':
+      case '2': {
         // Filtrar por projeto
+        const resultProjeto = await this.listarProjetosParaViz();
         this.stepAtual = 'viz_filtrar_ret_projeto';
-        return await this.listarProjetosParaViz();
-      
-      case '3':
+        return resultProjeto;
+      }
+
+      case '3': {
         // Filtrar por engenheiro
+        const resultEng = await this.listarEngenheirosParaViz();
         this.stepAtual = 'viz_filtrar_ret_engenheiro';
-        return await this.listarEngenheirosParaViz();
+        return resultEng;
+      }
       
       default:
         return {
