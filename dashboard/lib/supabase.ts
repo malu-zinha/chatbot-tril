@@ -73,12 +73,12 @@ export async function fetchVisaoGeral(): Promise<VisaoGeral | null> {
     .from('vw_bloco1_visao_geral')
     .select('*')
     .single()
-  
+
   if (error) {
     console.error('Erro ao buscar visão geral:', error)
     return null
   }
-  
+
   return data
 }
 
@@ -87,12 +87,12 @@ export async function fetchAtrasosEngenheiro(): Promise<AtrasosEngenheiro[]> {
     .from('vw_bloco2_atrasos_engenheiro')
     .select('*')
     .order('dias_medios_atraso', { ascending: false })
-  
+
   if (error) {
     console.error('Erro ao buscar atrasos por engenheiro:', error)
     return []
   }
-  
+
   return data || []
 }
 
@@ -101,12 +101,12 @@ export async function fetchAtrasosArea(): Promise<AtrasosArea[]> {
     .from('vw_bloco2_atrasos_area')
     .select('*')
     .order('dias_medio_atraso', { ascending: false })
-  
+
   if (error) {
     console.error('Erro ao buscar atrasos por área:', error)
     return []
   }
-  
+
   return data || []
 }
 
@@ -115,12 +115,12 @@ export async function fetchCargaTrabalho(): Promise<CargaTrabalho[]> {
     .from('vw_bloco3_carga_trabalho')
     .select('*')
     .order('dias_restantes', { ascending: false })
-  
+
   if (error) {
     console.error('Erro ao buscar carga de trabalho:', error)
     return []
   }
-  
+
   return data || []
 }
 
@@ -129,12 +129,12 @@ export async function fetchRetrabalhoEngenheiro(): Promise<RetrabalhoEngenheiro[
     .from('vw_bloco5_retrabalho_engenheiro')
     .select('*')
     .order('total_retrabalhos', { ascending: false })
-  
+
   if (error) {
     console.error('Erro ao buscar retrabalho por engenheiro:', error)
     return []
   }
-  
+
   return data || []
 }
 
@@ -142,12 +142,12 @@ export async function fetchProjetosStatus(): Promise<ProjetosStatus[]> {
   const { data, error } = await supabase
     .from('vw_grafico_projetos_status')
     .select('*')
-  
+
   if (error) {
     console.error('Erro ao buscar projetos por status:', error)
     return []
   }
-  
+
   return data || []
 }
 
@@ -182,7 +182,7 @@ export interface RetrabalhoAreaProjeto { area_codigo: string; quantidade: number
 export interface RetrabalhoMotivo { motivo_retrabalho: string; quantidade: number; }
 export interface RetrabalhoTaxaArea { area: string; taxa: number; }
 
-// Missing Fetch Functions for Compilation
+// Retrabalho fetch functions (stubs - sem views correspondentes no banco ainda)
 export async function fetchRetrabalhoGeral(): Promise<RetrabalhoGeral | null> { return { total_retrabalhos: 0 }; }
 export async function fetchRetrabalhoPorProjeto(): Promise<RetrabalhoPorProjeto[]> { return []; }
 export async function fetchRetrabalhoDetalhesPorProjeto(id: string): Promise<RetrabalhoDetalheProjeto[]> { return []; }
@@ -190,8 +190,46 @@ export async function fetchRetrabalhoAreaPorProjeto(id: string): Promise<Retraba
 export async function fetchRetrabalhoMotivosPorProjeto(id: string): Promise<RetrabalhoMotivo[]> { return []; }
 export async function fetchRetrabalhoMotivosGeral(): Promise<RetrabalhoMotivo[]> { return []; }
 export async function fetchRetrabalhoTaxaPorArea(): Promise<RetrabalhoTaxaArea[]> { return []; }
-export async function fetchProjetos(): Promise<any[]> { return []; }
-export async function fetchEngenheiros(): Promise<any[]> { return []; }
-export async function fetchAreas(): Promise<any[]> { return []; }
+
+export async function fetchProjetos(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('vw_projetos_completo')
+    .select('*')
+  
+  if (error) {
+    console.error('Erro ao buscar projetos:', error)
+    return []
+  }
+  
+  return data || []
+}
+
+export async function fetchEngenheiros(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('vw_dono_visao_geral')
+    .select('*')
+    .order('total_projetos', { ascending: false })
+  
+  if (error) {
+    console.error('Erro ao buscar engenheiros:', error)
+    return []
+  }
+  
+  return data || []
+}
+
+export async function fetchAreas(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('areas')
+    .select('*')
+    .order('descricao', { ascending: true })
+  
+  if (error) {
+    console.error('Erro ao buscar áreas:', error)
+    return []
+  }
+  
+  return data || []
+}
 
 
