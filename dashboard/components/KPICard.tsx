@@ -9,31 +9,30 @@ interface KPICardProps {
   color?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
   trend?: 'up' | 'down' | 'neutral'
   trendValue?: string
-  onClick?: () => void
 }
 
 const colorClasses = {
-  primary: 'from-tecpred-primary via-tecpred-secondary to-tecpred-primary',
+  primary: 'from-tecpred-primary to-tecpred-secondary',
   success: 'from-success to-green-600',
-  warning: 'from-tecpred-orange to-tecpred-coral',
+  warning: 'from-warning to-orange-600',
   danger: 'from-danger to-red-600',
-  info: 'from-tecpred-primary to-tecpred-secondary',
+  info: 'from-info to-blue-600',
 }
 
 const iconBgClasses = {
-  primary: 'bg-tecpred-orange bg-opacity-20',
+  primary: 'bg-tecpred-accent',
   success: 'bg-green-100',
-  warning: 'bg-tecpred-orange bg-opacity-20',
+  warning: 'bg-orange-100',
   danger: 'bg-red-100',
-  info: 'bg-tecpred-primary bg-opacity-20',
+  info: 'bg-blue-100',
 }
 
 const iconColorClasses = {
-  primary: 'text-tecpred-orange',
+  primary: 'text-tecpred-primary',
   success: 'text-success',
-  warning: 'text-tecpred-orange',
+  warning: 'text-warning',
   danger: 'text-danger',
-  info: 'text-tecpred-primary',
+  info: 'text-info',
 }
 
 export default function KPICard({
@@ -44,15 +43,9 @@ export default function KPICard({
   color = 'primary',
   trend,
   trendValue,
-  onClick,
 }: KPICardProps) {
   return (
-    <button
-      onClick={onClick}
-      className={`bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 animate-fade-in w-full text-left ${
-        onClick ? 'cursor-pointer hover:scale-105 active:scale-95' : ''
-      }`}
-    >
+    <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 animate-fade-in">
       <div className={`h-2 bg-gradient-to-r ${colorClasses[color]}`}></div>
       
       <div className="p-6">
@@ -81,12 +74,6 @@ export default function KPICard({
                 </span>
               </div>
             )}
-            
-            {onClick && (
-              <div className="mt-3 text-xs text-tecpred-primary font-medium">
-                Clique para ver detalhes →
-              </div>
-            )}
           </div>
           
           <div className={`p-3 rounded-lg ${iconBgClasses[color]}`}>
@@ -94,7 +81,7 @@ export default function KPICard({
           </div>
         </div>
       </div>
-    </button>
+    </div>
   )
 }
 

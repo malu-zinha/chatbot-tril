@@ -275,5 +275,3 @@ ORDER BY data_inicio;
 
 
 
-
-
