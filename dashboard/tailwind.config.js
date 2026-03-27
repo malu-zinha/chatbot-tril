@@ -16,11 +16,19 @@ module.exports = {
           dark: '#1A1D5E',        // Azul muito escuro
           light: '#E8E9F8',       // Azul muito claro
           white: '#FFFFFF',
+          orange: '#FF6B35',      // Laranja do logo
+          coral: '#FF8C61',       // Coral claro
         },
+        'tecpred-primary': '#2E3192',
+        'tecpred-secondary': '#4A4FB7',
+        'tecpred-accent': '#6B70D9',
+        'tecpred-orange': '#FF6B35',
+        'tecpred-coral': '#FF8C61',
+        'tecpred-light': '#E8E9F8',
         success: '#10B981',
-        warning: '#F59E0B',
+        warning: '#FF6B35',
         danger: '#EF4444',
-        info: '#3B82F6',
+        info: '#2E3192',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
