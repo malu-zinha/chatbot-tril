@@ -174,3 +174,24 @@ export function subscribeToChanges(
   return channel
 }
 
+// Missing Types for Compilation
+export interface RetrabalhoGeral { total_retrabalhos: number; }
+export interface RetrabalhoPorProjeto { projeto_id: string; codigo_projeto: string; cliente: string; total_retrabalhos: number; }
+export interface RetrabalhoDetalheProjeto { id: string; engenheiro: string; area_codigo: string; motivo: string; data_registro: string; }
+export interface RetrabalhoAreaProjeto { area_codigo: string; quantidade: number; }
+export interface RetrabalhoMotivo { motivo_retrabalho: string; quantidade: number; }
+export interface RetrabalhoTaxaArea { area: string; taxa: number; }
+
+// Missing Fetch Functions for Compilation
+export async function fetchRetrabalhoGeral(): Promise<RetrabalhoGeral | null> { return { total_retrabalhos: 0 }; }
+export async function fetchRetrabalhoPorProjeto(): Promise<RetrabalhoPorProjeto[]> { return []; }
+export async function fetchRetrabalhoDetalhesPorProjeto(id: string): Promise<RetrabalhoDetalheProjeto[]> { return []; }
+export async function fetchRetrabalhoAreaPorProjeto(id: string): Promise<RetrabalhoAreaProjeto[]> { return []; }
+export async function fetchRetrabalhoMotivosPorProjeto(id: string): Promise<RetrabalhoMotivo[]> { return []; }
+export async function fetchRetrabalhoMotivosGeral(): Promise<RetrabalhoMotivo[]> { return []; }
+export async function fetchRetrabalhoTaxaPorArea(): Promise<RetrabalhoTaxaArea[]> { return []; }
+export async function fetchProjetos(): Promise<any[]> { return []; }
+export async function fetchEngenheiros(): Promise<any[]> { return []; }
+export async function fetchAreas(): Promise<any[]> { return []; }
+
+

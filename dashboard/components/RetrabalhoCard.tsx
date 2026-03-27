@@ -4,9 +4,14 @@ import { RetrabalhoEngenheiro } from '../lib/supabase'
 
 interface RetrabalhoCardProps {
   data: RetrabalhoEngenheiro[]
+  retrabalhoGeral?: any
+  retrabalhoPorProjeto?: any
+  motivosGeral?: any
+  taxaAreaGeral?: any
+  onSelectProjeto?: (id: string) => void
 }
 
-export default function RetrabalhoCard({ data }: RetrabalhoCardProps) {
+export default function RetrabalhoCard({ data, retrabalhoGeral, retrabalhoPorProjeto, motivosGeral, taxaAreaGeral, onSelectProjeto }: RetrabalhoCardProps) {
   const totalRetrabalhos = data.reduce((sum, item) => sum + item.total_retrabalhos, 0)
   const mediaGeral = data.length > 0 
     ? data.reduce((sum, item) => sum + (item.retrabalho_medio_percentual || 0), 0) / data.length

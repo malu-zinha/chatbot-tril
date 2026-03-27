@@ -22,7 +22,8 @@ interface ProjetosTableProps {
   data: Projeto[]
   initialFilter?: 'all' | 'concluido' | 'em_execucao' | 'atrasado'
   title?: string
-  color?: 'primary' | 'success' | 'info' | 'danger'
+  color?: 'primary' | 'success' | 'info' | 'danger' | 'warning'
+  onVerRetrabalho?: (projeto: { projeto_id: string; codigo_projeto: string; cliente: string }) => void
 }
 
 export default function ProjetosTable({ 
@@ -31,7 +32,8 @@ export default function ProjetosTable({
   data, 
   initialFilter = 'all',
   title = 'Listagem de Projetos',
-  color = 'primary'
+  color = 'primary',
+  onVerRetrabalho
 }: ProjetosTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
   const [filterStatus, setFilterStatus] = React.useState<string>(initialFilter)
@@ -50,11 +52,12 @@ export default function ProjetosTable({
   if (!isOpen) return null
 
   // Mapa de cores para o header
-  const colorClasses = {
+  const colorClasses: Record<string, string> = {
     primary: 'from-tecpred-primary to-tecpred-secondary',
     success: 'from-success to-green-600',
     info: 'from-info to-blue-600',
     danger: 'from-danger to-red-600',
+    warning: 'from-tecpred-orange to-tecpred-coral',
   }
 
   const filteredData = data.filter(item => {

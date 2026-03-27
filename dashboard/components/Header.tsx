@@ -1,6 +1,5 @@
 import React from 'react'
 import { RefreshCw } from 'lucide-react'
-import Image from 'next/image'
 
 interface HeaderProps {
   lastUpdate: Date | null
