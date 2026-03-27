@@ -27,7 +27,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- PARTE 1: TABELAS BASE
 -- =====================================================
 
-\echo '🔧 Criando tabelas base...'
+-- Criando tabelas base...
 
 -- Engenheiros
 CREATE TABLE IF NOT EXISTS engenheiros (
@@ -35,29 +35,24 @@ CREATE TABLE IF NOT EXISTS engenheiros (
     nome TEXT NOT NULL,
     exclusivo BOOLEAN NOT NULL DEFAULT false,
     ativo BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_engenheiros_ativo ON engenheiros(ativo);
-
-COMMENT ON TABLE engenheiros IS 'Cadastro de engenheiros';
-COMMENT ON COLUMN engenheiros.exclusivo IS 'TRUE se trabalha somente na empresa';
+CREATE INDEX IF NOT EXISTS idx_engenheiros_ativo ON engenheiros(ativo);
 
 -- Áreas
 CREATE TABLE IF NOT EXISTS areas (
-    area_id SERIAL PRIMARY KEY,
+    area_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     codigo TEXT UNIQUE NOT NULL,
     descricao TEXT NOT NULL,
     tempo_trabalho_dias INTEGER NOT NULL DEFAULT 0,
     ativo BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_areas_codigo ON areas(codigo);
-CREATE INDEX idx_areas_ativo ON areas(ativo);
-
-COMMENT ON TABLE areas IS 'Cadastro de áreas de trabalho';
+CREATE INDEX IF NOT EXISTS idx_areas_codigo ON areas(codigo);
+CREATE INDEX IF NOT EXISTS idx_areas_ativo ON areas(ativo);
 
 -- Status
 CREATE TABLE IF NOT EXISTS status_codes (
@@ -67,13 +62,11 @@ CREATE TABLE IF NOT EXISTS status_codes (
     ordem INTEGER NOT NULL DEFAULT 0,
     percentual_base NUMERIC(5,2) DEFAULT 0.00,
     ativo BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_status_ordem ON status_codes(ordem);
-CREATE INDEX idx_status_ativo ON status_codes(ativo);
-
-COMMENT ON TABLE status_codes IS 'Etapas/status dos projetos';
+CREATE INDEX IF NOT EXISTS idx_status_ordem ON status_codes(ordem);
+CREATE INDEX IF NOT EXISTS idx_status_ativo ON status_codes(ativo);
 
 -- Projetos
 CREATE TABLE IF NOT EXISTS projetos (
@@ -82,19 +75,19 @@ CREATE TABLE IF NOT EXISTS projetos (
     cliente TEXT NOT NULL,
     descricao TEXT,
     ativo BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_projetos_codigo ON projetos(codigo_projeto);
-CREATE INDEX idx_projetos_ativo ON projetos(ativo);
+CREATE INDEX IF NOT EXISTS idx_projetos_codigo ON projetos(codigo_projeto);
+CREATE INDEX IF NOT EXISTS idx_projetos_ativo ON projetos(ativo);
 
 -- Engenheiros_Projetos (TABELA PRINCIPAL)
 CREATE TABLE IF NOT EXISTS engenheiros_projetos (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     eng_id UUID NOT NULL REFERENCES engenheiros(eng_id) ON DELETE CASCADE,
     projeto_id UUID NOT NULL REFERENCES projetos(projeto_id) ON DELETE CASCADE,
-    area_id INTEGER NOT NULL REFERENCES areas(area_id),
+    area_id UUID NOT NULL REFERENCES areas(area_id),
     
     data_inicio DATE,
     data_prevista DATE,
@@ -106,21 +99,21 @@ CREATE TABLE IF NOT EXISTS engenheiros_projetos (
     
     observacoes TEXT,
     ativo BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
     UNIQUE(eng_id, projeto_id, area_id)
 );
 
-CREATE INDEX idx_eng_proj_eng_id ON engenheiros_projetos(eng_id);
-CREATE INDEX idx_eng_proj_projeto_id ON engenheiros_projetos(projeto_id);
-CREATE INDEX idx_eng_proj_area_id ON engenheiros_projetos(area_id);
+CREATE INDEX IF NOT EXISTS idx_eng_proj_eng_id ON engenheiros_projetos(eng_id);
+CREATE INDEX IF NOT EXISTS idx_eng_proj_projeto_id ON engenheiros_projetos(projeto_id);
+CREATE INDEX IF NOT EXISTS idx_eng_proj_area_id ON engenheiros_projetos(area_id);
 
 -- =====================================================
 -- PARTE 2: TABELAS DE PREVISÕES E RETRABALHOS
 -- =====================================================
 
-\echo '📝 Criando tabelas de previsões e retrabalhos...'
+-- Criando tabelas de previsões e retrabalhos...
 
 -- Previsões Diárias
 CREATE TABLE IF NOT EXISTS projetos_previsao (
@@ -141,14 +134,14 @@ CREATE TABLE IF NOT EXISTS projetos_previsao (
     editavel BOOLEAN DEFAULT true,
     data_fim_dia TIMESTAMP WITH TIME ZONE,
     
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
     UNIQUE(eng_projeto_id, data_registro)
 );
 
-CREATE INDEX idx_proj_prev_eng_proj ON projetos_previsao(eng_projeto_id);
-CREATE INDEX idx_proj_prev_data ON projetos_previsao(data_registro);
+CREATE INDEX IF NOT EXISTS idx_proj_prev_eng_proj ON projetos_previsao(eng_projeto_id);
+CREATE INDEX IF NOT EXISTS idx_proj_prev_data ON projetos_previsao(data_registro);
 
 -- Retrabalhos
 CREATE TABLE IF NOT EXISTS retrabalho_projetos (
@@ -165,13 +158,13 @@ CREATE TABLE IF NOT EXISTS retrabalho_projetos (
     tipo_retrabalho TEXT,
     status_id INTEGER REFERENCES status_codes(status_id),
     
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
     UNIQUE(eng_projeto_id, data_retrabalho)
 );
 
-CREATE INDEX idx_retrab_eng_proj ON retrabalho_projetos(eng_projeto_id);
-CREATE INDEX idx_retrab_data ON retrabalho_projetos(data_retrabalho);
+CREATE INDEX IF NOT EXISTS idx_retrab_eng_proj ON retrabalho_projetos(eng_projeto_id);
+CREATE INDEX IF NOT EXISTS idx_retrab_data ON retrabalho_projetos(data_retrabalho);
 
 -- Prazos
 CREATE TABLE IF NOT EXISTS prazos (
@@ -186,26 +179,21 @@ CREATE TABLE IF NOT EXISTS prazos (
     prazo_final_eng DATE NOT NULL,
     prazo_final_cliente DATE NOT NULL,
     
-    prazo_interno_dias INTEGER GENERATED ALWAYS AS (
-        EXTRACT(DAY FROM (prazo_final_eng - data_inicio_projeto))
-    ) STORED,
-    
-    prazo_cliente_dias INTEGER GENERATED ALWAYS AS (
-        EXTRACT(DAY FROM (prazo_final_cliente - data_inicio_projeto))
-    ) STORED,
+    prazo_interno_dias INTEGER,
+    prazo_cliente_dias INTEGER,
     
     observacoes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_prazos_eng_proj ON prazos(eng_projeto_id);
+CREATE INDEX IF NOT EXISTS idx_prazos_eng_proj ON prazos(eng_projeto_id);
 
 -- =====================================================
 -- PARTE 3: TABELAS DO DONO (EVANDRO)
 -- =====================================================
 
-\echo '👔 Criando tabelas do dono...'
+-- Criando tabelas do dono...
 
 -- Dono
 CREATE TABLE IF NOT EXISTS dono_empresa (
@@ -214,7 +202,7 @@ CREATE TABLE IF NOT EXISTS dono_empresa (
     email TEXT UNIQUE,
     telefone TEXT,
     ativo BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Complexidade
@@ -235,10 +223,10 @@ CREATE TABLE IF NOT EXISTS evandro_distribuicao_tasks (
     projeto_id UUID REFERENCES projetos(projeto_id),
     codigo_projeto TEXT,
     cliente TEXT,
-    area_id INTEGER NOT NULL REFERENCES areas(area_id),
+    area_id UUID NOT NULL REFERENCES areas(area_id),
     complexidade_id INTEGER REFERENCES complexidade_tarefas(complexidade_id),
     descricao_task TEXT NOT NULL,
-    data_atribuicao TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    data_atribuicao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     data_inicio_prevista DATE,
     data_conclusao_prevista DATE,
     status_task TEXT DEFAULT 'PENDENTE',
@@ -249,10 +237,10 @@ CREATE TABLE IF NOT EXISTS evandro_distribuicao_tasks (
     data_sincronizacao TIMESTAMP WITH TIME ZONE,
     observacoes_dono TEXT,
     ativo BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_evandro_tasks_eng ON evandro_distribuicao_tasks(eng_id);
+CREATE INDEX IF NOT EXISTS idx_evandro_tasks_eng ON evandro_distribuicao_tasks(eng_id);
 
 -- Notificações WhatsApp
 CREATE TABLE IF NOT EXISTS notificacoes_whatsapp (
@@ -268,10 +256,10 @@ CREATE TABLE IF NOT EXISTS notificacoes_whatsapp (
     data_envio TIMESTAMP WITH TIME ZONE,
     erro_envio TEXT,
     tentativas INTEGER DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_notif_enviada ON notificacoes_whatsapp(enviada);
+CREATE INDEX IF NOT EXISTS idx_notif_enviada ON notificacoes_whatsapp(enviada);
 
 -- Logs do Chatbot
 CREATE TABLE IF NOT EXISTS chatbot_logs (
@@ -282,14 +270,14 @@ CREATE TABLE IF NOT EXISTS chatbot_logs (
     sucesso BOOLEAN DEFAULT true,
     mensagem_retorno TEXT,
     metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- =====================================================
 -- PARTE 4: SEED DATA
 -- =====================================================
 
-\echo '🌱 Inserindo dados iniciais...'
+-- Inserindo dados iniciais...
 
 -- Status
 INSERT INTO status_codes (codigo, descricao, ordem, percentual_base) VALUES
@@ -333,7 +321,6 @@ INSERT INTO dono_empresa (nome, email) VALUES
     ('Evandro', 'evandro@empresa.com')
 ON CONFLICT (email) DO NOTHING;
 
-\echo '✅ Schema completo criado com sucesso!'
-\echo '📊 Próximo passo: Criar TRIGGERS e FUNCTIONS'
-\echo '   Execute: chatbot_functions.sql e functions_dono.sql'
-
+-- Schema completo criado com sucesso!
+-- Próximo passo: Criar TRIGGERS e FUNCTIONS
+-- Execute: chatbot_functions.sql e functions_dono.sql

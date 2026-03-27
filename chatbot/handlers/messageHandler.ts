@@ -5,19 +5,36 @@
 //
 // Este módulo orquestra todos os fluxos conversacionais
 // e decide qual fluxo ativar baseado na mensagem do usuário
+// E TAMBÉM faz autenticação por número de WhatsApp
 // =====================================================
 
-import { RegisterProgressFlow } from '../flows/registerProgress.js';
-import { RegisterReworkFlow } from '../flows/registerRework.js';
-import { CheckStatusFlow } from '../flows/checkStatus.js';
+// Flows ativos
+import { EngineerProjectFlow } from '../flows/engineerProjectFlow.ts';
+import { OwnerFlow } from '../flows/ownerFlow.ts';
+
+// Supabase para autenticação (lazy loading para evitar problemas com dotenv)
+import { getSupabaseService, SupabaseService } from '../../integrations/supabase/supabaseService.ts';
+
+// Lazy loading: criar instância apenas quando necessário
+let supabaseServiceInstance: SupabaseService | null = null;
+function getSupabase(): SupabaseService {
+  if (!supabaseServiceInstance) {
+    supabaseServiceInstance = getSupabaseService();
+  }
+  return supabaseServiceInstance;
+}
 
 // =====================================================
 // TIPOS E INTERFACES
 // =====================================================
 
+export type TipoUsuario = 'engenheiro' | 'dono' | 'nao_cadastrado';
+
 export interface UserSession {
   whatsapp: string;
-  fluxo_ativo?: 'progress' | 'rework' | 'status' | null;
+  tipo_usuario?: TipoUsuario;
+  user_id?: string; // eng_id ou dono_id
+  fluxo_ativo?: 'engineer_project' | 'owner' | null;
   instancia_fluxo?: any;
   ultima_interacao: Date;
 }
@@ -33,13 +50,14 @@ export interface MessageResponse {
 
 export class MessageHandler {
   private sessoes: Map<string, UserSession>;
+  private readonly MAX_STACK_DEPTH = 10;
   private timeout_sessao: number = 15 * 60 * 1000; // 15 minutos
 
   constructor() {
-    this.sessoes = new Map();
-    
-    // Limpar sessões antigas periodicamente
-    setInterval(() => this.limparSessoesAntigas(), 5 * 60 * 1000); // A cada 5 minutos
+    this.sessoes = new Map(); // DEPRECATED
+
+    // Redis cuida da expiração automática via TTL
+    console.log('✅ MessageHandler inicializado com SessionService (Redis)');
   }
 
   // =====================================================
@@ -48,27 +66,80 @@ export class MessageHandler {
 
   async processarMensagem(whatsapp: string, mensagem: string): Promise<MessageResponse> {
     try {
+      // DEBUG ESPECÍFICO: Número problemático
+      const numeroProblema = '5583988990772';
+      const isNumeroProblema = whatsapp.includes(numeroProblema) || whatsapp.includes('98899');
+
+      console.log(`\n🔵 MessageHandler.processarMensagem()`);
+      console.log(`   WhatsApp: ${whatsapp}`);
+      console.log(`   Mensagem: "${mensagem}"`);
+
+      if (isNumeroProblema) {
+        console.log(`   🔴🔴🔴 NÚMERO PROBLEMÁTICO CHEGOU NO MESSAGEHANDLER! 🔴🔴🔴`);
+      }
+
       // Normalizar WhatsApp
+      console.log(`   🔍 [DEBUG] Normalizando WhatsApp...`);
       const whatsappNormalizado = this.normalizarWhatsapp(whatsapp);
+      console.log(`   🔍 [DEBUG] WhatsApp normalizado: ${whatsappNormalizado}`);
+
+      if (isNumeroProblema) {
+        console.log(`   🔴 WhatsApp normalizado: ${whatsappNormalizado}`);
+      }
 
       // Obter ou criar sessão
       let sessao = this.sessoes.get(whatsappNormalizado);
-      
+
       if (!sessao) {
+        console.log(`   📝 Criando nova sessão para ${whatsappNormalizado}`);
+
+        // AUTENTICAÇÃO: Verificar se é engenheiro ou dono
+        console.log(`   🔍 [DEBUG] Iniciando autenticação...`);
+        const tipoUsuario = await this.autenticarUsuario(whatsappNormalizado);
+        console.log(`   🔍 [DEBUG] Autenticação concluída: ${tipoUsuario.tipo}`);
+
         sessao = {
           whatsapp: whatsappNormalizado,
+          tipo_usuario: tipoUsuario.tipo,
+          user_id: tipoUsuario.user_id,
           fluxo_ativo: null,
           ultima_interacao: new Date(),
         };
         this.sessoes.set(whatsappNormalizado, sessao);
+
+        console.log(`   ✅ Sessão criada - Tipo: ${tipoUsuario.tipo}`);
+
+        // Se for dono, iniciar OwnerFlow imediatamente
+        if (tipoUsuario.tipo === 'dono') {
+          console.log(`   🔄 Iniciando OwnerFlow automaticamente para novo dono`);
+          return await this.iniciarFluxoDono(sessao);
+        }
+
+        // Se for engenheiro, mostrar menu
+        if (tipoUsuario.tipo === 'engenheiro') {
+          return { resposta: this.mensagemMenu(tipoUsuario.tipo) };
+        }
+      } else {
+        console.log(`   ✅ Sessão existente encontrada`);
+        console.log(`   Tipo de usuário: ${sessao.tipo_usuario || 'não autenticado'}`);
+        console.log(`   Fluxo ativo: ${sessao.fluxo_ativo || 'nenhum'}`);
       }
 
       // Atualizar timestamp da última interação
       sessao.ultima_interacao = new Date();
 
+      // VERIFICAR SE É NÚMERO NÃO CADASTRADO
+      if (sessao.tipo_usuario === 'nao_cadastrado') {
+        return {
+          resposta: this.mensagemNaoCadastrado(),
+        };
+      }
+
       // Verificar comandos globais
+      console.log(`   🔍 Verificando comandos globais...`);
       const comandoGlobal = await this.processarComandoGlobal(mensagem, sessao);
       if (comandoGlobal) {
+        console.log(`   ✅ Comando global processado\n`);
         return { resposta: comandoGlobal };
       }
 
@@ -89,26 +160,64 @@ export class MessageHandler {
       const intencao = this.classificarIntencao(mensagem);
 
       switch (intencao) {
-        case 'registrar_execucao':
-          return await this.iniciarFluxoExecucao(sessao);
-        
-        case 'registrar_retrabalho':
-          return await this.iniciarFluxoRetrabalho(sessao);
-        
-        case 'consultar_status':
-          return await this.iniciarFluxoStatus(sessao);
-        
+        case 'gerenciar_projeto':
+          console.log(`   🔄 Processando fluxo de gerenciamento de projeto`);
+
+          // DECISÃO: Fluxo de engenheiro OU fluxo de dono
+          if (sessao.tipo_usuario === 'dono') {
+            return await this.iniciarFluxoDono(sessao);
+          }
+
+          // Se for comando direto de menu (1, 2, 3, 4), processar diretamente
+          const mensagemNorm = mensagem.trim();
+          if (mensagemNorm === '1' || mensagemNorm === '2' || mensagemNorm === '3' || mensagemNorm === '4') {
+            console.log(`   ✅ Opção do menu detectada: ${mensagemNorm}`);
+            // Iniciar fluxo e processar a escolha imediatamente
+            const flow = new EngineerProjectFlow(sessao.whatsapp);
+            sessao.fluxo_ativo = 'engineer_project';
+            sessao.instancia_fluxo = flow;
+
+            // Processar "iniciar" primeiro (vai para stepInicio → escolher_acao)
+            await flow.processarMensagem('iniciar');
+
+            // Depois processar a escolha (1, 2, 3 ou 4)
+            const resultado = await flow.processarMensagem(mensagemNorm);
+            console.log(`   ✅ Fluxo processado, retornando resposta\n`);
+            return { resposta: resultado.mensagem };
+          } else {
+            console.log(`   ✅ Iniciando fluxo de projeto\n`);
+            // Palavra-chave genérica (projeto, cadastrar, etc) - mostrar menu
+            return await this.iniciarFluxoProjeto(sessao);
+          }
+
         case 'ajuda':
-          return { resposta: this.mensagemAjuda() };
-        
+          console.log(`   ✅ Retornando mensagem de ajuda\n`);
+          return { resposta: this.mensagemAjuda(sessao.tipo_usuario) };
+
         case 'menu':
-          return { resposta: this.mensagemMenu() };
-        
+          console.log(`   ✅ Retornando menu principal\n`);
+          // Para o dono, iniciar o OwnerFlow diretamente
+          if (sessao.tipo_usuario === 'dono') {
+            return await this.iniciarFluxoDono(sessao);
+          }
+          return { resposta: this.mensagemMenu(sessao.tipo_usuario) };
+
         default:
+          // Não tenta mais processar via IA - força uso do menu
+          console.log(`   ⚠️ Intenção não reconhecida\n`);
+          // Se for dono, iniciar OwnerFlow ao invés de mostrar mensagem de erro
+          if (sessao.tipo_usuario === 'dono') {
+            console.log(`   🔄 Iniciando OwnerFlow para dono (intenção não reconhecida)`);
+            return await this.iniciarFluxoDono(sessao);
+          }
           return { resposta: this.mensagemNaoEntendida() };
       }
     } catch (error: any) {
-      console.error('Erro ao processar mensagem:', error);
+      console.error('\n❌ ERRO no MessageHandler:');
+      console.error(`   WhatsApp: ${whatsapp}`);
+      console.error(`   Mensagem: "${mensagem}"`);
+      console.error(`   Erro: ${error.message}`);
+      console.error(`   Stack: ${error.stack}\n`);
       return {
         resposta: '❌ Desculpe, ocorreu um erro. Tente novamente.',
         erro: error.message,
@@ -117,11 +226,46 @@ export class MessageHandler {
   }
 
   // =====================================================
+  // FUNÇÃO: Autenticar Usuário
+  // =====================================================
+
+  private async autenticarUsuario(whatsapp: string): Promise<{ tipo: TipoUsuario; user_id?: string }> {
+    console.log(`   🔐 Autenticando usuário: ${whatsapp}`);
+
+    // Verificar se é engenheiro
+    console.log(`   🔍 [DEBUG] Buscando engenheiro por telefone...`);
+    const engenheiro = await getSupabase().buscarEngenheiroPorTelefone(whatsapp);
+    console.log(`   🔍 [DEBUG] Resultado busca engenheiro: ${engenheiro ? 'ENCONTRADO' : 'NÃO encontrado'}`);
+    if (engenheiro) {
+      console.log(`   ✅ Engenheiro identificado: ${engenheiro.nome} (${engenheiro.eng_id})`);
+      return { tipo: 'engenheiro', user_id: engenheiro.eng_id };
+    }
+
+    // Verificar se é dono
+    console.log(`   🔍 [DEBUG] Buscando dono por telefone...`);
+    const dono = await getSupabase().buscarDonoPorTelefone(whatsapp);
+    console.log(`   🔍 [DEBUG] Resultado busca dono: ${dono ? 'ENCONTRADO' : 'NÃO encontrado'}`);
+    if (dono) {
+      console.log(`   ✅ Dono identificado: ${dono.nome} (${dono.dono_id})`);
+      return { tipo: 'dono', user_id: dono.dono_id };
+    }
+
+    // Não cadastrado
+    console.log(`   ⚠️ Número não cadastrado no sistema`);
+    return { tipo: 'nao_cadastrado' };
+  }
+
+  // =====================================================
   // FUNÇÃO: Processar Comandos Globais
   // =====================================================
 
   private async processarComandoGlobal(mensagem: string, sessao: UserSession): Promise<string | null> {
     const mensagemLower = mensagem.toLowerCase().trim();
+
+    // Comando: Sincronizar manualmente
+    if (mensagemLower === 'sync' || mensagemLower === 'sincronizar') {
+      return await this.executarSincronizacaoManual();
+    }
 
     // Comando: Cancelar fluxo atual
     if (mensagemLower === 'cancelar' || mensagemLower === 'sair') {
@@ -150,39 +294,16 @@ export class MessageHandler {
   private classificarIntencao(mensagem: string): string {
     const mensagemLower = mensagem.toLowerCase().trim();
 
-    // Palavras-chave para registrar execução
-    const keywordsExecucao = [
+    // Atalhos numéricos do menu
+    if (mensagemLower === '1' || mensagemLower === '2' || mensagemLower === '3' || mensagemLower === '4') {
+      return 'gerenciar_projeto'; // Opções 1, 2, 3, 4 = Gestão de projetos
+    }
+
+    // Palavras-chave para MODIFICAR projetos (Engenheiros)
+    const keywordsModificar = [
+      'projeto',
+      'atualizar',
       'registrar',
-      'executar',
-      'execução',
-      'progresso',
-      'avanço',
-      'percentual',
-      'realizado',
-      'hoje',
-      'diário',
-    ];
-
-    // Palavras-chave para registrar retrabalho
-    const keywordsRetrabalho = [
-      'retrabalho',
-      'refazer',
-      'erro',
-      'problema',
-      'houve retrabalho',
-      'teve retrabalho',
-    ];
-
-    // Palavras-chave para consultar status
-    const keywordsStatus = [
-      'status',
-      'consultar',
-      'ver',
-      'andamento',
-      'como está',
-      'quanto',
-      'percentual total',
-      'progresso total',
     ];
 
     // Palavras-chave para ajuda
@@ -203,8 +324,8 @@ export class MessageHandler {
       'inicio',
     ];
 
-    // Classificar
-    if (keywordsMenu.some(kw => mensagemLower.includes(kw))) {
+    // Classificar (prioridade: específico → genérico)
+    if (keywordsMenu.some(kw => mensagemLower === kw)) {
       return 'menu';
     }
 
@@ -212,19 +333,11 @@ export class MessageHandler {
       return 'ajuda';
     }
 
-    if (keywordsRetrabalho.some(kw => mensagemLower.includes(kw))) {
-      return 'registrar_retrabalho';
+    if (keywordsModificar.some(kw => mensagemLower.includes(kw))) {
+      return 'gerenciar_projeto';
     }
 
-    if (keywordsStatus.some(kw => mensagemLower.includes(kw))) {
-      return 'consultar_status';
-    }
-
-    if (keywordsExecucao.some(kw => mensagemLower.includes(kw))) {
-      return 'registrar_execucao';
-    }
-
-    // Se não classificou, assumir menu
+    // Default: menu (força uso de comandos estruturados)
     return 'menu';
   }
 
@@ -232,29 +345,36 @@ export class MessageHandler {
   // FUNÇÕES: Iniciar Fluxos
   // =====================================================
 
-  private async iniciarFluxoExecucao(sessao: UserSession): Promise<MessageResponse> {
-    const flow = new RegisterProgressFlow(sessao.whatsapp);
-    sessao.fluxo_ativo = 'progress';
+  private async iniciarFluxoProjeto(sessao: UserSession): Promise<MessageResponse> {
+    const flow = new EngineerProjectFlow(sessao.whatsapp);
+    sessao.fluxo_ativo = 'engineer_project';
     sessao.instancia_fluxo = flow;
 
+    // Iniciar fluxo (mostra menu de 3 opções)
     const resultado = await flow.processarMensagem('iniciar');
     return { resposta: resultado.mensagem };
   }
 
-  private async iniciarFluxoRetrabalho(sessao: UserSession): Promise<MessageResponse> {
-    const flow = new RegisterReworkFlow(sessao.whatsapp);
-    sessao.fluxo_ativo = 'rework';
+  private async iniciarFluxoDono(sessao: UserSession): Promise<MessageResponse> {
+    if (!sessao.user_id) {
+      return {
+        resposta: '❌ Erro de autenticação. Digite "menu" para recomeçar.',
+      };
+    }
+
+    // Se já existe um fluxo ativo do dono, NÃO criar um novo!
+    if (sessao.fluxo_ativo === 'owner' && sessao.instancia_fluxo) {
+      console.log('   ⚠️ [DEBUG] Fluxo do dono já ativo, não criando novo');
+      const resultado = await sessao.instancia_fluxo.processarMensagem('iniciar');
+      return { resposta: resultado.mensagem };
+    }
+
+    console.log('   ✅ [DEBUG] Criando nova instância do OwnerFlow');
+    const flow = new OwnerFlow(sessao.whatsapp, sessao.user_id);
+    sessao.fluxo_ativo = 'owner';
     sessao.instancia_fluxo = flow;
 
-    const resultado = await flow.processarMensagem('iniciar');
-    return { resposta: resultado.mensagem };
-  }
-
-  private async iniciarFluxoStatus(sessao: UserSession): Promise<MessageResponse> {
-    const flow = new CheckStatusFlow(sessao.whatsapp);
-    sessao.fluxo_ativo = 'status';
-    sessao.instancia_fluxo = flow;
-
+    // Iniciar fluxo (mostra menu do dono)
     const resultado = await flow.processarMensagem('iniciar');
     return { resposta: resultado.mensagem };
   }
@@ -263,55 +383,131 @@ export class MessageHandler {
   // MENSAGENS PADRÃO
   // =====================================================
 
-  private mensagemMenu(): string {
-    return `👋 *Olá! Bem-vindo ao Sistema de Gestão de Projetos*
+  private mensagemMenu(tipoUsuario?: TipoUsuario): string {
+    if (tipoUsuario === 'dono') {
+      return `📋 *Menu do Dono*
 
-Escolha uma opção:
+📊 *Gestão da Empresa*
+1️⃣ Distribuir tarefa para engenheiro
+2️⃣ Verificar status dos projetos
+3️⃣ Consultar histórico e relatórios
 
-1️⃣ *Registrar Execução Diária*
-   Digite: _registrar execução_
+❓ *Ajuda*
+Digite "ajuda" para instruções
 
-2️⃣ *Registrar Retrabalho*
-   Digite: _registrar retrabalho_
+_Digite o número da opção desejada_`;
+    }
 
-3️⃣ *Consultar Status do Projeto*
-   Digite: _consultar status_
+    // Menu de engenheiro (padrão)
+    return `📋 *Menu do Engenheiro*
 
-4️⃣ *Ajuda*
-   Digite: _ajuda_
+🔔 *Atualizações Diárias*
+1️⃣ Notificação Matinal
+2️⃣ Notificação Noturna
 
-_Digite a opção desejada ou envie uma mensagem descrevendo o que precisa._`;
+📊 *Gestão*
+3️⃣ Visualizar Meus Projetos
+4️⃣ Marcar Etapa Concluída
+
+❓ *Ajuda*
+Digite "ajuda" para instruções
+
+_Digite o número da opção desejada_`;
   }
 
-  private mensagemAjuda(): string {
-    return `ℹ️ *Ajuda - Como Usar o Sistema*
+  private mensagemAjuda(tipoUsuario?: TipoUsuario): string {
+    if (tipoUsuario === 'dono') {
+      return `❓ *Ajuda - Dono da Empresa*
 
-*📊 Registrar Execução Diária*
-Use para registrar o progresso diário do seu projeto.
-Você informará: código do projeto, percentual previsto, percentual realizado e observações.
+1️⃣ *Distribuir tarefa para engenheiro*
+Atribua projetos aos engenheiros: escolha o engenheiro, defina área, prazos e observações.
 
-*🔧 Registrar Retrabalho*
-Use quando houver retrabalho no projeto.
-Você informará: código do projeto, motivo, descrição e impacto.
+2️⃣ *Verificar status dos projetos*
+Acompanhe o andamento de todos os projetos, consulte prazos e veja a performance da equipe.
 
-*📈 Consultar Status*
-Use para ver o progresso total do projeto.
-Mostra: percentual concluído, estatísticas, execuções recentes e retrabalhos.
+3️⃣ *Consultar histórico e relatórios*
+Acesse históricos de retrabalho, projetos concluídos e indicadores por área.
 
-*💡 Dicas*
-• Digite "cancelar" a qualquer momento para sair
-• Digite "menu" para voltar ao menu principal
-• Seja específico nas descrições e observações
+🔄 *Comandos úteis*
+• *menu* — volta ao menu principal
+• *cancelar* — sai do fluxo atual
+• *sync* — força sincronização
+
+_Digite "menu" para voltar_`;
+    }
+
+    // Ajuda de engenheiro (padrão)
+    return `❓ *Ajuda - Engenheiro*
+
+1️⃣ *Notificação Matinal*
+Informe o status atual e a previsão do dia para cada projeto.
+
+2️⃣ *Notificação Noturna*
+Registre o que foi feito, retrabalho e observações do dia.
+
+3️⃣ *Visualizar Meus Projetos*
+Veja a lista completa dos seus projetos com status e detalhes.
+
+4️⃣ *Marcar Etapa Concluída*
+Marque etapas de pavimentos como concluídas para atualizar o progresso ponderado.
+
+🔔 *Notificações automáticas*
+• Manhã (09:00): lembrete para informar status
+• Noite (17:00): lembrete para registrar o que foi feito
+
+🔄 *Comandos úteis*
+• *menu* — volta ao menu principal
+• *cancelar* — sai do fluxo atual
+• *voltar* ou *0* — volta ao passo anterior
+• *sync* — força sincronização
 
 _Digite "menu" para voltar_`;
   }
 
-  private mensagemNaoEntendida(): string {
-    return `🤔 Desculpe, não entendi sua mensagem.
+  private mensagemNaoCadastrado(): string {
+    return `❌ *Número não cadastrado*
 
-Digite *menu* para ver as opções disponíveis
-ou
-Digite *ajuda* para ver como usar o sistema`;
+Seu número de WhatsApp não está cadastrado no sistema.
+
+Para obter acesso, entre em contato com o administrador da TecPred.
+
+ℹ️ *Informações necessárias:*
+• Seu nome completo
+• Cargo/função (Engenheiro ou Dono)
+• Número de WhatsApp (este número)
+
+_Após o cadastro, você receberá acesso automático ao sistema._`;
+  }
+
+  private mensagemNaoEntendida(): string {
+    return `⚠️ Desculpe, não entendi sua mensagem.
+
+Digite *menu* para ver as opções disponíveis`;
+  }
+
+  // =====================================================
+  // FUNÇÃO: Sincronização Manual
+  // =====================================================
+
+  private async executarSincronizacaoManual(): Promise<string> {
+    try {
+      const { executarSincronizacao } = await import('../../integrations/cron/syncDatabaseToSheets.ts');
+
+      // Executar sincronização em background
+      executarSincronizacao().catch(error => {
+        console.error('❌ Erro na sincronização manual:', error);
+      });
+
+      return `🔄 *Sincronização iniciada!*\n\n` +
+        `Os dados do Supabase estão sendo sincronizados\n` +
+        `para o Google Sheets agora.\n\n` +
+        `⏱️ Aguarde alguns segundos e verifique a planilha.\n\n` +
+        `_A sincronização automática continua a cada 5 minutos_`;
+    } catch (error: any) {
+      console.error('Erro ao executar sincronização manual:', error);
+      return `❌ Erro ao iniciar sincronização.\n\n` +
+        `Verifique se o Supabase está configurado corretamente.`;
+    }
   }
 
   // =====================================================
@@ -319,12 +515,42 @@ Digite *ajuda* para ver como usar o sistema`;
   // =====================================================
 
   private normalizarWhatsapp(whatsapp: string): string {
-    // Remove caracteres especiais e garante formato +55XXXXXXXXXXX
-    const cleaned = whatsapp.replace(/[^\d+]/g, '');
-    if (!cleaned.startsWith('+')) {
-      return '+55' + cleaned;
+    try {
+      // Se já tem @c.us ou @g.us, remover primeiro
+      let numero = whatsapp;
+      if (whatsapp.includes('@')) {
+        numero = whatsapp.split('@')[0];
+      }
+
+      // Remove caracteres especiais e garante formato +55XXXXXXXXXXX
+      const cleaned = numero.replace(/[^\d+]/g, '');
+
+      // DEBUG: Número problemático
+      if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
+        console.log(`   🔍 Normalizando número problemático:`);
+        console.log(`   Original: ${whatsapp}`);
+        console.log(`   Após remover @: ${numero}`);
+        console.log(`   Após limpar: ${cleaned}`);
+      }
+
+      if (!cleaned.startsWith('+')) {
+        const resultado = '+55' + cleaned;
+        if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
+          console.log(`   Resultado final: ${resultado}`);
+        }
+        return resultado;
+      }
+
+      if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
+        console.log(`   Resultado final: ${cleaned}`);
+      }
+
+      return cleaned;
+    } catch (error: any) {
+      console.error(`❌ Erro ao normalizar WhatsApp "${whatsapp}":`, error);
+      // Retornar o original se houver erro
+      return whatsapp.replace(/[^\d+]/g, '').replace(/^(\d+)$/, '+55$1');
     }
-    return cleaned;
   }
 
   private limparSessoesAntigas(): void {

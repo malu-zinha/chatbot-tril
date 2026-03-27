@@ -7,7 +7,7 @@
 // para a planilha do CEO com visão geral de todos os projetos
 // =====================================================
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
 
 // =====================================================
@@ -43,7 +43,7 @@ interface SyncCEOResult {
 // =====================================================
 
 class CEOSyncService {
-  private supabase: SupabaseClient;
+  private supabase: any;
   private sheets: any;
 
   constructor() {

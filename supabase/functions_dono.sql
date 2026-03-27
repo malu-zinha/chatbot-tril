@@ -12,12 +12,12 @@
 CREATE OR REPLACE FUNCTION dono_distribuir_tarefa(
     p_dono_id UUID,
     p_eng_id UUID,
+    p_area_codigo TEXT,
+    p_descricao_task TEXT,
     p_projeto_id UUID DEFAULT NULL,
     p_codigo_projeto TEXT DEFAULT NULL,
     p_cliente TEXT DEFAULT NULL,
-    p_area_codigo TEXT,
     p_complexidade_codigo TEXT DEFAULT 'MEDIA',
-    p_descricao_task TEXT,
     p_data_inicio_prevista DATE DEFAULT NULL,
     p_data_conclusao_prevista DATE DEFAULT NULL,
     p_observacoes_dono TEXT DEFAULT NULL
@@ -25,7 +25,7 @@ CREATE OR REPLACE FUNCTION dono_distribuir_tarefa(
 RETURNS JSON AS $$
 DECLARE
     v_task_id UUID;
-    v_area_id INTEGER;
+    v_area_id UUID;
     v_complexidade_id INTEGER;
     v_eng_nome TEXT;
     v_area_descricao TEXT;
@@ -134,6 +134,204 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION dono_distribuir_tarefa IS 'Distribui tarefa para engenheiro - sincroniza e notifica automaticamente';
+
+-- =====================================================
+-- FUNCTION: dono_distribuir_projeto_com_prazos
+-- Distribui projeto existente para engenheiro com cadastro completo de prazos
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION dono_distribuir_projeto_com_prazos(
+    p_dono_id UUID,
+    p_eng_id UUID,
+    p_projeto_id UUID,
+    p_area_codigo TEXT,
+    p_data_inicio DATE,
+    p_prazo_final_eng DATE,
+    p_prazo_final_cliente DATE,
+    p_data_inicio_esperada_cliente DATE DEFAULT NULL,
+    p_observacoes TEXT DEFAULT NULL
+)
+RETURNS JSON AS $$
+DECLARE
+    v_area_id UUID;
+    v_status_id INTEGER;
+    v_eng_projeto_id UUID;
+    v_prazo_id UUID;
+    v_eng_nome TEXT;
+    v_area_descricao TEXT;
+    v_codigo_projeto TEXT;
+BEGIN
+    -- Valida dono
+    IF NOT EXISTS (SELECT 1 FROM dono_empresa WHERE dono_id = p_dono_id AND ativo = true) THEN
+        RETURN json_build_object(
+            'sucesso', false,
+            'mensagem', 'Dono não encontrado ou inativo'
+        );
+    END IF;
+    
+    -- Valida engenheiro
+    IF NOT EXISTS (SELECT 1 FROM engenheiros WHERE eng_id = p_eng_id AND ativo = true) THEN
+        RETURN json_build_object(
+            'sucesso', false,
+            'mensagem', 'Engenheiro não encontrado ou inativo'
+        );
+    END IF;
+    
+    -- Valida projeto
+    IF NOT EXISTS (SELECT 1 FROM projetos WHERE projeto_id = p_projeto_id AND ativo = true) THEN
+        RETURN json_build_object(
+            'sucesso', false,
+            'mensagem', 'Projeto não encontrado ou inativo'
+        );
+    END IF;
+    
+    -- Valida datas
+    IF p_prazo_final_eng < p_data_inicio THEN
+        RETURN json_build_object(
+            'sucesso', false,
+            'mensagem', 'Prazo final do engenheiro deve ser maior ou igual à data de início'
+        );
+    END IF;
+    
+    IF p_prazo_final_cliente < p_prazo_final_eng THEN
+        RETURN json_build_object(
+            'sucesso', false,
+            'mensagem', 'Prazo final do cliente deve ser maior ou igual ao prazo interno'
+        );
+    END IF;
+    
+    -- Busca área
+    SELECT area_id, descricao INTO v_area_id, v_area_descricao
+    FROM areas
+    WHERE UPPER(codigo) = UPPER(TRIM(p_area_codigo)) AND ativo = true;
+    
+    IF v_area_id IS NULL THEN
+        RETURN json_build_object(
+            'sucesso', false,
+            'mensagem', 'Área não encontrada: ' || p_area_codigo
+        );
+    END IF;
+    
+    -- Busca dados complementares
+    SELECT nome INTO v_eng_nome FROM engenheiros WHERE eng_id = p_eng_id;
+    SELECT codigo_projeto INTO v_codigo_projeto FROM projetos WHERE projeto_id = p_projeto_id;
+    
+    -- Busca status inicial
+    SELECT status_id INTO v_status_id
+    FROM status_codes
+    WHERE codigo = 'AGUARDANDO_INICIO'
+    LIMIT 1;
+    
+    -- Verifica duplicidade
+    IF EXISTS (
+        SELECT 1 FROM engenheiros_projetos 
+        WHERE eng_id = p_eng_id 
+        AND projeto_id = p_projeto_id 
+        AND area_id = v_area_id 
+        AND ativo = true
+    ) THEN
+        RETURN json_build_object(
+            'sucesso', false,
+            'mensagem', 'Engenheiro já está atribuído a esta área neste projeto'
+        );
+    END IF;
+    
+    -- 1. Cria atribuição em engenheiros_projetos
+    INSERT INTO engenheiros_projetos (
+        eng_id,
+        projeto_id,
+        area_id,
+        data_inicio,
+        data_prevista,
+        status_id,
+        observacoes
+    ) VALUES (
+        p_eng_id,
+        p_projeto_id,
+        v_area_id,
+        p_data_inicio,
+        p_prazo_final_eng,
+        v_status_id,
+        p_observacoes
+    ) RETURNING id INTO v_eng_projeto_id;
+    
+    -- 2. Cria registro de prazos (triggers calcularão prazo_interno_dias e prazo_cliente_dias)
+    INSERT INTO prazos (
+        eng_projeto_id,
+        projeto_id,
+        eng_id,
+        data_inicio_projeto,
+        data_inicio_esperada_cliente,
+        prazo_final_eng,
+        prazo_final_cliente,
+        observacoes
+    ) VALUES (
+        v_eng_projeto_id,
+        p_projeto_id,
+        p_eng_id,
+        p_data_inicio,
+        p_data_inicio_esperada_cliente,
+        p_prazo_final_eng,
+        p_prazo_final_cliente,
+        p_observacoes
+    ) RETURNING id INTO v_prazo_id;
+    
+    -- 3. Registra em evandro_distribuicao_tasks
+    INSERT INTO evandro_distribuicao_tasks (
+        dono_id,
+        eng_id,
+        projeto_id,
+        area_id,
+        eng_projeto_id,
+        descricao_task,
+        data_inicio_prevista,
+        data_conclusao_prevista,
+        observacoes_dono,
+        status_task,
+        sincronizado,
+        data_sincronizacao
+    ) VALUES (
+        p_dono_id,
+        p_eng_id,
+        p_projeto_id,
+        v_area_id,
+        v_eng_projeto_id,
+        'Projeto distribuído com prazos definidos',
+        p_data_inicio,
+        p_prazo_final_cliente,
+        p_observacoes,
+        'CONCLUIDO', -- Já está sincronizado
+        true,
+        NOW()
+    );
+    
+    -- 4. Notificação WhatsApp é criada automaticamente pelo trigger
+    -- trg_notificar_novo_projeto (AFTER INSERT em engenheiros_projetos)
+
+    RETURN json_build_object(
+        'sucesso', true,
+        'mensagem', format('✅ Projeto distribuído para %s com prazos cadastrados!', v_eng_nome),
+        'eng_projeto_id', v_eng_projeto_id,
+        'prazo_id', v_prazo_id,
+        'detalhes', json_build_object(
+            'engenheiro', v_eng_nome,
+            'projeto', v_codigo_projeto,
+            'area', v_area_descricao,
+            'data_inicio', p_data_inicio,
+            'prazo_eng', p_prazo_final_eng,
+            'prazo_cliente', p_prazo_final_cliente
+        )
+    );
+    
+EXCEPTION WHEN OTHERS THEN
+    RETURN json_build_object(
+        'sucesso', false,
+        'mensagem', 'Erro ao distribuir projeto: ' || SQLERRM
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION dono_distribuir_projeto_com_prazos IS 'Distribui projeto existente com cadastro completo de prazos na tabela prazos';
 
 -- =====================================================
 -- FUNCTION: dono_consultar_status_engenheiro

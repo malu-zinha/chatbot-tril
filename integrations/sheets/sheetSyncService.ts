@@ -216,10 +216,10 @@ export class SheetSyncService {
       const engineerHeaders = await sheetsService.getHeaders(spreadsheetId, engineerSheetName);
       const evandroHeaders = await sheetsService.getHeaders(spreadsheetId, evandroSheetName);
 
-      // Criar linha na aba Engenheiro (apenas campos comuns)
+      // Criar linha na aba Engenheiro (exclui campos exclusivos do Evandro)
       const engineerData: Record<string, any> = {};
       for (const header of engineerHeaders) {
-        if (COMMON_FIELDS.includes(header) && projectData[header]) {
+        if (!EVANDRO_EXCLUSIVE_FIELDS.includes(header) && projectData[header]) {
           engineerData[header] = projectData[header];
         }
       }

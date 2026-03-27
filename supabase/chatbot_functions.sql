@@ -823,9 +823,9 @@ COMMENT ON FUNCTION registrar_retrabalho_dia IS 'Registra retrabalho diário - c
 CREATE OR REPLACE FUNCTION criar_atualizar_prazos(
     p_atribuicao_id UUID,
     p_data_inicio_projeto DATE,
-    p_data_inicio_esperada_cliente DATE DEFAULT NULL,
     p_prazo_final_eng DATE,
     p_prazo_final_cliente DATE,
+    p_data_inicio_esperada_cliente DATE DEFAULT NULL,
     p_observacoes TEXT DEFAULT NULL
 )
 RETURNS JSON AS $$
@@ -972,3 +972,21 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION buscar_historico_retrabalhos IS 'Busca histórico de retrabalhos - chatbot';
+
+-- Função para calcular os prazos
+CREATE OR REPLACE FUNCTION calcular_prazos() 
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.prazo_interno_dias := (NEW.prazo_final_eng - NEW.data_inicio_projeto);
+    NEW.prazo_cliente_dias := (NEW.prazo_final_cliente - NEW.data_inicio_projeto);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger para atualizar os prazos ao inserir ou atualizar
+CREATE TRIGGER trg_calcular_prazos
+BEFORE INSERT OR UPDATE ON prazos
+FOR EACH ROW
+EXECUTE FUNCTION calcular_prazos();
+
+COMMENT ON TRIGGER trg_calcular_prazos ON prazos IS 'Calcula prazos internos e do cliente automaticamente ao inserir ou atualizar';
