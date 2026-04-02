@@ -30,7 +30,7 @@ interface FlowResult {
 
 type StepFunction = (mensagem: string) => Promise<FlowResult>;
 
-type FlowMode = 'visualizar' | 'distribuir' | 'criar' | 'editar';
+type FlowMode = 'visualizar' | 'distribuir' | 'criar' | 'editar' | 'deletar';
 type VizTipo = 'projeto' | 'engenheiro' | 'retrabalhos';
 
 // =====================================================
@@ -71,6 +71,11 @@ export class OwnerFlow {
     criar_codigo?: string;
     criar_cliente?: string;
     criar_descricao?: string;
+
+    // Deleção
+    del_projeto_id?: string;
+    del_codigo_projeto?: string;
+    del_cliente?: string;
 
     // Edição
     edit_projeto_id?: string;
@@ -141,6 +146,10 @@ export class OwnerFlow {
       criar_descricao: this.stepCriarDescricao.bind(this),
       criar_confirmar: this.stepCriarConfirmar.bind(this),
 
+      // Deletar
+      del_escolher_projeto: this.stepDelEscolherProjeto.bind(this),
+      del_confirmar: this.stepDelConfirmar.bind(this),
+
       // Editar
       edit_escolher_projeto: this.stepEditEscolherProjeto.bind(this),
       edit_escolher_area: this.stepEditEscolherArea.bind(this),
@@ -192,7 +201,8 @@ export class OwnerFlow {
                 `1️⃣ Visualizar informações\n` +
                 `2️⃣ Distribuir projeto para engenheiro\n` +
                 `3️⃣ Criar novo projeto\n` +
-                `4️⃣ Editar projeto\n\n` +
+                `4️⃣ Editar projeto\n` +
+                `5️⃣ Deletar projeto\n\n` +
                 `_Digite o número da opção desejada_`,
       finalizado: false,
     };
@@ -234,6 +244,10 @@ export class OwnerFlow {
         this.contexto.modo = 'editar';
         return await this.iniciarEdicao();
 
+      case '5':
+        this.contexto.modo = 'deletar';
+        return await this.iniciarDelecao();
+
       default:
         return {
           mensagem: `❌ Opção inválida.\n\n` +
@@ -241,7 +255,8 @@ export class OwnerFlow {
                     `1️⃣ - Visualizar informações\n` +
                     `2️⃣ - Distribuir projeto\n` +
                     `3️⃣ - Criar novo projeto\n` +
-                    `4️⃣ - Editar projeto`,
+                    `4️⃣ - Editar projeto\n` +
+                    `5️⃣ - Deletar projeto`,
           finalizado: false,
         };
     }
@@ -1182,6 +1197,104 @@ export class OwnerFlow {
   }
 
   // =====================================================
+  // FLUXO 5: DELETAR PROJETO (SOFT DELETE)
+  // =====================================================
+
+  private async iniciarDelecao(): Promise<FlowResult> {
+    const resultado = await getSupabase().listarTodosProjetos();
+
+    if (!resultado.success || !resultado.data || resultado.data.length === 0) {
+      return {
+        mensagem: `📭 Nenhum projeto encontrado.\n\n_Digite "menu" para voltar_`,
+        finalizado: true,
+      };
+    }
+
+    this.contexto.projetos = resultado.data;
+    this.stepAtual = 'del_escolher_projeto';
+
+    let msg = `🗑️ *Deletar Projeto*\n\n`;
+    msg += `Escolha o projeto que deseja deletar:\n\n`;
+    resultado.data.forEach((proj: any, idx: number) => {
+      msg += `${idx + 1}️⃣ ${proj.codigo_projeto} - ${proj.cliente}\n`;
+    });
+    msg += `\n_Digite o número do projeto_`;
+
+    return { mensagem: msg, finalizado: false };
+  }
+
+  private async stepDelEscolherProjeto(mensagem: string): Promise<FlowResult> {
+    const escolha = parseInt(mensagem.trim()) - 1;
+
+    if (isNaN(escolha) || escolha < 0 || escolha >= (this.contexto.projetos?.length || 0)) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.contexto.projetos?.length}`,
+        finalizado: false,
+      };
+    }
+
+    const projeto = this.contexto.projetos![escolha];
+    this.contexto.del_projeto_id = projeto.projeto_id;
+    this.contexto.del_codigo_projeto = projeto.codigo_projeto;
+    this.contexto.del_cliente = projeto.cliente;
+
+    this.stepAtual = 'del_confirmar';
+
+    let msg = `⚠️ *Confirmar Exclusão*\n\n`;
+    msg += `Você está prestes a deletar o projeto:\n\n`;
+    msg += `📋 *Código:* ${projeto.codigo_projeto}\n`;
+    msg += `👤 *Cliente:* ${projeto.cliente}\n`;
+    if (projeto.descricao) {
+      msg += `📝 *Descrição:* ${projeto.descricao}\n`;
+    }
+    msg += `\n⚠️ Todas as atribuições deste projeto também serão desativadas.\n\n`;
+    msg += `1️⃣ Sim, deletar\n`;
+    msg += `2️⃣ Cancelar\n\n`;
+    msg += `_Digite 1 para confirmar ou 2 para cancelar_`;
+
+    return { mensagem: msg, finalizado: false };
+  }
+
+  private async stepDelConfirmar(mensagem: string): Promise<FlowResult> {
+    const opcao = mensagem.trim();
+
+    if (opcao === '2') {
+      this.contexto = {};
+      return {
+        mensagem: `❌ Exclusão cancelada.\n\n_Digite "menu" para voltar ao menu principal_`,
+        finalizado: true,
+      };
+    }
+
+    if (opcao !== '1') {
+      return {
+        mensagem: `❌ Opção inválida.\n\nDigite 1 para confirmar ou 2 para cancelar`,
+        finalizado: false,
+      };
+    }
+
+    const resultado = await getSupabase().desativarProjeto(this.contexto.del_projeto_id!);
+
+    if (!resultado.success) {
+      return {
+        mensagem: `❌ Erro ao deletar projeto: ${resultado.error}\n\n_Digite "menu" para voltar_`,
+        finalizado: true,
+      };
+    }
+
+    const qtdAtrib = resultado.data?.atribuicoes_desativadas || 0;
+
+    let msg = `✅ Projeto *${this.contexto.del_codigo_projeto}* deletado com sucesso!\n\n`;
+    if (qtdAtrib > 0) {
+      msg += `📋 ${qtdAtrib} atribuição(ões) desativada(s).\n\n`;
+    }
+    msg += `_Digite "menu" para voltar ao menu principal_`;
+
+    this.contexto = {};
+    return { mensagem: msg, finalizado: true };
+  }
+
+  // =====================================================
   // FLUXO 4: EDITAR PROJETO
   // =====================================================
 
@@ -1226,10 +1339,10 @@ export class OwnerFlow {
     const resultado = await getSupabase().buscarAreasDoProjeto(projeto.projeto_id);
 
     if (!resultado.success || !resultado.data || resultado.data.length === 0) {
-      // Projeto sem atribuições - só pode editar dados master
-      this.contexto.edit_dados_atuais = projeto;
-      this.stepAtual = 'edit_menu_categorias';
-      return this.mostrarMenuCategorias(true);
+      return {
+        mensagem: `⚠️ Este projeto não possui áreas/atribuições para editar.\n\nUse a opção "2 - Distribuir projeto" para atribuir uma área primeiro.\n\n_Digite "menu" para voltar_`,
+        finalizado: true,
+      };
     }
 
     if (resultado.data.length === 1) {
@@ -1239,14 +1352,13 @@ export class OwnerFlow {
       this.contexto.edit_area_descricao = area.descricao;
       this.contexto.edit_eng_nome = area.engenheiro_nome;
 
-      // Buscar dados completos da atribuição
       const detalhes = await getSupabase().buscarAtribuicaoParaEdicao(this.contexto.edit_atribuicao_id!);
       if (detalhes.success && detalhes.data) {
         this.contexto.edit_dados_atuais = detalhes.data;
       }
 
       this.stepAtual = 'edit_menu_categorias';
-      return this.mostrarMenuCategorias(false);
+      return this.mostrarMenuCategorias();
     }
 
     // Múltiplas áreas - pedir para escolher
@@ -1285,25 +1397,20 @@ export class OwnerFlow {
     }
 
     this.stepAtual = 'edit_menu_categorias';
-    return this.mostrarMenuCategorias(false);
+    return this.mostrarMenuCategorias();
   }
 
-  private mostrarMenuCategorias(somenteProjetoMaster: boolean): FlowResult {
-    const dados = this.contexto.edit_dados_atuais;
+  private mostrarMenuCategorias(): FlowResult {
     let msg = `✏️ *Editar: ${this.contexto.edit_codigo_projeto}*\n`;
-    if (this.contexto.edit_area_descricao) {
-      msg += `📦 Área: ${this.contexto.edit_area_descricao}\n`;
-    }
+    msg += `📦 Área: ${this.contexto.edit_area_descricao}\n`;
     if (this.contexto.edit_eng_nome) {
       msg += `👷 Engenheiro: ${this.contexto.edit_eng_nome}\n`;
     }
     msg += `\nEscolha a categoria para editar:\n\n`;
     msg += `1️⃣ Dados do projeto (código, cliente, descrição)\n`;
-    if (!somenteProjetoMaster) {
-      msg += `2️⃣ Datas e prazos\n`;
-      msg += `3️⃣ Status e andamento\n`;
-      msg += `4️⃣ Observações\n`;
-    }
+    msg += `2️⃣ Datas e prazos\n`;
+    msg += `3️⃣ Status e andamento\n`;
+    msg += `4️⃣ Observações\n`;
     msg += `\n_Digite o número da categoria_`;
 
     return { mensagem: msg, finalizado: false };
@@ -1312,14 +1419,6 @@ export class OwnerFlow {
   private async stepEditMenuCategorias(mensagem: string): Promise<FlowResult> {
     const opcao = mensagem.trim();
     const dados = this.contexto.edit_dados_atuais;
-    const somenteProjetoMaster = !this.contexto.edit_atribuicao_id;
-
-    if (somenteProjetoMaster && opcao !== '1') {
-      return {
-        mensagem: `❌ Este projeto não possui atribuições. Apenas dados do projeto podem ser editados.\n\nDigite 1 para editar dados do projeto.`,
-        finalizado: false,
-      };
-    }
 
     this.stepAtual = 'edit_menu_campos';
 

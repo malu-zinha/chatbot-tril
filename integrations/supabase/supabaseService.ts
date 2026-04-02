@@ -1929,6 +1929,53 @@ export class SupabaseService {
   }
 
   // =====================================================
+  // SOFT DELETE DE PROJETOS (DONO)
+  // =====================================================
+
+  /**
+   * Desativa (soft delete) um projeto e todas suas atribuições
+   */
+  async desativarProjeto(
+    projeto_id: string
+  ): Promise<{ success: boolean; error?: string; data?: { atribuicoes_desativadas: number } }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      // 1. Desativar o projeto
+      const { error: erroProjeto } = await this.supabase
+        .from('projetos')
+        .update({ ativo: false, updated_at: new Date().toISOString() })
+        .eq('projeto_id', projeto_id);
+
+      if (erroProjeto) {
+        console.error('❌ Erro ao desativar projeto:', erroProjeto);
+        return { success: false, error: erroProjeto.message };
+      }
+
+      // 2. Desativar todas as atribuições relacionadas
+      const { data: atribuicoes, error: erroAtrib } = await this.supabase
+        .from('engenheiros_projetos')
+        .update({ ativo: false, updated_at: new Date().toISOString() })
+        .eq('projeto_id', projeto_id)
+        .eq('ativo', true)
+        .select('id');
+
+      if (erroAtrib) {
+        console.error('❌ Erro ao desativar atribuições:', erroAtrib);
+        // Projeto já foi desativado, reportar erro parcial
+        return { success: true, error: `Projeto desativado, mas erro nas atribuições: ${erroAtrib.message}`, data: { atribuicoes_desativadas: 0 } };
+      }
+
+      const qtd = atribuicoes?.length || 0;
+      console.log(`✅ Projeto ${projeto_id} desativado com ${qtd} atribuição(ões)`);
+      return { success: true, data: { atribuicoes_desativadas: qtd } };
+    } catch (error: any) {
+      console.error('❌ Erro ao desativar projeto:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // =====================================================
   // EDIÇÃO DE PROJETOS (DONO)
   // =====================================================
 
