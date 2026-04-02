@@ -1929,6 +1929,135 @@ export class SupabaseService {
   }
 
   // =====================================================
+  // EDIÇÃO DE PROJETOS (DONO)
+  // =====================================================
+
+  /**
+   * Atualiza campos do projeto master (tabela projetos)
+   */
+  async atualizarProjeto(
+    projeto_id: string,
+    campos: Partial<{ codigo_projeto: string; cliente: string; descricao: string }>
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const updateData: any = { ...campos, updated_at: new Date().toISOString() };
+
+      const { error } = await this.supabase
+        .from('projetos')
+        .update(updateData)
+        .eq('projeto_id', projeto_id);
+
+      if (error) {
+        console.error('❌ Erro ao atualizar projeto:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log(`✅ Projeto ${projeto_id} atualizado:`, campos);
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar projeto:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Atualiza campos da atribuição (engenheiros_projetos) - versão genérica para o dono
+   */
+  async atualizarAtribuicaoDono(
+    atribuicao_id: string,
+    campos: Partial<{
+      data_inicio: string;
+      data_prevista: string;
+      status_id: number;
+      percentual_andamento: number;
+      observacoes: string;
+    }>
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const updateData: any = { ...campos, updated_at: new Date().toISOString() };
+
+      const { error } = await this.supabase
+        .from('engenheiros_projetos')
+        .update(updateData)
+        .eq('id', atribuicao_id);
+
+      if (error) {
+        console.error('❌ Erro ao atualizar atribuição:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log(`✅ Atribuição ${atribuicao_id} atualizada:`, campos);
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar atribuição:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Atualiza campos de prazos
+   */
+  async atualizarPrazos(
+    eng_projeto_id: string,
+    campos: Partial<{
+      prazo_final_eng: string;
+      prazo_final_cliente: string;
+      data_inicio_esperada_cliente: string;
+    }>
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const updateData: any = { ...campos, updated_at: new Date().toISOString() };
+
+      const { error } = await this.supabase
+        .from('prazos')
+        .update(updateData)
+        .eq('eng_projeto_id', eng_projeto_id);
+
+      if (error) {
+        console.error('❌ Erro ao atualizar prazos:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log(`✅ Prazos atualizados para atribuição ${eng_projeto_id}:`, campos);
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar prazos:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Busca atribuição com detalhes para edição (projeto + área + engenheiro + prazos)
+   */
+  async buscarAtribuicaoParaEdicao(atribuicao_id: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const { data, error } = await this.supabase
+        .from('vw_projetos_completo')
+        .select('*')
+        .eq('atribuicao_id', atribuicao_id)
+        .single();
+
+      if (error) {
+        console.error('❌ Erro ao buscar atribuição para edição:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar atribuição:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // =====================================================
   // PROGRESSO PONDERADO (PAVIMENTOS / ETAPAS)
   // =====================================================
 
