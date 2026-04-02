@@ -1635,8 +1635,10 @@ export class SupabaseService {
       const { data, error } = await this.supabase
         .from('engenheiros_projetos')
         .select(`
+          id,
           area_id,
-          areas!inner(area_id, codigo, descricao)
+          areas!inner(area_id, codigo, descricao),
+          engenheiros(nome)
         `)
         .eq('projeto_id', projetoId)
         .eq('ativo', true);
@@ -1646,11 +1648,15 @@ export class SupabaseService {
         return { success: false, error: error.message };
       }
 
-      // Remove duplicatas de áreas
+      // Remove duplicatas de áreas, preservando atribuicao_id e engenheiro_nome
       const areasUnicas = data?.reduce((acc: any[], curr: any) => {
-        const area = curr.areas;
-        if (!acc.find((a: any) => a.area_id === area.area_id)) {
-          acc.push(area);
+        const jaExiste = acc.find((a: any) => a.area_id === curr.areas.area_id);
+        if (!jaExiste) {
+          acc.push({
+            ...curr.areas,
+            atribuicao_id: curr.id,
+            engenheiro_nome: curr.engenheiros?.nome || null,
+          });
         }
         return acc;
       }, []);
@@ -2061,14 +2067,34 @@ export class SupabaseService {
     try {
       const updateData: any = { ...campos, updated_at: new Date().toISOString() };
 
-      const { error } = await this.supabase
+      const { data: updated, error } = await this.supabase
         .from('prazos')
         .update(updateData)
-        .eq('eng_projeto_id', eng_projeto_id);
+        .eq('eng_projeto_id', eng_projeto_id)
+        .select('eng_projeto_id');
 
       if (error) {
         console.error('❌ Erro ao atualizar prazos:', error);
         return { success: false, error: error.message };
+      }
+
+      // Se nenhuma linha foi atualizada, criar o registro via upsert
+      if (!updated || updated.length === 0) {
+        console.warn(`⚠️ Nenhum registro de prazos encontrado para ${eng_projeto_id}, criando via upsert...`);
+        const { error: upsertError } = await this.supabase
+          .from('prazos')
+          .upsert(
+            { eng_projeto_id, ...campos, updated_at: new Date().toISOString() },
+            { onConflict: 'eng_projeto_id' }
+          );
+
+        if (upsertError) {
+          console.error('❌ Erro ao criar prazos via upsert:', upsertError);
+          return { success: false, error: upsertError.message };
+        }
+
+        console.log(`✅ Prazos criados via upsert para atribuição ${eng_projeto_id}:`, campos);
+        return { success: true };
       }
 
       console.log(`✅ Prazos atualizados para atribuição ${eng_projeto_id}:`, campos);

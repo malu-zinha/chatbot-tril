@@ -1355,10 +1355,18 @@ export class OwnerFlow {
       const detalhes = await getSupabase().buscarAtribuicaoParaEdicao(this.contexto.edit_atribuicao_id!);
       if (detalhes.success && detalhes.data) {
         this.contexto.edit_dados_atuais = detalhes.data;
+      } else {
+        console.warn('⚠️ Dados atuais não carregados para edição:', detalhes.error);
       }
 
       this.stepAtual = 'edit_menu_categorias';
-      return this.mostrarMenuCategorias();
+      const resultMenu = this.mostrarMenuCategorias();
+      if (!this.contexto.edit_dados_atuais) {
+        resultMenu.mensagem =
+          `⚠️ _Não foi possível carregar os valores atuais. Os campos mostrarão "N/A"._\n\n` +
+          resultMenu.mensagem;
+      }
+      return resultMenu;
     }
 
     // Múltiplas áreas - pedir para escolher
@@ -1394,10 +1402,18 @@ export class OwnerFlow {
     const detalhes = await getSupabase().buscarAtribuicaoParaEdicao(this.contexto.edit_atribuicao_id!);
     if (detalhes.success && detalhes.data) {
       this.contexto.edit_dados_atuais = detalhes.data;
+    } else {
+      console.warn('⚠️ Dados atuais não carregados para edição:', detalhes.error);
     }
 
     this.stepAtual = 'edit_menu_categorias';
-    return this.mostrarMenuCategorias();
+    const resultMenu = this.mostrarMenuCategorias();
+    if (!this.contexto.edit_dados_atuais) {
+      resultMenu.mensagem =
+        `⚠️ _Não foi possível carregar os valores atuais. Os campos mostrarão "N/A"._\n\n` +
+        resultMenu.mensagem;
+    }
+    return resultMenu;
   }
 
   private mostrarMenuCategorias(): FlowResult {
@@ -1420,10 +1436,9 @@ export class OwnerFlow {
     const opcao = mensagem.trim();
     const dados = this.contexto.edit_dados_atuais;
 
-    this.stepAtual = 'edit_menu_campos';
-
     switch (opcao) {
       case '1': {
+        this.stepAtual = 'edit_menu_campos';
         let msg = `📋 *Dados do Projeto*\n\n`;
         msg += `Valores atuais:\n`;
         msg += `  • Código: ${dados?.codigo_projeto || this.contexto.edit_codigo_projeto}\n`;
@@ -1439,6 +1454,7 @@ export class OwnerFlow {
       }
 
       case '2': {
+        this.stepAtual = 'edit_menu_campos';
         let msg = `📅 *Datas e Prazos*\n\n`;
         msg += `Valores atuais:\n`;
         msg += `  • Data início: ${this.formatarData(dados?.data_inicio)}\n`;
@@ -1458,6 +1474,7 @@ export class OwnerFlow {
       }
 
       case '3': {
+        this.stepAtual = 'edit_menu_campos';
         let msg = `📊 *Status e Andamento*\n\n`;
         msg += `Valores atuais:\n`;
         msg += `  • Status: ${dados?.status_descricao || 'N/A'}\n`;
@@ -1483,7 +1500,7 @@ export class OwnerFlow {
 
       default:
         return {
-          mensagem: `❌ Opção inválida.\n\nDigite um número válido.`,
+          mensagem: `❌ Opção inválida.\n\nDigite:\n1️⃣ Dados do projeto\n2️⃣ Datas e prazos\n3️⃣ Status e andamento\n4️⃣ Observações`,
           finalizado: false,
         };
     }
@@ -1609,13 +1626,19 @@ export class OwnerFlow {
       const status = this.contexto.status_list![escolha];
       this.contexto.edit_novo_valor = status.status_id;
       // Guardar descrição para confirmação
-      this.contexto.edit_campo = `status_id:${status.descricao}`;
+      this.contexto.edit_campo = `status_id||${status.descricao}`;
     } else if (campo === 'percentual_andamento') {
       const valor = parseInt(input);
       if (isNaN(valor) || valor < 0 || valor > 100) {
         return { mensagem: `❌ Digite um número entre 0 e 100.`, finalizado: false };
       }
       this.contexto.edit_novo_valor = valor;
+    } else {
+      console.error(`❌ Campo desconhecido em stepEditDigitarValor: "${campo}"`);
+      return {
+        mensagem: `❌ Erro interno: campo desconhecido. Digite "menu" para recomeçar.`,
+        finalizado: true,
+      };
     }
 
     // Mostrar confirmação
@@ -1655,8 +1678,9 @@ export class OwnerFlow {
       };
     }
 
-    const campo = this.contexto.edit_campo!.split(':')[0]; // Remove descrição do status se houver
+    const campo = this.contexto.edit_campo!.split('||')[0]; // Remove descrição do status se houver
     const valor = this.contexto.edit_novo_valor;
+    const nomeCampo = this.getNomeCampo(this.contexto.edit_campo!); // Extrair antes de limpar contexto
     let resultado: { success: boolean; error?: string };
 
     // Campos da tabela projetos (master)
@@ -1691,8 +1715,6 @@ export class OwnerFlow {
       };
     }
 
-    const nomeCampo = this.getNomeCampo(this.contexto.edit_campo!);
-
     this.contexto = {};
     return {
       mensagem: `✅ *${nomeCampo}* atualizado com sucesso!\n\n_Digite "menu" para voltar ao menu principal_`,
@@ -1717,7 +1739,11 @@ export class OwnerFlow {
     const mes = parseInt(partes[1]);
     const ano = parseInt(partes[2]);
 
-    if (isNaN(dia) || isNaN(mes) || isNaN(ano) || dia < 1 || dia > 31 || mes < 1 || mes > 12) {
+    if (isNaN(dia) || isNaN(mes) || isNaN(ano)) return null;
+
+    // Checar se a data realmente existe (ex: rejeita 30/02, 31/04)
+    const d = new Date(ano, mes - 1, dia);
+    if (d.getFullYear() !== ano || d.getMonth() !== mes - 1 || d.getDate() !== dia) {
       return null;
     }
 
@@ -1749,19 +1775,19 @@ export class OwnerFlow {
       'percentual_andamento': 'Percentual de andamento',
       'observacoes': 'Observações',
     };
-    // Handle status_id:descricao format
-    const campoBase = campo.split(':')[0];
+    // Handle status_id||descricao format
+    const campoBase = campo.split('||')[0];
     return nomes[campoBase] || campo;
   }
 
   private getValorExibicao(campo: string, valor: any): string {
-    const campoBase = campo.split(':')[0];
+    const campoBase = campo.split('||')[0];
     if (['data_inicio', 'data_prevista', 'prazo_final_eng', 'prazo_final_cliente', 'data_inicio_esperada_cliente'].includes(campoBase)) {
       return this.formatarData(valor);
     }
     if (campoBase === 'status_id') {
       // Use a descrição guardada no campo
-      const descricao = campo.split(':')[1];
+      const descricao = campo.split('||')[1];
       return descricao || `ID ${valor}`;
     }
     if (campoBase === 'percentual_andamento') {
