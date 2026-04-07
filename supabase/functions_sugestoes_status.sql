@@ -360,5 +360,3 @@ SELECT atualizar_feito_dia_com_sugestoes(
 
 
 
-
-

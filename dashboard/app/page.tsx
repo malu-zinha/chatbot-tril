@@ -1,5 +1,7 @@
-import { redirect } from 'next/navigation'
+import DashboardClient from '@/components/DashboardClient'
+
+export const dynamic = 'force-dynamic'
 
 export default function HomePage() {
-  redirect('/inicio')
+  return <DashboardClient />
 }
