@@ -61,6 +61,64 @@ export interface RetrabalhoEngenheiro {
   projetos_com_retrabalho: number
 }
 
+export interface RetrabalhoGeral {
+  total_retrabalhos_geral: number
+  total_projetos_ativos: number
+  percentual_geral_retrabalho: number
+}
+
+export interface RetrabalhoPorProjeto {
+  projeto_id: string
+  codigo_projeto: string
+  cliente: string
+  total_retrabalhos_projeto: number
+  total_engenheiros_projeto: number
+  percentual_retrabalho_projeto: number
+}
+
+export interface RetrabalhoDetalheProjeto {
+  retrabalho_id: string
+  projeto_id: string
+  codigo_projeto: string
+  cliente: string
+  data_retrabalho: string
+  eng_id: string
+  engenheiro_nome: string
+  motivo_retrabalho: string | null
+  area_id: number
+  area_codigo: string
+  area_descricao: string
+}
+
+export interface RetrabalhoAreaProjeto {
+  projeto_id: string
+  codigo_projeto: string
+  cliente: string
+  area_id: number
+  area_codigo: string
+  area: string
+  total_retrabalhos_area: number
+}
+
+export interface RetrabalhoMotivo {
+  motivo_retrabalho: string
+  quantidade: number
+  engenheiros_afetados?: number
+  projetos_afetados?: number
+}
+
+export interface RetrabalhoTaxaArea {
+  projeto_id: string
+  codigo_projeto: string
+  cliente: string
+  area_id: number
+  area_codigo: string
+  area: string
+  total_retrabalhos_area: number
+  dias_com_registro: number
+  taxa_retrabalho_por_dia: number
+}
+
 export interface ProjetosStatus {
   status: string
   quantidade: number
@@ -138,6 +196,113 @@ export async function fetchRetrabalhoEngenheiro(): Promise<RetrabalhoEngenheiro[
   return data || []
 }
 
+export async function fetchRetrabalhoGeral(): Promise<RetrabalhoGeral | null> {
+  const { data, error } = await supabase
+    .from('vw_retrabalho_geral')
+    .select('*')
+    .single()
+
+  if (error) {
+    console.error('Erro ao buscar retrabalho geral:', error)
+    return null
+  }
+
+  return data as RetrabalhoGeral
+}
+
+export async function fetchRetrabalhoPorProjeto(): Promise<RetrabalhoPorProjeto[]> {
+  const { data, error } = await supabase
+    .from('vw_retrabalho_por_projeto')
+    .select('*')
+    .order('percentual_retrabalho_projeto', { ascending: false })
+
+  if (error) {
+    console.error('Erro ao buscar retrabalho por projeto:', error)
+    return []
+  }
+
+  return (data as RetrabalhoPorProjeto[]) || []
+}
+
+export async function fetchRetrabalhoDetalhesPorProjeto(
+  projetoId: string
+): Promise<RetrabalhoDetalheProjeto[]> {
+  const { data, error } = await supabase
+    .from('vw_retrabalho_detalhes_projeto')
+    .select('*')
+    .eq('projeto_id', projetoId)
+    .order('data_retrabalho', { ascending: false })
+
+  if (error) {
+    console.error('Erro ao buscar detalhes de retrabalho por projeto:', error)
+    return []
+  }
+
+  return (data as RetrabalhoDetalheProjeto[]) || []
+}
+
+export async function fetchRetrabalhoAreaPorProjeto(
+  projetoId: string
+): Promise<RetrabalhoAreaProjeto[]> {
+  const { data, error } = await supabase
+    .from('vw_retrabalho_por_area_projeto')
+    .select('*')
+    .eq('projeto_id', projetoId)
+    .order('total_retrabalhos_area', { ascending: false })
+
+  if (error) {
+    console.error('Erro ao buscar retrabalho por área do projeto:', error)
+    return []
+  }
+
+  return (data as RetrabalhoAreaProjeto[]) || []
+}
+
+export async function fetchRetrabalhoMotivosPorProjeto(
+  projetoId: string
+): Promise<RetrabalhoMotivo[]> {
+  const { data, error } = await supabase
+    .from('vw_retrabalho_motivos_por_projeto')
+    .select('*')
+    .eq('projeto_id', projetoId)
+    .order('quantidade', { ascending: false })
+
+  if (error) {
+    console.error('Erro ao buscar motivos de retrabalho por projeto:', error)
+    return []
+  }
+
+  return (data as RetrabalhoMotivo[]) || []
+}
+
+export async function fetchRetrabalhoMotivosGeral(): Promise<RetrabalhoMotivo[]> {
+  const { data, error } = await supabase
+    .from('vw_dono_retrabalhos_por_motivo')
+    .select('*')
+    .order('quantidade', { ascending: false })
+
+  if (error) {
+    console.error('Erro ao buscar motivos gerais de retrabalho:', error)
+    return []
+  }
+
+  return (data as RetrabalhoMotivo[]) || []
+}
+
+export async function fetchRetrabalhoTaxaPorArea(): Promise<RetrabalhoTaxaArea[]> {
+  const { data, error } = await supabase
+    .from('vw_retrabalho_taxa_area_projeto')
+    .select('*')
+    .order('taxa_retrabalho_por_dia', { ascending: false })
+
+  if (error) {
+    console.error('Erro ao buscar taxa de retrabalho por área:', error)
+    return []
+  }
+
+  return (data as RetrabalhoTaxaArea[]) || []
+}
+
 export async function fetchProjetosStatus(): Promise<ProjetosStatus[]> {
   const { data, error } = await supabase
     .from('vw_grafico_projetos_status')
@@ -148,6 +313,50 @@ export async function fetchProjetosStatus(): Promise<ProjetosStatus[]> {
     return []
   }
   
+  return data || []
+}
+
+export async function fetchProjetos() {
+  const { data, error } = await supabase
+    .from('vw_projetos_detalhado')
+    .select('*')
+    .eq('ativo', true)
+
+  if (error) {
+    console.error('Erro ao buscar projetos:', error)
+    return []
+  }
+
+  return data || []
+}
+
+export async function fetchEngenheiros() {
+  const { data, error } = await supabase
+    .from('engenheiros')
+    .select('*')
+    .eq('ativo', true)
+    .order('nome', { ascending: true })
+
+  if (error) {
+    console.error('Erro ao buscar engenheiros:', error)
+    return []
+  }
+
+  return data || []
+}
+
+export async function fetchAreas() {
+  const { data, error } = await supabase
+    .from('areas')
+    .select('*')
+    .eq('ativo', true)
+    .order('codigo', { ascending: true })
+
+  if (error) {
+    console.error('Erro ao buscar áreas:', error)
+    return []
+  }
+
   return data || []
 }
 

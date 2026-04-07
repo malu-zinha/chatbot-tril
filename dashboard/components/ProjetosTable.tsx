@@ -1,5 +1,5 @@
 import React from 'react'
-import { X, Search, Filter } from 'lucide-react'
+import { X, Search, AlertTriangle } from 'lucide-react'
 
 interface Projeto {
   projeto_id: string
@@ -14,6 +14,8 @@ interface Projeto {
   data_prevista?: string
   data_conclusao?: string
   dias_atraso: number
+  created_at?: string
+  motivo_aguardo?: string
 }
 
 interface ProjetosTableProps {
@@ -22,7 +24,8 @@ interface ProjetosTableProps {
   data: Projeto[]
   initialFilter?: 'all' | 'concluido' | 'em_execucao' | 'atrasado'
   title?: string
-  color?: 'primary' | 'success' | 'info' | 'danger'
+  color?: 'primary' | 'success' | 'info' | 'danger' | 'warning'
+  onVerRetrabalho?: (projeto: Projeto) => void
 }
 
 export default function ProjetosTable({ 
@@ -31,7 +34,8 @@ export default function ProjetosTable({
   data, 
   initialFilter = 'all',
   title = 'Listagem de Projetos',
-  color = 'primary'
+  color = 'primary',
+  onVerRetrabalho,
 }: ProjetosTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
   const [filterStatus, setFilterStatus] = React.useState<string>(initialFilter)
@@ -55,7 +59,16 @@ export default function ProjetosTable({
     success: 'from-success to-green-600',
     info: 'from-info to-blue-600',
     danger: 'from-danger to-red-600',
+    warning: 'from-tecpred-orange to-tecpred-coral',
   }
+
+  const isStatusAguardando = (status?: string) =>
+    (status || '').toLowerCase().includes('aguard')
+
+  const getMotivoAguardo = (item: Projeto) =>
+    item.motivo_aguardo?.trim() ||
+    item.descricao?.trim() ||
+    'Sem motivo de aguardo registrado.'
 
   const filteredData = data.filter(item => {
     const matchesSearch = 
@@ -150,12 +163,17 @@ export default function ProjetosTable({
                 <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Atraso
                 </th>
+                {onVerRetrabalho && (
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Retrabalho
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={onVerRetrabalho ? 9 : 8} className="px-6 py-12 text-center text-gray-500">
                     Nenhum projeto encontrado
                   </td>
                 </tr>
@@ -188,15 +206,37 @@ export default function ProjetosTable({
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        item.data_conclusao 
-                          ? 'bg-success text-white' 
-                          : item.dias_atraso > 0
-                          ? 'bg-danger text-white'
-                          : 'bg-info text-white'
-                      }`}>
-                        {item.status_descricao}
-                      </span>
+                      {isStatusAguardando(item.status_descricao) ? (
+                        <div className="relative inline-block group">
+                          <span
+                            className={`px-2 py-1 text-xs font-medium rounded-full ${
+                              item.data_conclusao
+                                ? 'bg-success text-white'
+                                : item.dias_atraso > 0
+                                ? 'bg-danger text-white'
+                                : 'bg-info text-white'
+                            }`}
+                          >
+                            {item.status_descricao}
+                          </span>
+                          <div className="pointer-events-none absolute left-0 top-full mt-2 z-20 hidden w-72 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg group-hover:block">
+                            <div className="mb-1 font-semibold text-gray-900">Motivo do aguardo</div>
+                            <div className="whitespace-normal leading-relaxed">
+                              {getMotivoAguardo(item)}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          item.data_conclusao
+                            ? 'bg-success text-white'
+                            : item.dias_atraso > 0
+                            ? 'bg-danger text-white'
+                            : 'bg-info text-white'
+                        }`}>
+                          {item.status_descricao}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
@@ -233,6 +273,19 @@ export default function ProjetosTable({
                         <span className="text-sm text-success">No prazo</span>
                       )}
                     </td>
+                    {onVerRetrabalho && (
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <button
+                          type="button"
+                          onClick={() => onVerRetrabalho(item)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg transition-colors"
+                          title={`Ver retrabalhos de ${item.codigo_projeto}`}
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Ver
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
