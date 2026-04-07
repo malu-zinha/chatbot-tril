@@ -19,12 +19,6 @@ module.exports = {
           orange: '#FF6B35',      // Laranja do logo
           coral: '#FF8C61',       // Coral claro
         },
-        'tecpred-primary': '#2E3192',
-        'tecpred-secondary': '#4A4FB7',
-        'tecpred-accent': '#6B70D9',
-        'tecpred-orange': '#FF6B35',
-        'tecpred-coral': '#FF8C61',
-        'tecpred-light': '#E8E9F8',
         success: '#10B981',
         warning: '#FF6B35',
         danger: '#EF4444',

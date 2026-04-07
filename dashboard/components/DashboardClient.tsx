@@ -18,6 +18,17 @@ import EngenheirosTable from '@/components/EngenheirosTable'
 import AreasTable from '@/components/AreasTable'
 import AtribuirTask, { TaskData } from '@/components/AtribuirTask'
 import {
+  mockVisaoGeral,
+  mockAtrasosEngenheiro,
+  mockCargaTrabalho,
+  mockRetrabalhos,
+  mockProjetosStatus,
+  mockProjetos,
+  mockEngenheiros,
+  mockAreas,
+} from '@/lib/mockData'
+import {
+  supabase,
   fetchVisaoGeral,
   fetchAtrasosEngenheiro,
   fetchCargaTrabalho,
@@ -46,6 +57,9 @@ import {
   RetrabalhoMotivo,
   RetrabalhoTaxaArea,
   ProjetosStatus,
+  Projeto,
+  Engenheiro,
+  Area,
 } from '@/lib/supabase'
 
 const ProjetosStatusChart = dynamic(() => import('@/components/ProjetosStatusChart'), {
@@ -71,9 +85,9 @@ export default function DashboardClient() {
   const [retrabalhoMotivosGeral, setRetrabalhoMotivosGeral] = useState<RetrabalhoMotivo[]>([])
   const [retrabalhoTaxaArea, setRetrabalhoTaxaArea] = useState<RetrabalhoTaxaArea[]>([])
   const [projetosStatus, setProjetosStatus] = useState<ProjetosStatus[]>([])
-  const [projetos, setProjetos] = useState<any[]>([])
-  const [engenheiros, setEngenheiros] = useState<any[]>([])
-  const [areas, setAreas] = useState<any[]>([])
+  const [projetos, setProjetos] = useState<Projeto[]>([])
+  const [engenheiros, setEngenheiros] = useState<Engenheiro[]>([])
+  const [areas, setAreas] = useState<Area[]>([])
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   
@@ -95,6 +109,23 @@ export default function DashboardClient() {
   const loadData = async () => {
     setIsLoading(true)
     try {
+      if (!isSupabaseConfigured) {
+        setVisaoGeral(mockVisaoGeral)
+        setAtrasosEngenheiro(mockAtrasosEngenheiro)
+        setCargaTrabalho(mockCargaTrabalho)
+        setRetrabalhos(mockRetrabalhos)
+        setRetrabalhoGeral(null)
+        setRetrabalhoPorProjeto([])
+        setRetrabalhoMotivosGeral([])
+        setRetrabalhoTaxaArea([])
+        setProjetosStatus(mockProjetosStatus)
+        setProjetos(mockProjetos)
+        setEngenheiros(mockEngenheiros)
+        setAreas(mockAreas)
+        setLastUpdate(new Date())
+        return
+      }
+
       const [
         visaoGeralData,
         atrasosData,
@@ -157,14 +188,80 @@ export default function DashboardClient() {
       subscribeToChanges('retrabalho_projetos', loadData),
     ]
     return () => {
-      channels.forEach((channel) => channel.unsubscribe())
+      channels.forEach((channel) => {
+        if (channel) supabase.removeChannel(channel)
+      })
     }
   }, [])
 
-  const handleAtribuirTask = (data: TaskData) => {
-    console.log('Novo projeto atribuído:', data)
-    alert(`Projeto ${data.codigo_projeto} atribuído com sucesso para o engenheiro!`)
-    loadData()
+  const handleAtribuirTask = async (data: TaskData) => {
+    if (!isSupabaseConfigured) {
+      alert('Supabase não está configurado. Não é possível salvar o projeto.')
+      return
+    }
+    try {
+      // 1. Buscar ou criar o projeto na tabela projetos
+      let projetoId: string | null = null
+
+      const { data: existente } = await supabase
+        .from('projetos')
+        .select('projeto_id')
+        .eq('codigo_projeto', data.codigo_projeto)
+        .maybeSingle()
+
+      if (existente) {
+        projetoId = existente.projeto_id
+      } else {
+        const { data: novoProjeto, error: errProjeto } = await supabase
+          .from('projetos')
+          .insert({
+            codigo_projeto: data.codigo_projeto,
+            cliente: data.cliente,
+            descricao: data.descricao || null,
+          })
+          .select('projeto_id')
+          .single()
+
+        if (errProjeto || !novoProjeto) {
+          console.error('Erro ao criar projeto:', errProjeto)
+          alert(`Erro ao criar projeto: ${errProjeto?.message}`)
+          return
+        }
+        projetoId = novoProjeto.projeto_id
+      }
+
+      // 2. Buscar complexidade_id correspondente
+      let complexidadeId: number | null = null
+      const { data: comp } = await supabase
+        .from('complexidade_tarefas')
+        .select('complexidade_id')
+        .eq('codigo', data.complexidade.toUpperCase())
+        .maybeSingle()
+      if (comp) complexidadeId = comp.complexidade_id
+
+      // 3. Inserir na tabela de distribuição de tasks
+      const { error } = await supabase.from('evandro_distribuicao_tasks').insert({
+        eng_id: data.eng_id,
+        projeto_id: projetoId,
+        codigo_projeto: data.codigo_projeto,
+        cliente: data.cliente,
+        area_id: data.area_id,
+        complexidade_id: complexidadeId,
+        descricao_task: data.descricao || `Projeto ${data.codigo_projeto}`,
+        data_conclusao_prevista: data.data_prevista,
+      })
+
+      if (error) {
+        console.error('Erro ao atribuir task:', error)
+        alert(`Erro ao atribuir projeto: ${error.message}`)
+        return
+      }
+      alert(`Projeto ${data.codigo_projeto} atribuído com sucesso!`)
+      loadData()
+    } catch (err) {
+      console.error('Erro ao atribuir task:', err)
+      alert('Erro inesperado ao atribuir projeto. Verifique o console.')
+    }
   }
 
   const openRetrabalhoModal = async (
@@ -232,10 +329,18 @@ export default function DashboardClient() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-tecpred-light">
-      <Header lastUpdate={lastUpdate} isLoading={isLoading} />
+      <Header lastUpdate={lastUpdate} isLoading={isLoading} isConnected={isSupabaseConfigured} />
 
       <main className="container mx-auto px-6 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Planilhas</h1>
+        {isLoading && !lastUpdate && (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-12 h-12 border-4 border-tecpred-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-gray-500 text-sm">Carregando dados do dashboard...</p>
+          </div>
+        )}
+        {(!isLoading || lastUpdate) && (
+        <>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
         <div className="mb-6">
           <button
             onClick={() => setShowAtribuirTaskModal(true)}
@@ -261,7 +366,7 @@ export default function DashboardClient() {
               value={visaoGeral?.total_projetos || 0}
               subtitle={`${visaoGeral?.total_areas || 0} áreas`}
               icon={Briefcase}
-              color="warning"
+              color="primary"
               onClick={() => setShowProjetosModal(true)}
             />
             <KPICard
@@ -269,7 +374,7 @@ export default function DashboardClient() {
               value={visaoGeral?.projetos_concluidos || 0}
               subtitle={`${visaoGeral?.areas_concluidas || 0} áreas concluídas`}
               icon={CheckCircle}
-              color="warning"
+              color="success"
               onClick={() => setShowProjetosConcluidosModal(true)}
             />
             <KPICard
@@ -277,7 +382,7 @@ export default function DashboardClient() {
               value={visaoGeral?.projetos_em_execucao || 0}
               subtitle={`${visaoGeral?.areas_ativas || 0} áreas ativas`}
               icon={Play}
-              color="warning"
+              color="info"
               onClick={() => setShowProjetosExecucaoModal(true)}
             />
             <KPICard
@@ -285,7 +390,7 @@ export default function DashboardClient() {
               value={visaoGeral?.projetos_atrasados || 0}
               subtitle="Requer atenção"
               icon={AlertTriangle}
-              color="warning"
+              color="danger"
               onClick={() => setShowAtrasadosModal(true)}
             />
           </div>
@@ -432,6 +537,8 @@ export default function DashboardClient() {
             motivosProjeto={retrabalhoMotivosProjeto}
           />
         </section>
+        </>
+        )}
       </main>
     </div>
   )

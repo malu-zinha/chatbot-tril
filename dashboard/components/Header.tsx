@@ -5,25 +5,24 @@ import Image from 'next/image'
 interface HeaderProps {
   lastUpdate: Date | null
   isLoading: boolean
+  isConnected?: boolean
 }
 
-export default function Header({ lastUpdate, isLoading }: HeaderProps) {
+export default function Header({ lastUpdate, isLoading, isConnected = true }: HeaderProps) {
   return (
     <header className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary shadow-lg border-b-4 border-tecpred-orange">
       <div className="container mx-auto px-6 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center space-x-4">
-            <div className="bg-white px-6 py-3 rounded-lg shadow-lg border-2 border-tecpred-orange">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-tecpred-primary rounded flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">P</span>
-                </div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-tecpred-primary to-tecpred-secondary bg-clip-text text-transparent">
-                  TecPred
-                </h1>
-              </div>
-            </div>
+            <Image
+              src="/logo.png"
+              alt="TecPred"
+              width={480}
+              height={152}
+              priority
+              className="h-40 w-auto brightness-110 contrast-125 drop-shadow-[0_2px_10px_rgba(255,255,255,0.45)]"
+            />
             <div className="hidden md:block">
               <h2 className="text-white text-lg font-semibold">
                 Dashboard Executivo
@@ -53,10 +52,18 @@ export default function Header({ lastUpdate, isLoading }: HeaderProps) {
               </div>
             </div>
             
-            <div className="flex items-center space-x-2 bg-success bg-opacity-20 px-3 py-2 rounded-lg border border-success">
-              <div className="w-3 h-3 bg-success rounded-full animate-pulse-slow shadow-lg shadow-success"></div>
+            <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg border ${
+              isConnected
+                ? 'bg-success bg-opacity-20 border-success'
+                : 'bg-danger bg-opacity-20 border-danger'
+            }`}>
+              <div className={`w-3 h-3 rounded-full shadow-lg ${
+                isConnected
+                  ? 'bg-success animate-pulse-slow shadow-success'
+                  : 'bg-danger shadow-danger'
+              }`}></div>
               <span className="text-white text-sm font-medium">
-                Conectado
+                {isConnected ? 'Conectado' : 'Desconectado'}
               </span>
             </div>
           </div>

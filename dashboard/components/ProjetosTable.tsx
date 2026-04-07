@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useCallback } from 'react'
 import { X, Search, AlertTriangle } from 'lucide-react'
 
 interface Projeto {
@@ -12,7 +12,7 @@ interface Projeto {
   percentual_andamento: number
   data_inicio?: string
   data_prevista?: string
-  data_conclusao?: string
+  data_conclusao?: string | null
   dias_atraso: number
   created_at?: string
   motivo_aguardo?: string
@@ -39,7 +39,29 @@ export default function ProjetosTable({
 }: ProjetosTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
   const [filterStatus, setFilterStatus] = React.useState<string>(initialFilter)
+  const [tooltipOpen, setTooltipOpen] = React.useState<string | null>(null)
   
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose()
+  }, [onClose])
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown)
+      return () => document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, handleKeyDown])
+
+  // Trava scroll do body quando modal abre, destrava quando fecha
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [isOpen])
+
   // Atualiza o filtro e limpa busca quando o modal abre com um filtro inicial
   React.useEffect(() => {
     if (isOpen) {
@@ -100,8 +122,8 @@ export default function ProjetosTable({
   })
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-fade-in">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-fade-in" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className={`bg-gradient-to-r ${colorClasses[color]} p-6 rounded-t-xl`}>
           <div className="flex items-center justify-between">
@@ -191,7 +213,7 @@ export default function ProjetosTable({
                       </div>
                       {item.descricao && (
                         <div className="text-xs text-gray-500 mt-1">
-                          {item.descricao.substring(0, 50)}...
+                          {item.descricao.length > 50 ? item.descricao.substring(0, 50) + '...' : item.descricao}
                         </div>
                       )}
                     </td>
@@ -207,8 +229,10 @@ export default function ProjetosTable({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {isStatusAguardando(item.status_descricao) ? (
-                        <div className="relative inline-block group">
-                          <span
+                        <div className="relative inline-block">
+                          <button
+                            type="button"
+                            onClick={() => setTooltipOpen(tooltipOpen === item.projeto_id ? null : item.projeto_id)}
                             className={`px-2 py-1 text-xs font-medium rounded-full ${
                               item.data_conclusao
                                 ? 'bg-success text-white'
@@ -218,13 +242,15 @@ export default function ProjetosTable({
                             }`}
                           >
                             {item.status_descricao}
-                          </span>
-                          <div className="pointer-events-none absolute left-0 top-full mt-2 z-20 hidden w-72 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg group-hover:block">
-                            <div className="mb-1 font-semibold text-gray-900">Motivo do aguardo</div>
-                            <div className="whitespace-normal leading-relaxed">
-                              {getMotivoAguardo(item)}
+                          </button>
+                          {tooltipOpen === item.projeto_id && (
+                            <div className="absolute left-0 top-full mt-2 z-20 w-72 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg">
+                              <div className="mb-1 font-semibold text-gray-900">Motivo do aguardo</div>
+                              <div className="whitespace-normal leading-relaxed">
+                                {getMotivoAguardo(item)}
+                              </div>
                             </div>
-                          </div>
+                          )}
                         </div>
                       ) : (
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${

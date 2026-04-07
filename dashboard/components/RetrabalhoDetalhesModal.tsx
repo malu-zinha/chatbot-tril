@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import {
   RetrabalhoDetalheProjeto,
@@ -32,6 +32,21 @@ export default function RetrabalhoDetalhesModal({
 }: RetrabalhoDetalhesModalProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('areas')
   const [expandedAreas, setExpandedAreas] = useState<Set<number>>(new Set())
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose()
+  }, [onClose])
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown)
+        document.body.style.overflow = ''
+      }
+    }
+  }, [isOpen, handleKeyDown])
 
   if (!isOpen) return null
 
@@ -65,8 +80,8 @@ export default function RetrabalhoDetalhesModal({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="px-6 py-4 border-b flex items-center justify-between">
           <div>
