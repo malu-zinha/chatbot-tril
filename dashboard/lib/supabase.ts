@@ -385,8 +385,8 @@ export async function fetchRetrabalhoTaxaPorArea(): Promise<RetrabalhoTaxaArea[]
   const [retRes, epRes, projRes, areaRes] = await Promise.all([
     supabase.from('retrabalho_projetos').select('projeto_id, eng_projeto_id, data_retrabalho'),
     supabase.from('engenheiros_projetos').select('id, projeto_id, area_id'),
-    supabase.from('projetos').select('id, codigo_projeto, cliente'),
-    supabase.from('areas').select('id, codigo, descricao'),
+    supabase.from('projetos').select('projeto_id, codigo_projeto, cliente'),
+    supabase.from('areas').select('area_id, codigo, descricao'),
   ])
 
   if (retRes.error || epRes.error || projRes.error || areaRes.error) {
@@ -399,8 +399,8 @@ export async function fetchRetrabalhoTaxaPorArea(): Promise<RetrabalhoTaxaArea[]
   const projetos = projRes.data || []
   const areas = areaRes.data || []
 
-  const projetoMap = new Map(projetos.map(p => [p.id, p]))
-  const areaMap = new Map(areas.map(a => [a.id, a]))
+  const projetoMap = new Map(projetos.map(p => [p.projeto_id, p]))
+  const areaMap = new Map(areas.map(a => [a.area_id, a]))
   const epMap = new Map(engProjetos.map(ep => [ep.id, ep]))
 
   // Group retrabalhos by projeto_id + area_id
