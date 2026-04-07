@@ -1,4 +1,15 @@
 // =====================================================
+// ⚠️  ARQUIVO DESATIVADO — NÃO USAR
+// =====================================================
+// Este módulo usa um schema antigo do Supabase que não
+// existe mais (colunas: id, whatsapp, engenheiro_id, etc).
+// O schema atual usa: eng_id, telefone, projeto_id,
+// codigo_projeto, e relação N:N via engenheiros_projetos.
+//
+// Se precisar reativar, reescrever para o schema atual.
+// Verificado em 2026-04-07: nenhum outro módulo importa
+// este arquivo.
+// =====================================================
 // INTEGRAÇÃO: Sincronização Planilhas Engenheiros → Supabase
 // =====================================================
 // Responsabilidade: Iza (Integrações)

@@ -481,6 +481,9 @@ export async function fetchEngenheiros(): Promise<Engenheiro[]> {
     console.error('Erro ao buscar engenheiros:', engRes.error)
     return []
   }
+  if (cargaRes.error) console.error('Erro ao buscar carga de trabalho:', cargaRes.error)
+  if (retRes.error) console.error('Erro ao buscar retrabalhos:', retRes.error)
+  if (atrasosRes.error) console.error('Erro ao buscar atrasos:', atrasosRes.error)
 
   const cargaMap = new Map<string, CargaTrabalho>()
   for (const c of (cargaRes.data || [])) {

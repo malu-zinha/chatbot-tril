@@ -59,7 +59,7 @@ export interface Complexidade {
 }
 
 export interface Area {
-  area_id: number;
+  area_id: string;
   codigo: string;
   descricao: string;
   tempo_trabalho_dias: number;
@@ -89,7 +89,7 @@ export interface Atribuicao {
   id: string;
   eng_id: string;
   projeto_id: string;
-  area_id: number;
+  area_id: string;
   data_inicio?: string;
   data_prevista?: string;
   data_conclusao?: string;
@@ -338,7 +338,7 @@ export class SupabaseService {
   /**
    * Busca área por ID
    */
-  async buscarAreaPorId(area_id: number): Promise<Area | null> {
+  async buscarAreaPorId(area_id: string): Promise<Area | null> {
     if (!this.connected) return null;
 
     try {
@@ -928,10 +928,10 @@ export class SupabaseService {
     const projetosMap = new Map<string, ProjetoLegacy>();
 
     for (const atrib of atribuicoes) {
-      const projeto = await this.buscarProjetoPorCodigo(atrib.projeto_id);
+      const projeto = await this.buscarProjetoPorId(atrib.projeto_id);
       if (!projeto) continue;
 
-      const area = await this.buscarAreaPorCodigo(atrib.area_id.toString());
+      const area = await this.buscarAreaPorId(atrib.area_id);
       const status = atrib.status_id ? await this.supabase
         .from('status_codes')
         .select('*')
@@ -987,7 +987,7 @@ export class SupabaseService {
       };
     }
 
-    const area = await this.buscarAreaPorCodigo(atribuicao.area_id.toString());
+    const area = await this.buscarAreaPorId(atribuicao.area_id);
     const status = atribuicao.status_id ? await this.supabase
       .from('status_codes')
       .select('*')

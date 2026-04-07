@@ -292,8 +292,8 @@ async function syncDashboardCEO(): Promise<void> {
       const projetoData = await supabase.buscarProjetoPorId(atrib.projeto_id);
       
       const engenheiro = await supabase.buscarEngenheiroPorId(atrib.eng_id);
-      const area = await supabase.buscarAreaPorCodigo(atrib.area_id.toString());
-      const status = atrib.status_id ? await supabase.buscarStatusPorCodigo(atrib.status_id.toString()) : null;
+      const area = await supabase.buscarAreaPorId(atrib.area_id);
+      const status = atrib.status_id ? await supabase.buscarStatusPorId(atrib.status_id) : null;
       
       projetos.push({
         codigo: projetoData?.codigo_projeto || '',
