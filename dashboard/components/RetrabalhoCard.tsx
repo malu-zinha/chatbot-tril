@@ -1,85 +1,189 @@
 import React from 'react'
 import { AlertCircle } from 'lucide-react'
-import { RetrabalhoEngenheiro } from '../lib/supabase'
+import {
+  RetrabalhoEngenheiro,
+  RetrabalhoGeral,
+  RetrabalhoPorProjeto,
+  RetrabalhoMotivo,
+  RetrabalhoTaxaArea,
+} from '@/lib/supabase'
+import RetrabalhoPizzaChart from '@/components/RetrabalhoPizzaChart'
+import RetrabalhoTaxaAreaChart from '@/components/RetrabalhoTaxaAreaChart'
 
 interface RetrabalhoCardProps {
   data: RetrabalhoEngenheiro[]
-  retrabalhoGeral?: any
-  retrabalhoPorProjeto?: any
-  motivosGeral?: any
-  taxaAreaGeral?: any
-  onSelectProjeto?: (id: string) => void
+  retrabalhoGeral: RetrabalhoGeral | null
+  retrabalhoPorProjeto?: RetrabalhoPorProjeto[]
+  motivosGeral?: RetrabalhoMotivo[]
+  taxaAreaGeral?: RetrabalhoTaxaArea[]
+  onSelectProjeto?: (projetoId: string) => void
 }
 
-export default function RetrabalhoCard({ data, retrabalhoGeral, retrabalhoPorProjeto, motivosGeral, taxaAreaGeral, onSelectProjeto }: RetrabalhoCardProps) {
+export default function RetrabalhoCard({
+  data,
+  retrabalhoGeral,
+  retrabalhoPorProjeto = [],
+  motivosGeral = [],
+  taxaAreaGeral = [],
+  onSelectProjeto,
+}: RetrabalhoCardProps) {
   const totalRetrabalhos = data.reduce((sum, item) => sum + item.total_retrabalhos, 0)
-  const mediaGeral = data.length > 0 
+  const mediaGeral = data.length > 0
     ? data.reduce((sum, item) => sum + (item.retrabalho_medio_percentual || 0), 0) / data.length
     : 0
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 animate-fade-in">
-      <div className="flex items-center space-x-2 mb-4">
-        <AlertCircle className="w-5 h-5 text-warning" />
-        <h3 className="text-lg font-bold text-gray-900">
-          Retrabalho por Engenheiro
-        </h3>
+      <div className="mb-4">
+        <div className="flex items-center space-x-2">
+          <AlertCircle className="w-5 h-5 text-warning" />
+          <h3 className="text-lg font-bold text-gray-900">
+            Retrabalho por Engenheiro
+          </h3>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          Visão geral TecPred + por projeto (clique na % para ver datas, engenheiro e motivo)
+        </p>
       </div>
-      
-      <div className="mb-6 grid grid-cols-2 gap-4">
+
+      <div className="mb-6 grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-gradient-to-r from-warning to-orange-600 rounded-lg p-4 text-white">
           <div className="text-sm font-medium opacity-90">Total de Retrabalhos</div>
           <div className="text-3xl font-bold mt-1">{totalRetrabalhos}</div>
         </div>
+        <div className="bg-gradient-to-r from-tecpred-primary to-tecpred-secondary rounded-lg p-4 text-white">
+          <div className="text-sm font-medium opacity-90">% Geral TecPred</div>
+          <div className="text-3xl font-bold mt-1">
+            {retrabalhoGeral ? `${retrabalhoGeral.percentual_geral_retrabalho.toFixed(1)}%` : '0%'}
+          </div>
+          <div className="text-xs opacity-90 mt-0.5">
+            retrabalhos ÷ projetos ativos
+          </div>
+        </div>
         <div className="bg-gradient-to-r from-danger to-red-600 rounded-lg p-4 text-white">
           <div className="text-sm font-medium opacity-90">Média Geral</div>
           <div className="text-3xl font-bold mt-1">{mediaGeral.toFixed(1)}%</div>
+          <div className="text-xs opacity-90 mt-0.5">
+            média por engenheiro
+          </div>
         </div>
       </div>
-      
-      {data.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <p>🎉 Nenhum retrabalho registrado!</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {data.slice(0, 5).map((item) => (
-            <div 
-              key={item.eng_id}
-              className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-            >
-              <div className="flex-1">
-                <div className="font-medium text-gray-900">{item.engenheiro}</div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {item.qtde_areas_retrabalho} áreas • {item.projetos_com_retrabalho} projetos
+
+      {data.length > 0 && (
+        <div className="mb-6">
+          <h4 className="text-sm font-semibold text-gray-700 mb-3">Por engenheiro</h4>
+          <div className="space-y-3">
+            {data.slice(0, 5).map((item) => (
+              <div
+                key={item.eng_id}
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900">{item.engenheiro}</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {item.qtde_areas_retrabalho} áreas • {item.projetos_com_retrabalho} projetos
+                  </div>
                 </div>
-              </div>
-              
-              <div className="text-right">
-                <div className="flex items-center space-x-3">
+                <div className="text-right flex items-center space-x-3">
                   <div>
-                    <div className="text-lg font-bold text-danger">
-                      {item.total_retrabalhos}
-                    </div>
+                    <div className="text-lg font-bold text-danger">{item.total_retrabalhos}</div>
                     <div className="text-xs text-gray-500">ocorrências</div>
                   </div>
                   <div>
-                    <div className={`text-lg font-bold ${
-                      (item.retrabalho_medio_percentual || 0) > 20 ? 'text-danger' :
-                      (item.retrabalho_medio_percentual || 0) > 10 ? 'text-warning' :
-                      'text-success'
-                    }`}>
-                      {item.retrabalho_medio_percentual?.toFixed(1) || 0}%
+                    <div
+                      className={`text-lg font-bold ${
+                        (item.retrabalho_medio_percentual || 0) > 20
+                          ? 'text-danger'
+                          : (item.retrabalho_medio_percentual || 0) > 10
+                            ? 'text-warning'
+                            : 'text-success'
+                      }`}
+                    >
+                      {(item.retrabalho_medio_percentual ?? 0).toFixed(1)}%
                     </div>
                     <div className="text-xs text-gray-500">média</div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="pt-4 border-t border-gray-200">
+        <h4 className="text-sm font-semibold text-gray-700 mb-2">Por projeto</h4>
+        <p className="text-xs text-gray-500 mb-3">
+          % = retrabalhos ÷ profissionais no projeto. Clique na % para ver áreas, motivos e detalhes.
+        </p>
+        {retrabalhoPorProjeto && retrabalhoPorProjeto.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-gray-500 border-b">
+                  <th className="py-2 pr-4">Projeto</th>
+                  <th className="py-2 pr-4">Cliente</th>
+                  <th className="py-2 pr-4 text-right">Retrabalhos</th>
+                  <th className="py-2 pr-4 text-right">Profissionais</th>
+                  <th className="py-2 pl-4 text-right">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {retrabalhoPorProjeto.map((item) => (
+                  <tr
+                    key={item.projeto_id}
+                    className="border-b last:border-0 hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="py-2 pr-4 font-medium text-gray-900">{item.codigo_projeto}</td>
+                    <td className="py-2 pr-4 text-gray-700">{item.cliente}</td>
+                    <td className="py-2 pr-4 text-right text-gray-900">
+                      {item.total_retrabalhos_projeto}
+                    </td>
+                    <td className="py-2 pr-4 text-right text-gray-900">
+                      {item.total_engenheiros_projeto}
+                    </td>
+                    <td className="py-2 pl-4 text-right">
+                      {onSelectProjeto ? (
+                        <button
+                          type="button"
+                          onClick={() => onSelectProjeto(item.projeto_id)}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"
+                        >
+                          {item.percentual_retrabalho_projeto.toFixed(1)}%
+                        </button>
+                      ) : (
+                        <span className="text-orange-700 font-semibold">
+                          {item.percentual_retrabalho_projeto.toFixed(1)}%
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 py-3">Nenhum projeto com retrabalho registrado.</p>
+        )}
+      </div>
+
+      {taxaAreaGeral.length > 0 && (
+        <div className="pt-4 border-t border-gray-200 mt-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-1">
+            Taxa de retrabalho por área / projeto
+          </h4>
+          <RetrabalhoTaxaAreaChart data={taxaAreaGeral} />
+        </div>
+      )}
+
+      {motivosGeral.length > 0 && (
+        <div className="pt-4 border-t border-gray-200 mt-4">
+          <RetrabalhoPizzaChart
+            data={motivosGeral}
+            title="Motivos mais frequentes — TecPred (geral)"
+            height={280}
+          />
         </div>
       )}
     </div>
   )
 }
-

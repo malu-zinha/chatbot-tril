@@ -1,5 +1,5 @@
-import React from 'react'
-import { X, Search, Filter } from 'lucide-react'
+import React, { useEffect, useCallback } from 'react'
+import { X, Search, AlertTriangle } from 'lucide-react'
 
 interface Projeto {
   projeto_id: string
@@ -12,8 +12,10 @@ interface Projeto {
   percentual_andamento: number
   data_inicio?: string
   data_prevista?: string
-  data_conclusao?: string
+  data_conclusao?: string | null
   dias_atraso: number
+  created_at?: string
+  motivo_aguardo?: string
 }
 
 interface ProjetosTableProps {
@@ -23,7 +25,7 @@ interface ProjetosTableProps {
   initialFilter?: 'all' | 'concluido' | 'em_execucao' | 'atrasado'
   title?: string
   color?: 'primary' | 'success' | 'info' | 'danger' | 'warning'
-  onVerRetrabalho?: (projeto: { projeto_id: string; codigo_projeto: string; cliente: string }) => void
+  onVerRetrabalho?: (projeto: Projeto) => void
 }
 
 export default function ProjetosTable({ 
@@ -33,11 +35,33 @@ export default function ProjetosTable({
   initialFilter = 'all',
   title = 'Listagem de Projetos',
   color = 'primary',
-  onVerRetrabalho
+  onVerRetrabalho,
 }: ProjetosTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
   const [filterStatus, setFilterStatus] = React.useState<string>(initialFilter)
+  const [tooltipOpen, setTooltipOpen] = React.useState<string | null>(null)
   
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose()
+  }, [onClose])
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown)
+      return () => document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, handleKeyDown])
+
+  // Trava scroll do body quando modal abre, destrava quando fecha
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [isOpen])
+
   // Atualiza o filtro e limpa busca quando o modal abre com um filtro inicial
   React.useEffect(() => {
     if (isOpen) {
@@ -52,13 +76,21 @@ export default function ProjetosTable({
   if (!isOpen) return null
 
   // Mapa de cores para o header
-  const colorClasses: Record<string, string> = {
+  const colorClasses = {
     primary: 'from-tecpred-primary to-tecpred-secondary',
     success: 'from-success to-green-600',
     info: 'from-info to-blue-600',
     danger: 'from-danger to-red-600',
     warning: 'from-tecpred-orange to-tecpred-coral',
   }
+
+  const isStatusAguardando = (status?: string) =>
+    (status || '').toLowerCase().includes('aguard')
+
+  const getMotivoAguardo = (item: Projeto) =>
+    item.motivo_aguardo?.trim() ||
+    item.descricao?.trim() ||
+    'Sem motivo de aguardo registrado.'
 
   const filteredData = data.filter(item => {
     const matchesSearch = 
@@ -90,8 +122,8 @@ export default function ProjetosTable({
   })
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-fade-in">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-fade-in" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className={`bg-gradient-to-r ${colorClasses[color]} p-6 rounded-t-xl`}>
           <div className="flex items-center justify-between">
@@ -153,12 +185,17 @@ export default function ProjetosTable({
                 <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Atraso
                 </th>
+                {onVerRetrabalho && (
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Retrabalho
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={onVerRetrabalho ? 9 : 8} className="px-6 py-12 text-center text-gray-500">
                     Nenhum projeto encontrado
                   </td>
                 </tr>
@@ -176,7 +213,7 @@ export default function ProjetosTable({
                       </div>
                       {item.descricao && (
                         <div className="text-xs text-gray-500 mt-1">
-                          {item.descricao.substring(0, 50)}...
+                          {item.descricao.length > 50 ? item.descricao.substring(0, 50) + '...' : item.descricao}
                         </div>
                       )}
                     </td>
@@ -191,15 +228,41 @@ export default function ProjetosTable({
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        item.data_conclusao 
-                          ? 'bg-success text-white' 
-                          : item.dias_atraso > 0
-                          ? 'bg-danger text-white'
-                          : 'bg-info text-white'
-                      }`}>
-                        {item.status_descricao}
-                      </span>
+                      {isStatusAguardando(item.status_descricao) ? (
+                        <div className="relative inline-block">
+                          <button
+                            type="button"
+                            onClick={() => setTooltipOpen(tooltipOpen === item.projeto_id ? null : item.projeto_id)}
+                            className={`px-2 py-1 text-xs font-medium rounded-full ${
+                              item.data_conclusao
+                                ? 'bg-success text-white'
+                                : item.dias_atraso > 0
+                                ? 'bg-danger text-white'
+                                : 'bg-info text-white'
+                            }`}
+                          >
+                            {item.status_descricao}
+                          </button>
+                          {tooltipOpen === item.projeto_id && (
+                            <div className="absolute left-0 top-full mt-2 z-20 w-72 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg">
+                              <div className="mb-1 font-semibold text-gray-900">Motivo do aguardo</div>
+                              <div className="whitespace-normal leading-relaxed">
+                                {getMotivoAguardo(item)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          item.data_conclusao
+                            ? 'bg-success text-white'
+                            : item.dias_atraso > 0
+                            ? 'bg-danger text-white'
+                            : 'bg-info text-white'
+                        }`}>
+                          {item.status_descricao}
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-2">
@@ -236,6 +299,19 @@ export default function ProjetosTable({
                         <span className="text-sm text-success">No prazo</span>
                       )}
                     </td>
+                    {onVerRetrabalho && (
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <button
+                          type="button"
+                          onClick={() => onVerRetrabalho(item)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg transition-colors"
+                          title={`Ver retrabalhos de ${item.codigo_projeto}`}
+                        >
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Ver
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}

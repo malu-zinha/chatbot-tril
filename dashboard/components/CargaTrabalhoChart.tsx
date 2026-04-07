@@ -9,7 +9,7 @@ interface CargaTrabalhoChartProps {
 export default function CargaTrabalhoChart({ data }: CargaTrabalhoChartProps) {
   const chartData = data.map(item => ({
     name: item.engenheiro.split(' ')[0], // Primeiro nome
-    'Dias Executados': item.dias_estimados_totais - item.dias_restantes,
+    'Dias Executados': Math.max(0, item.dias_estimados_totais - item.dias_restantes),
     'Dias Restantes': item.dias_restantes,
   }))
 
@@ -52,7 +52,7 @@ export default function CargaTrabalhoChart({ data }: CargaTrabalhoChartProps) {
                 {item.dias_restantes} dias
               </div>
               <div className="text-xs text-gray-500">
-                {item.percentual_execucao_media}% concluído
+                {item.percentual_execucao_media.toFixed(1)}% concluído
               </div>
             </div>
           </div>
