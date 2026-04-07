@@ -34,6 +34,7 @@ import {
   fetchEngenheiros,
   fetchAreas,
   subscribeToChanges,
+  isSupabaseConfigured,
   VisaoGeral,
   AtrasosEngenheiro,
   CargaTrabalho,
@@ -144,13 +145,19 @@ export default function DashboardClient() {
 
   useEffect(() => {
     loadData()
+    if (!isSupabaseConfigured) {
+      console.warn(
+        'Supabase: defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY em .env.local (Realtime desativado).'
+      )
+      return
+    }
     const channels = [
       subscribeToChanges('engenheiros_projetos', loadData),
       subscribeToChanges('projetos', loadData),
       subscribeToChanges('retrabalho_projetos', loadData),
     ]
     return () => {
-      channels.forEach(channel => channel.unsubscribe())
+      channels.forEach((channel) => channel.unsubscribe())
     }
   }, [])
 

@@ -1,15 +1,27 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || ''
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  realtime: {
-    params: {
-      eventsPerSecond: 10,
+/** Evita chamadas inválidas e WebSocket de Realtime quando o .env não está preenchido. */
+export const isSupabaseConfigured =
+  Boolean(supabaseUrl && supabaseAnonKey) && /^https?:\/\//i.test(supabaseUrl)
+
+const placeholderUrl = 'https://placeholder.supabase.co'
+const placeholderKey =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
+
+export const supabase: SupabaseClient = createClient(
+  isSupabaseConfigured ? supabaseUrl : placeholderUrl,
+  isSupabaseConfigured ? supabaseAnonKey : placeholderKey,
+  {
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
     },
-  },
-})
+  }
+)
 
 // Types
 export interface VisaoGeral {
@@ -365,6 +377,10 @@ export function subscribeToChanges(
   table: string,
   callback: () => void
 ) {
+  if (!isSupabaseConfigured) {
+    return { unsubscribe: () => {} }
+  }
+
   const channel = supabase
     .channel(`realtime-${table}`)
     .on(
