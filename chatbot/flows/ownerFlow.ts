@@ -8,6 +8,7 @@
 // =====================================================
 
 import { getSupabaseService, SupabaseService } from '../../integrations/supabase/supabaseService.ts';
+import { normalizeProjectCode, validateWhatsapp } from '../../logic/validation/validateInput.ts';
 
 // Lazy loading para evitar problemas com dotenv
 let supabaseServiceInstance: SupabaseService | null = null;
@@ -76,6 +77,11 @@ export class OwnerFlow {
     del_projeto_id?: string;
     del_codigo_projeto?: string;
     del_cliente?: string;
+    
+    // Engenheiros
+    eng_nome_novo?: string;
+    eng_telefone_novo?: string;
+    eng_campo_edit?: string;
 
     // Edição
     edit_projeto_id?: string;
@@ -146,10 +152,6 @@ export class OwnerFlow {
       criar_descricao: this.stepCriarDescricao.bind(this),
       criar_confirmar: this.stepCriarConfirmar.bind(this),
 
-      // Deletar
-      del_escolher_projeto: this.stepDelEscolherProjeto.bind(this),
-      del_confirmar: this.stepDelConfirmar.bind(this),
-
       // Editar
       edit_escolher_projeto: this.stepEditEscolherProjeto.bind(this),
       edit_escolher_area: this.stepEditEscolherArea.bind(this),
@@ -157,6 +159,25 @@ export class OwnerFlow {
       edit_menu_campos: this.stepEditMenuCampos.bind(this),
       edit_digitar_valor: this.stepEditDigitarValor.bind(this),
       edit_confirmar: this.stepEditConfirmar.bind(this),
+
+      // Gerenciar Engenheiros
+      eng_menu: this.stepEngMenu.bind(this),
+      eng_menu_escolha: this.stepEngMenuEscolha.bind(this),
+      eng_criar_nome: this.stepEngCriarNome.bind(this),
+      eng_criar_telefone: this.stepEngCriarTelefone.bind(this),
+      eng_editar_selecionar: this.stepEngEditarSelecionar.bind(this),
+      eng_editar_campo: this.stepEngEditarCampo.bind(this),
+      eng_editar_valor: this.stepEngEditarValor.bind(this),
+      eng_editar_confirmar: this.stepEngEditarConfirmar.bind(this),
+      eng_excluir_selecionar: this.stepEngExcluirSelecionar.bind(this),
+      eng_excluir_confirmar: this.stepEngExcluirConfirmar.bind(this),
+
+      // Exclusão Unificada
+      excluir_selecionar_projeto: this.stepExcluirSelecionarProjeto.bind(this),
+      excluir_acao: this.stepExcluirAcao.bind(this),
+      excluir_projeto_confirmar: this.stepExcluirProjetoConfirmar.bind(this),
+      area_excluir_selecionar: this.stepAreaExcluirSelecionar.bind(this),
+      area_excluir_confirmar: this.stepAreaExcluirConfirmar.bind(this),
     };
 
     const stepFunction = steps[this.stepAtual];
@@ -202,7 +223,8 @@ export class OwnerFlow {
                 `2️⃣ Distribuir projeto para engenheiro\n` +
                 `3️⃣ Criar novo projeto\n` +
                 `4️⃣ Editar projeto\n` +
-                `5️⃣ Deletar projeto\n\n` +
+                `5️⃣ Gerenciar Engenheiros\n` +
+                `6️⃣ Excluir (Projeto/Área)\n\n` +
                 `_Digite o número da opção desejada_`,
       finalizado: false,
     };
@@ -245,18 +267,17 @@ export class OwnerFlow {
         return await this.iniciarEdicao();
 
       case '5':
+        this.stepAtual = 'eng_menu';
+        return this.stepEngMenu('');
+
+      case '6':
         this.contexto.modo = 'deletar';
-        return await this.iniciarDelecao();
+        return await this.iniciarExclusaoUnificada();
 
       default:
         return {
           mensagem: `❌ Opção inválida.\n\n` +
-                    `Digite:\n` +
-                    `1️⃣ - Visualizar informações\n` +
-                    `2️⃣ - Distribuir projeto\n` +
-                    `3️⃣ - Criar novo projeto\n` +
-                    `4️⃣ - Editar projeto\n` +
-                    `5️⃣ - Deletar projeto`,
+                    `Digite uma opção entre 1 e 6.`,
           finalizado: false,
         };
     }
@@ -444,8 +465,22 @@ export class OwnerFlow {
   }
 
   private async stepVizListarProjetosEng(mensagem: string): Promise<FlowResult> {
-    // Recarrega lista caso necessário
-    return { mensagem: 'Recarregando...', finalizado: false };
+    // Recarrega lista de projetos do engenheiro
+    if (!this.contexto.viz_eng_id) {
+      return { mensagem: '❌ Erro: engenheiro não selecionado. Digite "menu" para recomeçar.', finalizado: true };
+    }
+    const resultado = await getSupabase().buscarProjetosPorEngenheiro(this.contexto.viz_eng_id);
+    if (!resultado.success || !resultado.data || resultado.data.length === 0) {
+      return { mensagem: '📭 Nenhum projeto encontrado.\n\n_Digite "menu" para voltar_', finalizado: true };
+    }
+    this.contexto.projetos = resultado.data;
+    this.stepAtual = 'viz_escolher_projeto_eng';
+    let msg = `📋 *Projetos:*\n\n`;
+    resultado.data.forEach((proj: any, idx: number) => {
+      msg += `${idx + 1}️⃣ ${proj.codigo_projeto} - ${proj.area_descricao}\n`;
+    });
+    msg += `\n_Digite o número do projeto_`;
+    return { mensagem: msg, finalizado: false };
   }
 
   private async stepVizEscolherProjetoEng(mensagem: string): Promise<FlowResult> {
@@ -815,38 +850,23 @@ export class OwnerFlow {
 
   private async stepDistDataInicio(mensagem: string): Promise<FlowResult> {
     const input = mensagem.trim().toLowerCase();
-    let data: string;
     
     if (input === 'hoje') {
-      data = new Date().toISOString().split('T')[0];
+      this.contexto.dist_data_inicio = new Date().toISOString().split('T')[0];
     } else {
-      // Validar formato DD/MM/AAAA
-      const partes = input.split('/');
-      if (partes.length !== 3) {
+      const data = this.parsearData(input);
+      if (!data) {
         return {
-          mensagem: `❌ Formato inválido.\n\n` +
+          mensagem: `❌ Data inválida.\n\n` +
                     `Use: DD/MM/AAAA ou digite "hoje"`,
           finalizado: false,
         };
       }
       
-      const dia = parseInt(partes[0]);
-      const mes = parseInt(partes[1]);
-      const ano = parseInt(partes[2]);
-      
-      if (isNaN(dia) || isNaN(mes) || isNaN(ano) || dia < 1 || dia > 31 || mes < 1 || mes > 12) {
-        return {
-          mensagem: `❌ Data inválida.\n\n` +
-                    `Use: DD/MM/AAAA (ex: 20/01/2026)`,
-          finalizado: false,
-        };
-      }
-      
-      // Converter para formato ISO (YYYY-MM-DD)
-      data = `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+      // Usar data validada
+      this.contexto.dist_data_inicio = data;
     }
-    
-    this.contexto.dist_data_inicio = data;
+
     this.stepAtual = 'dist_data_inicio_cliente';
     
     return {
@@ -863,20 +883,8 @@ export class OwnerFlow {
     const input = mensagem.trim().toLowerCase();
       
     if (input !== 'pular') {
-      const partes = input.split('/');
-      if (partes.length !== 3) {
-        return {
-          mensagem: `❌ Formato inválido.\n\n` +
-                    `Use: DD/MM/AAAA ou digite "pular"`,
-          finalizado: false,
-        };
-      }
-
-      const dia = parseInt(partes[0]);
-      const mes = parseInt(partes[1]);
-      const ano = parseInt(partes[2]);
-      
-      if (isNaN(dia) || isNaN(mes) || isNaN(ano) || dia < 1 || dia > 31 || mes < 1 || mes > 12) {
+      const data = this.parsearData(input);
+      if (!data) {
         return {
           mensagem: `❌ Data inválida.\n\n` +
                     `Use: DD/MM/AAAA ou digite "pular"`,
@@ -884,7 +892,7 @@ export class OwnerFlow {
         };
       }
 
-      this.contexto.dist_data_inicio_cliente = `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+      this.contexto.dist_data_inicio_cliente = data;
     }
 
     this.stepAtual = 'dist_prazo_eng';
@@ -899,27 +907,13 @@ export class OwnerFlow {
 
   private async stepDistPrazoEng(mensagem: string): Promise<FlowResult> {
     const input = mensagem.trim();
-    const partes = input.split('/');
-    
-    if (partes.length !== 3) {
+    const prazoEng = this.parsearData(input);
+    if (!prazoEng) {
       return {
-        mensagem: `❌ Formato inválido.\n\nUse: DD/MM/AAAA`,
+        mensagem: `❌ Data inválida.\n\nUse: DD/MM/AAAA (ex: 15/02/2026)`,
         finalizado: false,
       };
     }
-
-    const dia = parseInt(partes[0]);
-    const mes = parseInt(partes[1]);
-    const ano = parseInt(partes[2]);
-
-    if (isNaN(dia) || isNaN(mes) || isNaN(ano) || dia < 1 || dia > 31 || mes < 1 || mes > 12) {
-    return {
-        mensagem: `❌ Data inválida.\n\nUse: DD/MM/AAAA (ex: 15/02/2026)`,
-      finalizado: false,
-    };
-  }
-
-    const prazoEng = `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
 
     // Validar: prazo_eng >= data_inicio
     if (prazoEng < this.contexto.dist_data_inicio!) {
@@ -945,27 +939,13 @@ export class OwnerFlow {
 
   private async stepDistPrazoCliente(mensagem: string): Promise<FlowResult> {
     const input = mensagem.trim();
-    const partes = input.split('/');
-    
-    if (partes.length !== 3) {
-      return {
-        mensagem: `❌ Formato inválido.\n\nUse: DD/MM/AAAA`,
-        finalizado: false,
-      };
-    }
-    
-    const dia = parseInt(partes[0]);
-    const mes = parseInt(partes[1]);
-    const ano = parseInt(partes[2]);
-    
-    if (isNaN(dia) || isNaN(mes) || isNaN(ano) || dia < 1 || dia > 31 || mes < 1 || mes > 12) {
+    const prazoCliente = this.parsearData(input);
+    if (!prazoCliente) {
       return {
         mensagem: `❌ Data inválida.\n\nUse: DD/MM/AAAA (ex: 28/02/2026)`,
         finalizado: false,
       };
     }
-    
-    const prazoCliente = `${ano}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
     
     // Validar: prazo_cliente >= prazo_eng
     if (prazoCliente < this.contexto.dist_prazo_eng!) {
@@ -1083,7 +1063,8 @@ export class OwnerFlow {
   // =====================================================
 
   private async stepCriarCodigo(mensagem: string): Promise<FlowResult> {
-    const codigo = mensagem.trim().toUpperCase();
+    const rawCodigo = mensagem.trim();
+    const codigo = normalizeProjectCode(rawCodigo);
     
     if (codigo.length < 3) {
       return {
@@ -1196,107 +1177,7 @@ export class OwnerFlow {
     return { mensagem: msg, finalizado: true };
   }
 
-  // =====================================================
-  // FLUXO 5: DELETAR PROJETO (SOFT DELETE)
-  // =====================================================
 
-  private async iniciarDelecao(): Promise<FlowResult> {
-    const resultado = await getSupabase().listarTodosProjetos();
-
-    if (!resultado.success || !resultado.data || resultado.data.length === 0) {
-      return {
-        mensagem: `📭 Nenhum projeto encontrado.\n\n_Digite "menu" para voltar_`,
-        finalizado: true,
-      };
-    }
-
-    this.contexto.projetos = resultado.data;
-    this.stepAtual = 'del_escolher_projeto';
-
-    let msg = `🗑️ *Deletar Projeto*\n\n`;
-    msg += `Escolha o projeto que deseja deletar:\n\n`;
-    resultado.data.forEach((proj: any, idx: number) => {
-      msg += `${idx + 1}️⃣ ${proj.codigo_projeto} - ${proj.cliente}\n`;
-    });
-    msg += `\n_Digite o número do projeto_`;
-
-    return { mensagem: msg, finalizado: false };
-  }
-
-  private async stepDelEscolherProjeto(mensagem: string): Promise<FlowResult> {
-    const escolha = parseInt(mensagem.trim()) - 1;
-
-    if (isNaN(escolha) || escolha < 0 || escolha >= (this.contexto.projetos?.length || 0)) {
-      return {
-        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${this.contexto.projetos?.length}`,
-        finalizado: false,
-      };
-    }
-
-    const projeto = this.contexto.projetos![escolha];
-    this.contexto.del_projeto_id = projeto.projeto_id;
-    this.contexto.del_codigo_projeto = projeto.codigo_projeto;
-    this.contexto.del_cliente = projeto.cliente;
-
-    this.stepAtual = 'del_confirmar';
-
-    let msg = `⚠️ *Confirmar Exclusão*\n\n`;
-    msg += `Você está prestes a deletar o projeto:\n\n`;
-    msg += `📋 *Código:* ${projeto.codigo_projeto}\n`;
-    msg += `👤 *Cliente:* ${projeto.cliente}\n`;
-    if (projeto.descricao) {
-      msg += `📝 *Descrição:* ${projeto.descricao}\n`;
-    }
-    msg += `\n⚠️ Todas as atribuições deste projeto também serão desativadas.\n\n`;
-    msg += `1️⃣ Sim, deletar\n`;
-    msg += `2️⃣ Cancelar\n\n`;
-    msg += `_Digite 1 para confirmar ou 2 para cancelar_`;
-
-    return { mensagem: msg, finalizado: false };
-  }
-
-  private async stepDelConfirmar(mensagem: string): Promise<FlowResult> {
-    const opcao = mensagem.trim();
-
-    if (opcao === '2') {
-      this.contexto = {};
-      return {
-        mensagem: `❌ Exclusão cancelada.\n\n_Digite "menu" para voltar ao menu principal_`,
-        finalizado: true,
-      };
-    }
-
-    if (opcao !== '1') {
-      return {
-        mensagem: `❌ Opção inválida.\n\nDigite 1 para confirmar ou 2 para cancelar`,
-        finalizado: false,
-      };
-    }
-
-    const resultado = await getSupabase().desativarProjeto(this.contexto.del_projeto_id!);
-
-    if (!resultado.success) {
-      return {
-        mensagem: `❌ Erro ao deletar projeto: ${resultado.error}\n\n_Digite "menu" para voltar_`,
-        finalizado: true,
-      };
-    }
-
-    const qtdAtrib = resultado.data?.atribuicoes_desativadas || 0;
-
-    let msg = `✅ Projeto *${this.contexto.del_codigo_projeto}* deletado com sucesso!\n\n`;
-    if (qtdAtrib > 0) {
-      msg += `📋 ${qtdAtrib} atribuição(ões) desativada(s).\n\n`;
-    }
-    msg += `_Digite "menu" para voltar ao menu principal_`;
-
-    this.contexto = {};
-    return { mensagem: msg, finalizado: true };
-  }
-
-  // =====================================================
-  // FLUXO 4: EDITAR PROJETO
-  // =====================================================
 
   private async iniciarEdicao(): Promise<FlowResult> {
     const resultado = await getSupabase().listarTodosProjetos();
@@ -1595,7 +1476,7 @@ export class OwnerFlow {
 
     // Validação e parsing por tipo de campo
     if (campo === 'codigo_projeto') {
-      const codigo = input.toUpperCase();
+      const codigo = normalizeProjectCode(input);
       if (codigo.length < 3) {
         return { mensagem: `❌ Código muito curto. Mínimo 3 caracteres.`, finalizado: false };
       }
@@ -1797,5 +1678,271 @@ export class OwnerFlow {
       return '(limpo)';
     }
     return String(valor);
+  }
+
+  // =====================================================
+  // GERENCIAR ENGENHEIROS (Feature 1)
+  // =====================================================
+
+  private async stepEngMenu(mensagem: string): Promise<FlowResult> {
+    const res = await getSupabase().listarEngenheiros();
+    const engenheiros = res.data || [];
+    this.contexto.engenheiros = engenheiros;
+
+    let lista = `👨‍💻 *Gerenciar Engenheiros*\n\n`;
+    if (engenheiros.length === 0) {
+      lista += `_(Nenhum engenheiro cadastrado)_\n`;
+    } else {
+      engenheiros.forEach((e: any, i: number) => {
+        lista += `${i + 1}. ${e.nome} ${e.telefone ? '(' + e.telefone + ')' : ''}\n`;
+      });
+    }
+
+    lista += `\nO que deseja fazer?\n`;
+    lista += `a) Criar Engenheiro\n`;
+    if (engenheiros.length > 0) {
+      lista += `b) Editar Engenheiro\n`;
+      lista += `c) Excluir Engenheiro\n`;
+    }
+    lista += `d) Voltar\n\n`;
+    lista += `_Digite a letra desejada_`;
+
+    this.stepAtual = 'eng_menu_escolha';
+    return { mensagem: lista, finalizado: false };
+  }
+
+  private async stepEngMenuEscolha(mensagem: string): Promise<FlowResult> {
+    const opcao = mensagem.toLowerCase().trim();
+    const temEngenheiros = (this.contexto.engenheiros || []).length > 0;
+
+    if (opcao === 'a') {
+      this.stepAtual = 'eng_criar_nome';
+      return { mensagem: `Qual o *NOME COMPLETO* do engenheiro?`, finalizado: false };
+    }
+    if (opcao === 'b' && temEngenheiros) {
+      this.stepAtual = 'eng_editar_selecionar';
+      return { mensagem: `Digite o *NÚMERO* do engenheiro que deseja editar:`, finalizado: false };
+    }
+    if (opcao === 'c' && temEngenheiros) {
+      this.stepAtual = 'eng_excluir_selecionar';
+      return { mensagem: `Digite o *NÚMERO* do engenheiro que deseja excluir (desativar):`, finalizado: false };
+    }
+    if (opcao === 'd') {
+      return this.stepInicio('');
+    }
+
+    return { mensagem: `❌ Opção inválida. Digite a, ${temEngenheiros ? 'b, c, ' : ''}ou d.`, finalizado: false };
+  }
+
+  private async stepEngCriarNome(mensagem: string): Promise<FlowResult> {
+    const nome = mensagem.trim();
+    if (nome.length < 3) {
+      return { mensagem: `❌ Nome muito curto. Mínimo 3 caracteres.`, finalizado: false };
+    }
+    this.contexto.eng_nome_novo = nome;
+    this.stepAtual = 'eng_criar_telefone';
+    return { mensagem: `Qual o *WHATSAPP (Telefone)* do engenheiro (ex: 11999999999)?`, finalizado: false };
+  }
+
+  private async stepEngCriarTelefone(mensagem: string): Promise<FlowResult> {
+    const res = validateWhatsapp(mensagem);
+    if (!res.valido) {
+      return { mensagem: `❌ Telefone inválido. ${res.erros.join(', ')}\n\nDigite novamente:`, finalizado: false };
+    }
+    this.contexto.eng_telefone_novo = res.dados_normalizados;
+    
+    const criador = getSupabase();
+    // criarOuBuscarEngenheiro(whatsapp, nome) — verificar se já existe
+    const eng = await criador.criarOuBuscarEngenheiro(this.contexto.eng_telefone_novo!, this.contexto.eng_nome_novo!);
+    
+    if (!eng) {
+      return { mensagem: `❌ Erro ao cadastrar engenheiro. Tente novamente.\n\n_Digite "menu" para voltar._`, finalizado: true };
+    }
+
+    // Se retornou engenheiro com nome diferente do que digitamos, é porque já existia
+    if (eng.nome !== this.contexto.eng_nome_novo) {
+      return { mensagem: `⚠️ Já existe um engenheiro com esse telefone: *${eng.nome}*\n\n_Digite "menu" para voltar._`, finalizado: true };
+    }
+    
+    return { mensagem: `✅ Engenheiro *${this.contexto.eng_nome_novo}* cadastrado com sucesso!\n\n_Digite "menu" para voltar._`, finalizado: true };
+  }
+
+  private async stepEngEditarSelecionar(mensagem: string): Promise<FlowResult> {
+    const i = parseInt(mensagem.trim()) - 1;
+    const lista = this.contexto.engenheiros || [];
+    if (isNaN(i) || !lista[i]) {
+      return { mensagem: `❌ Engenheiro inválido. Digite um número da lista:`, finalizado: false };
+    }
+    this.contexto.viz_eng_id = lista[i].eng_id;
+    this.contexto.eng_nome_novo = lista[i].nome;
+    
+    this.stepAtual = 'eng_editar_campo';
+    return { 
+      mensagem: `Editando: *${lista[i].nome}*\nO que deseja editar?\n1. Nome\n2. Telefone`, 
+      finalizado: false 
+    };
+  }
+
+  private async stepEngEditarCampo(mensagem: string): Promise<FlowResult> {
+    const op = mensagem.trim();
+    if (op === '1') this.contexto.eng_campo_edit = 'nome';
+    else if (op === '2') this.contexto.eng_campo_edit = 'telefone';
+    else return { mensagem: `❌ Opção inválida. (1 = Nome, 2 = Telefone)`, finalizado: false };
+
+    this.stepAtual = 'eng_editar_valor';
+    return { mensagem: `Ok, digite o novo valor para *${this.contexto.eng_campo_edit}*:`, finalizado: false };
+  }
+
+  private async stepEngEditarValor(mensagem: string): Promise<FlowResult> {
+    let val = mensagem.trim();
+    if (this.contexto.eng_campo_edit === 'telefone') {
+      const r = validateWhatsapp(val);
+      if (!r.valido) return { mensagem: `❌ Telefone inválido. ${r.erros.join(', ')}`, finalizado: false };
+      val = r.dados_normalizados;
+    }
+    this.contexto.edit_novo_valor = val;
+    this.stepAtual = 'eng_editar_confirmar';
+    return { mensagem: `Confirma alterar ${this.contexto.eng_campo_edit} para *${val}*?\n1. Sim\n2. Não`, finalizado: false };
+  }
+
+  private async stepEngEditarConfirmar(mensagem: string): Promise<FlowResult> {
+    if (mensagem.trim() === '1') {
+      const payload: any = {};
+      payload[this.contexto.eng_campo_edit!] = this.contexto.edit_novo_valor;
+      await getSupabase().atualizarEngenheiro(this.contexto.viz_eng_id!, payload);
+      return { mensagem: `✅ Atualizado com sucesso!\n\n_Digite "menu" para voltar._`, finalizado: true };
+    }
+    return { mensagem: `❌ Cancelado.\n\n_Digite "menu" para voltar._`, finalizado: true };
+  }
+
+  private async stepEngExcluirSelecionar(mensagem: string): Promise<FlowResult> {
+    const i = parseInt(mensagem.trim()) - 1;
+    const lista = this.contexto.engenheiros || [];
+    if (isNaN(i) || !lista[i]) {
+      return { mensagem: `❌ Engenheiro inválido. Digite um número da lista:`, finalizado: false };
+    }
+    this.contexto.viz_eng_id = lista[i].eng_id;
+    this.contexto.eng_nome_novo = lista[i].nome;
+    
+    this.stepAtual = 'eng_excluir_confirmar';
+    return { mensagem: `⚠️ Você tem certeza que deseja remover o engenheiro *${lista[i].nome}*?\n1. Sim\n2. Não`, finalizado: false };
+  }
+
+  private async stepEngExcluirConfirmar(mensagem: string): Promise<FlowResult> {
+    if (mensagem.trim() === '1') {
+      const res = await getSupabase().desativarEngenheiro(this.contexto.viz_eng_id!);
+      if (!res.success) {
+        if (res.error === 'engenheiro_com_projetos') {
+          return { mensagem: `❌ Este engenheiro possui projetos ativos! Retire-o dos projetos antes de excluí-lo.\n\n_Digite "menu" para voltar._`, finalizado: true };
+        }
+        return { mensagem: `❌ Erro: ${res.error}`, finalizado: true };
+      }
+      return { mensagem: `✅ Engenheiro excluído.\n\n_Digite "menu" para voltar._`, finalizado: true };
+    }
+    return { mensagem: `❌ Cancelado.\n\n_Digite "menu" para voltar._`, finalizado: true };
+  }
+
+  // =====================================================
+  // EXCLUSÃO UNIFICADA (Feature 4)
+  // =====================================================
+
+  private async iniciarExclusaoUnificada(): Promise<FlowResult> {
+    const res = await getSupabase().listarTodosProjetos();
+    const infoProjetos = res.data || [];
+    if (infoProjetos.length === 0) {
+      return {
+        mensagem: `❌ Não há projetos ativos para excluir.\n\n_Digite "menu" para voltar._`,
+        finalizado: true,
+      };
+    }
+    this.contexto.projetos = infoProjetos;
+    this.stepAtual = 'excluir_selecionar_projeto';
+    
+    let listaProjetos = `🗑️ *Fluxo de Exclusão*\n\nDe qual projeto você quer excluir algo?\n\n`;
+    infoProjetos.forEach((p: any, i: number) => {
+      listaProjetos += `${i + 1}. [${p.codigo_projeto}] ${p.cliente}\n`;
+    });
+    
+    return { mensagem: listaProjetos, finalizado: false };
+  }
+
+  private async stepExcluirSelecionarProjeto(mensagem: string): Promise<FlowResult> {
+    const i = parseInt(mensagem.trim()) - 1;
+    const p = this.contexto.projetos?.[i];
+    if (!p) return { mensagem: `❌ Opção inválida.`, finalizado: false };
+    
+    this.contexto.del_projeto_id = p.projeto_id;
+    this.contexto.del_codigo_projeto = p.codigo_projeto;
+    
+    this.stepAtual = 'excluir_acao';
+    return {
+      mensagem: `Opções para o projeto *${p.codigo_projeto}*:\n\n` +
+                `1. ⚠️ Excluir Projeto Completo\n` +
+                `2. 🎯 Excluir uma Área Específica\n` +
+                `3. Cancelar`,
+      finalizado: false
+    };
+  }
+
+  private async stepExcluirAcao(mensagem: string): Promise<FlowResult> {
+    const op = mensagem.trim();
+    if (op === '1') {
+      this.stepAtual = 'excluir_projeto_confirmar';
+      return { mensagem: `Tem certeza que deseja desativar COMPLETAMENTE o projeto *${this.contexto.del_codigo_projeto}*?\n1. Sim\n2. Não`, finalizado: false };
+    } else if (op === '2') {
+      const areas = await getSupabase().buscarAreasDoProjeto(this.contexto.del_projeto_id!);
+      if (!areas.success || !areas.data || areas.data.length === 0) {
+        return { mensagem: `❌ Não há áreas para excluir neste projeto.\n\n_Digite "menu"_`, finalizado: true };
+      }
+      this.contexto.areas = areas.data;
+      this.stepAtual = 'area_excluir_selecionar';
+      
+      let res = `Qual área você deseja remover?\n\n`;
+      areas.data.forEach((a: any, idx: number) => {
+         res += `${idx + 1}. ${a.descricao} (${a.engenheiro_nome || 'Sem Eng.'})\n`;
+      });
+      return { mensagem: res, finalizado: false };
+    } else {
+      return { mensagem: `❌ Operação cancelada.\n\n_Digite "menu"_`, finalizado: true };
+    }
+  }
+
+  private async stepExcluirProjetoConfirmar(mensagem: string): Promise<FlowResult> {
+    if (mensagem.trim() === '1') {
+      const r = await getSupabase().desativarProjeto(this.contexto.del_projeto_id!);
+      if (r.success) {
+        return { mensagem: `✅ Projeto desativado com sucesso.\n\n_Digite "menu"_`, finalizado: true };
+      }
+      return { mensagem: `❌ Erro ao desativar projeto: ${r.error || 'Erro desconhecido'}\n\n_Digite "menu"_`, finalizado: true };
+    }
+    return { mensagem: `❌ Cancelado.\n\n_Digite "menu"_`, finalizado: true };
+  }
+
+  private async stepAreaExcluirSelecionar(mensagem: string): Promise<FlowResult> {
+    const i = parseInt(mensagem.trim()) - 1;
+    const a = this.contexto.areas?.[i];
+    if (!a) return { mensagem: `❌ Inválido.`, finalizado: false };
+    
+    this.contexto.viz_atribuicao_id = a.atribuicao_id;
+    this.contexto.edit_area_descricao = a.descricao;
+    
+    this.stepAtual = 'area_excluir_confirmar';
+    return { mensagem: `Confirma exclusão da área *${a.descricao}*?\n1. Sim\n2. Não`, finalizado: false };
+  }
+
+  private async stepAreaExcluirConfirmar(mensagem: string): Promise<FlowResult> {
+    if (mensagem.trim() === '1') {
+      const qtd = await getSupabase().contarAreasAtivasDoProjeto(this.contexto.del_projeto_id!);
+      if (qtd <= 1) {
+        return { mensagem: `❌ Um projeto deve ter no mínimo uma área ativa! Você não pode excluir a última área. Se não existe mais o projeto, exclua o *Projeto Completo*.\n\n_Digite "menu"_`, finalizado: true };
+      }
+      
+      const res = await getSupabase().desativarAtribuicao(this.contexto.viz_atribuicao_id!);
+      if (res.success) {
+        return { mensagem: `✅ Área removida com sucesso.\n\n_Digite "menu"_`, finalizado: true };
+      }
+      return { mensagem: `❌ Erro ao remover área: ${res.error || 'Erro desconhecido'}\n\n_Digite "menu"_`, finalizado: true };
+    }
+    return { mensagem: `❌ Cancelado.\n\n_Digite "menu"_`, finalizado: true };
   }
 }

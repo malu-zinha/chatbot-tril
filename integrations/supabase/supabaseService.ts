@@ -285,6 +285,95 @@ export class SupabaseService {
     }
   }
 
+  /**
+   * Atualiza dados de um engenheiro
+   */
+  async atualizarEngenheiro(
+    eng_id: string,
+    campos: Partial<{ nome: string; telefone: string }>
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const updateData: any = { ...campos, updated_at: new Date().toISOString() };
+      
+      if (campos.telefone) {
+        updateData.telefone = campos.telefone.replace(/[^\d+]/g, '');
+      }
+
+      const { error } = await this.supabase
+        .from('engenheiros')
+        .update(updateData)
+        .eq('eng_id', eng_id);
+
+      if (error) {
+        console.error('❌ Erro ao atualizar engenheiro:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar engenheiro:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Checa se o engenheiro tem atribuições (projetos) ativas
+   */
+  async checarEngenheiroTemAtribuicoesAtivas(eng_id: string): Promise<boolean> {
+    if (!this.connected) return false;
+
+    try {
+      const { count, error } = await this.supabase
+        .from('engenheiros_projetos')
+        .select('id', { count: 'exact', head: true })
+        .eq('eng_id', eng_id)
+        .eq('ativo', true);
+
+      if (error) {
+        console.error('❌ Erro ao checar atribuições do engenheiro:', error);
+        return false;
+      }
+
+      return (count ?? 0) > 0;
+    } catch (error: any) {
+      console.error('❌ Erro ao checar atribuições:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Desativa (soft-delete) um engenheiro
+   */
+  async desativarEngenheiro(
+    eng_id: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const temAtivos = await this.checarEngenheiroTemAtribuicoesAtivas(eng_id);
+      if (temAtivos) {
+        return { success: false, error: 'engenheiro_com_projetos' };
+      }
+
+      const { error } = await this.supabase
+        .from('engenheiros')
+        .update({ ativo: false, updated_at: new Date().toISOString() })
+        .eq('eng_id', eng_id);
+
+      if (error) {
+        console.error('❌ Erro ao desativar engenheiro:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao desativar engenheiro:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
   // =====================================================
   // ÁREAS E STATUS
   // =====================================================
@@ -719,6 +808,57 @@ export class SupabaseService {
     } catch (error: any) {
       console.error('❌ Erro ao atualizar previsão:', error.message);
       return false;
+    }
+  }
+
+  /**
+   * Conta quantas atribuições ativas um projeto tem
+   */
+  async contarAreasAtivasDoProjeto(projeto_id: string): Promise<number> {
+    if (!this.connected) return 0;
+
+    try {
+      const { count, error } = await this.supabase
+        .from('engenheiros_projetos')
+        .select('id', { count: 'exact', head: true })
+        .eq('projeto_id', projeto_id)
+        .eq('ativo', true);
+
+      if (error) {
+        console.error('❌ Erro ao contar áreas do projeto:', error);
+        return 0;
+      }
+
+      return count ?? 0;
+    } catch (error: any) {
+      console.error('❌ Erro ao contar áreas:', error.message);
+      return 0;
+    }
+  }
+
+  /**
+   * Desativa (soft-delete) uma atribuição (área) específica
+   */
+  async desativarAtribuicao(
+    atribuicao_id: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const { error } = await this.supabase
+        .from('engenheiros_projetos')
+        .update({ ativo: false, updated_at: new Date().toISOString() })
+        .eq('id', atribuicao_id);
+
+      if (error) {
+        console.error('❌ Erro ao desativar atribuição:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao desativar atribuição:', error.message);
+      return { success: false, error: error.message };
     }
   }
 
@@ -1210,10 +1350,6 @@ export class SupabaseService {
   // AUTENTICAÇÃO - TELEFONE
   // =====================================================
 
-  // =====================================================
-  // AUTENTICAÇÃO - TELEFONE
-  // =====================================================
-
   /**
    * Busca engenheiro por telefone (campo telefone direto na tabela engenheiros)
    */
@@ -1299,7 +1435,7 @@ export class SupabaseService {
 
       const { error } = await this.supabase
         .from('engenheiros')
-        .update({ telefone: telefoneNormalizado })
+        .update({ telefone: telefoneNormalizado, updated_at: new Date().toISOString() })
         .eq('eng_id', eng_id);
 
       if (error) {
@@ -1648,20 +1784,14 @@ export class SupabaseService {
         return { success: false, error: error.message };
       }
 
-      // Remove duplicatas de áreas, preservando atribuicao_id e engenheiro_nome
-      const areasUnicas = data?.reduce((acc: any[], curr: any) => {
-        const jaExiste = acc.find((a: any) => a.area_id === curr.areas.area_id);
-        if (!jaExiste) {
-          acc.push({
-            ...curr.areas,
-            atribuicao_id: curr.id,
-            engenheiro_nome: curr.engenheiros?.nome || null,
-          });
-        }
-        return acc;
-      }, []);
+      // Mapear atribuições preservando todas (inclusive múltiplos engenheiros na mesma área)
+      const areasCompletas = data?.map((curr: any) => ({
+        ...curr.areas,
+        atribuicao_id: curr.id,
+        engenheiro_nome: curr.engenheiros?.nome || null,
+      })) || [];
 
-      return { success: true, data: areasUnicas || [] };
+      return { success: true, data: areasCompletas };
     } catch (error: any) {
       console.error('❌ Erro ao buscar áreas:', error.message);
       return { success: false, error: error.message };
@@ -1907,6 +2037,12 @@ export class SupabaseService {
     if (!dataStr) return null;
 
     try {
+      // Se já está em formato ISO (YYYY-MM-DD), retornar diretamente
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dataStr.trim())) {
+        return dataStr.trim();
+      }
+
+      // Formato DD/MM/AAAA → YYYY-MM-DD
       const partes = dataStr.split('/');
       if (partes.length !== 3) return null;
 
