@@ -99,7 +99,7 @@ export default function RetrabalhoCard({
                             : 'text-success'
                       }`}
                     >
-                      {item.retrabalho_medio_percentual?.toFixed(1) || 0}%
+                      {(item.retrabalho_medio_percentual ?? 0).toFixed(1)}%
                     </div>
                     <div className="text-xs text-gray-500">média</div>
                   </div>

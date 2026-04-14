@@ -362,6 +362,34 @@ export function sanitizeText(text: string, maxLength?: number): string {
 }
 
 // =====================================================
+// FUNÇÃO: Normalizar Código de Projeto
+// =====================================================
+// Testes unitários de referência:
+// normalizeProjectCode("002") -> "PRJ-002"
+// normalizeProjectCode("OBR-2024-01") -> "OBR-2024-01"
+// normalizeProjectCode("prj2") -> "PRJ-2"
+// normalizeProjectCode("prj-005") -> "PRJ-005"
+// normalizeProjectCode("1") -> "PRJ-1"
+export function normalizeProjectCode(input: string): string {
+  if (!input) return '';
+  const trimmed = input.trim().toUpperCase();
+  
+  // Se for apenas números (ex: "002")
+  if (/^\d+$/.test(trimmed)) {
+    return `PRJ-${trimmed}`;
+  }
+  
+  // Se começar com texto e terminar com número, sem hífen (ex: "PRJ2")
+  const match = trimmed.match(/^([A-Z]+)(\d+)$/);
+  if (match) {
+    return `${match[1]}-${match[2]}`;
+  }
+  
+  // Caso contrário, mantém como está (ex: "PRJ-002", "OBR-2024-01")
+  return trimmed;
+}
+
+// =====================================================
 // FUNÇÃO: Validar Lote de Dados
 // =====================================================
 

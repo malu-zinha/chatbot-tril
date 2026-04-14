@@ -18,10 +18,10 @@ export default function Header({ lastUpdate, isLoading, isConnected = true }: He
             <Image
               src="/logo.png"
               alt="TecPred"
-              width={560}
-              height={178}
+              width={480}
+              height={152}
               priority
-              className="h-40 w-auto -my-8 brightness-110 contrast-125 drop-shadow-[0_2px_10px_rgba(255,255,255,0.45)]"
+              className="h-40 w-auto brightness-110 contrast-125 drop-shadow-[0_2px_10px_rgba(255,255,255,0.45)]"
             />
             <div className="hidden md:block">
               <h2 className="text-white text-lg font-semibold">

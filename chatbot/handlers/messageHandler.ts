@@ -54,10 +54,11 @@ export class MessageHandler {
   private timeout_sessao: number = 15 * 60 * 1000; // 15 minutos
 
   constructor() {
-    this.sessoes = new Map(); // DEPRECATED
+    this.sessoes = new Map();
 
-    // Redis cuida da expiração automática via TTL
-    console.log('✅ MessageHandler inicializado com SessionService (Redis)');
+    // Sessões são mantidas em memória (Map)
+    // SessionService (Redis) está disponível mas não integrado ao MessageHandler
+    console.log('✅ MessageHandler inicializado com sessões in-memory');
   }
 
   // =====================================================
@@ -534,7 +535,14 @@ Digite *menu* para ver as opções disponíveis`;
       }
 
       if (!cleaned.startsWith('+')) {
-        const resultado = '+55' + cleaned;
+        // Evitar duplo +55: se o número já começa com 55 (código do país Brasil),
+        // não adicionar outro 55
+        let resultado: string;
+        if (cleaned.startsWith('55') && cleaned.length >= 12) {
+          resultado = '+' + cleaned;
+        } else {
+          resultado = '+55' + cleaned;
+        }
         if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
           console.log(`   Resultado final: ${resultado}`);
         }

@@ -665,10 +665,16 @@ export class EngineerProjectFlow {
             };
             const statusCodigo = statusMap[statusNome] || 'EM_EXECUCAO';
 
-            const previsao = await (supabase as any).registrarPrevisaoDia(
+            // Buscar status_id numérico a partir do código
+            const statusObj = await supabase.buscarStatusPorCodigo(statusCodigo);
+            const statusId = statusObj?.status_id ?? 1;
+
+            // FIX BUG-02: argumentos estavam invertidos (texto, código)
+            // Assinatura correta: registrarPrevisaoDia(eng_projeto_id, status_id: number, previsao_texto: string)
+            const previsao = await supabase.registrarPrevisaoDia(
               this.state.selectedAtribuicaoId,
-              morningData['Previsão para o dia'],
-              statusCodigo
+              statusId,
+              morningData['Previsão para o dia']
             );
 
             if (previsao) {

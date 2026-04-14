@@ -59,7 +59,7 @@ export interface Complexidade {
 }
 
 export interface Area {
-  area_id: number;
+  area_id: string;
   codigo: string;
   descricao: string;
   tempo_trabalho_dias: number;
@@ -89,7 +89,7 @@ export interface Atribuicao {
   id: string;
   eng_id: string;
   projeto_id: string;
-  area_id: number;
+  area_id: string;
   data_inicio?: string;
   data_prevista?: string;
   data_conclusao?: string;
@@ -285,6 +285,95 @@ export class SupabaseService {
     }
   }
 
+  /**
+   * Atualiza dados de um engenheiro
+   */
+  async atualizarEngenheiro(
+    eng_id: string,
+    campos: Partial<{ nome: string; telefone: string }>
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const updateData: any = { ...campos, updated_at: new Date().toISOString() };
+      
+      if (campos.telefone) {
+        updateData.telefone = campos.telefone.replace(/[^\d+]/g, '');
+      }
+
+      const { error } = await this.supabase
+        .from('engenheiros')
+        .update(updateData)
+        .eq('eng_id', eng_id);
+
+      if (error) {
+        console.error('❌ Erro ao atualizar engenheiro:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar engenheiro:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Checa se o engenheiro tem atribuições (projetos) ativas
+   */
+  async checarEngenheiroTemAtribuicoesAtivas(eng_id: string): Promise<boolean> {
+    if (!this.connected) return false;
+
+    try {
+      const { count, error } = await this.supabase
+        .from('engenheiros_projetos')
+        .select('id', { count: 'exact', head: true })
+        .eq('eng_id', eng_id)
+        .eq('ativo', true);
+
+      if (error) {
+        console.error('❌ Erro ao checar atribuições do engenheiro:', error);
+        return false;
+      }
+
+      return (count ?? 0) > 0;
+    } catch (error: any) {
+      console.error('❌ Erro ao checar atribuições:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Desativa (soft-delete) um engenheiro
+   */
+  async desativarEngenheiro(
+    eng_id: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const temAtivos = await this.checarEngenheiroTemAtribuicoesAtivas(eng_id);
+      if (temAtivos) {
+        return { success: false, error: 'engenheiro_com_projetos' };
+      }
+
+      const { error } = await this.supabase
+        .from('engenheiros')
+        .update({ ativo: false, updated_at: new Date().toISOString() })
+        .eq('eng_id', eng_id);
+
+      if (error) {
+        console.error('❌ Erro ao desativar engenheiro:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao desativar engenheiro:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
   // =====================================================
   // ÁREAS E STATUS
   // =====================================================
@@ -338,7 +427,7 @@ export class SupabaseService {
   /**
    * Busca área por ID
    */
-  async buscarAreaPorId(area_id: number): Promise<Area | null> {
+  async buscarAreaPorId(area_id: string): Promise<Area | null> {
     if (!this.connected) return null;
 
     try {
@@ -722,6 +811,57 @@ export class SupabaseService {
     }
   }
 
+  /**
+   * Conta quantas atribuições ativas um projeto tem
+   */
+  async contarAreasAtivasDoProjeto(projeto_id: string): Promise<number> {
+    if (!this.connected) return 0;
+
+    try {
+      const { count, error } = await this.supabase
+        .from('engenheiros_projetos')
+        .select('id', { count: 'exact', head: true })
+        .eq('projeto_id', projeto_id)
+        .eq('ativo', true);
+
+      if (error) {
+        console.error('❌ Erro ao contar áreas do projeto:', error);
+        return 0;
+      }
+
+      return count ?? 0;
+    } catch (error: any) {
+      console.error('❌ Erro ao contar áreas:', error.message);
+      return 0;
+    }
+  }
+
+  /**
+   * Desativa (soft-delete) uma atribuição (área) específica
+   */
+  async desativarAtribuicao(
+    atribuicao_id: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const { error } = await this.supabase
+        .from('engenheiros_projetos')
+        .update({ ativo: false, updated_at: new Date().toISOString() })
+        .eq('id', atribuicao_id);
+
+      if (error) {
+        console.error('❌ Erro ao desativar atribuição:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao desativar atribuição:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
   // =====================================================
   // PREVISÕES E RETRABALHOS
   // =====================================================
@@ -928,10 +1068,10 @@ export class SupabaseService {
     const projetosMap = new Map<string, ProjetoLegacy>();
 
     for (const atrib of atribuicoes) {
-      const projeto = await this.buscarProjetoPorCodigo(atrib.projeto_id);
+      const projeto = await this.buscarProjetoPorId(atrib.projeto_id);
       if (!projeto) continue;
 
-      const area = await this.buscarAreaPorCodigo(atrib.area_id.toString());
+      const area = await this.buscarAreaPorId(atrib.area_id);
       const status = atrib.status_id ? await this.supabase
         .from('status_codes')
         .select('*')
@@ -987,7 +1127,7 @@ export class SupabaseService {
       };
     }
 
-    const area = await this.buscarAreaPorCodigo(atribuicao.area_id.toString());
+    const area = await this.buscarAreaPorId(atribuicao.area_id);
     const status = atribuicao.status_id ? await this.supabase
       .from('status_codes')
       .select('*')
@@ -1210,10 +1350,6 @@ export class SupabaseService {
   // AUTENTICAÇÃO - TELEFONE
   // =====================================================
 
-  // =====================================================
-  // AUTENTICAÇÃO - TELEFONE
-  // =====================================================
-
   /**
    * Busca engenheiro por telefone (campo telefone direto na tabela engenheiros)
    */
@@ -1299,7 +1435,7 @@ export class SupabaseService {
 
       const { error } = await this.supabase
         .from('engenheiros')
-        .update({ telefone: telefoneNormalizado })
+        .update({ telefone: telefoneNormalizado, updated_at: new Date().toISOString() })
         .eq('eng_id', eng_id);
 
       if (error) {
@@ -1635,8 +1771,10 @@ export class SupabaseService {
       const { data, error } = await this.supabase
         .from('engenheiros_projetos')
         .select(`
+          id,
           area_id,
-          areas!inner(area_id, codigo, descricao)
+          areas!inner(area_id, codigo, descricao),
+          engenheiros(nome)
         `)
         .eq('projeto_id', projetoId)
         .eq('ativo', true);
@@ -1646,16 +1784,14 @@ export class SupabaseService {
         return { success: false, error: error.message };
       }
 
-      // Remove duplicatas de áreas
-      const areasUnicas = data?.reduce((acc: any[], curr: any) => {
-        const area = curr.areas;
-        if (!acc.find((a: any) => a.area_id === area.area_id)) {
-          acc.push(area);
-        }
-        return acc;
-      }, []);
+      // Mapear atribuições preservando todas (inclusive múltiplos engenheiros na mesma área)
+      const areasCompletas = data?.map((curr: any) => ({
+        ...curr.areas,
+        atribuicao_id: curr.id,
+        engenheiro_nome: curr.engenheiros?.nome || null,
+      })) || [];
 
-      return { success: true, data: areasUnicas || [] };
+      return { success: true, data: areasCompletas };
     } catch (error: any) {
       console.error('❌ Erro ao buscar áreas:', error.message);
       return { success: false, error: error.message };
@@ -1901,6 +2037,12 @@ export class SupabaseService {
     if (!dataStr) return null;
 
     try {
+      // Se já está em formato ISO (YYYY-MM-DD), retornar diretamente
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dataStr.trim())) {
+        return dataStr.trim();
+      }
+
+      // Formato DD/MM/AAAA → YYYY-MM-DD
       const partes = dataStr.split('/');
       if (partes.length !== 3) return null;
 
@@ -1925,6 +2067,202 @@ export class SupabaseService {
       return `${dia}/${mes}/${ano}`;
     } catch (error) {
       return dataStr;
+    }
+  }
+
+  // =====================================================
+  // SOFT DELETE DE PROJETOS (DONO)
+  // =====================================================
+
+  /**
+   * Desativa (soft delete) um projeto e todas suas atribuições
+   */
+  async desativarProjeto(
+    projeto_id: string
+  ): Promise<{ success: boolean; error?: string; data?: { atribuicoes_desativadas: number } }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      // 1. Desativar o projeto
+      const { error: erroProjeto } = await this.supabase
+        .from('projetos')
+        .update({ ativo: false, updated_at: new Date().toISOString() })
+        .eq('projeto_id', projeto_id);
+
+      if (erroProjeto) {
+        console.error('❌ Erro ao desativar projeto:', erroProjeto);
+        return { success: false, error: erroProjeto.message };
+      }
+
+      // 2. Desativar todas as atribuições relacionadas
+      const { data: atribuicoes, error: erroAtrib } = await this.supabase
+        .from('engenheiros_projetos')
+        .update({ ativo: false, updated_at: new Date().toISOString() })
+        .eq('projeto_id', projeto_id)
+        .eq('ativo', true)
+        .select('id');
+
+      if (erroAtrib) {
+        console.error('❌ Erro ao desativar atribuições:', erroAtrib);
+        // Projeto já foi desativado, reportar erro parcial
+        return { success: true, error: `Projeto desativado, mas erro nas atribuições: ${erroAtrib.message}`, data: { atribuicoes_desativadas: 0 } };
+      }
+
+      const qtd = atribuicoes?.length || 0;
+      console.log(`✅ Projeto ${projeto_id} desativado com ${qtd} atribuição(ões)`);
+      return { success: true, data: { atribuicoes_desativadas: qtd } };
+    } catch (error: any) {
+      console.error('❌ Erro ao desativar projeto:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // =====================================================
+  // EDIÇÃO DE PROJETOS (DONO)
+  // =====================================================
+
+  /**
+   * Atualiza campos do projeto master (tabela projetos)
+   */
+  async atualizarProjeto(
+    projeto_id: string,
+    campos: Partial<{ codigo_projeto: string; cliente: string; descricao: string }>
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const updateData: any = { ...campos, updated_at: new Date().toISOString() };
+
+      const { error } = await this.supabase
+        .from('projetos')
+        .update(updateData)
+        .eq('projeto_id', projeto_id);
+
+      if (error) {
+        console.error('❌ Erro ao atualizar projeto:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log(`✅ Projeto ${projeto_id} atualizado:`, campos);
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar projeto:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Atualiza campos da atribuição (engenheiros_projetos) - versão genérica para o dono
+   */
+  async atualizarAtribuicaoDono(
+    atribuicao_id: string,
+    campos: Partial<{
+      data_inicio: string;
+      data_prevista: string;
+      status_id: number;
+      percentual_andamento: number;
+      observacoes: string;
+    }>
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const updateData: any = { ...campos, updated_at: new Date().toISOString() };
+
+      const { error } = await this.supabase
+        .from('engenheiros_projetos')
+        .update(updateData)
+        .eq('id', atribuicao_id);
+
+      if (error) {
+        console.error('❌ Erro ao atualizar atribuição:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log(`✅ Atribuição ${atribuicao_id} atualizada:`, campos);
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar atribuição:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Atualiza campos de prazos
+   */
+  async atualizarPrazos(
+    eng_projeto_id: string,
+    campos: Partial<{
+      prazo_final_eng: string;
+      prazo_final_cliente: string;
+      data_inicio_esperada_cliente: string;
+    }>
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const updateData: any = { ...campos, updated_at: new Date().toISOString() };
+
+      const { data: updated, error } = await this.supabase
+        .from('prazos')
+        .update(updateData)
+        .eq('eng_projeto_id', eng_projeto_id)
+        .select('eng_projeto_id');
+
+      if (error) {
+        console.error('❌ Erro ao atualizar prazos:', error);
+        return { success: false, error: error.message };
+      }
+
+      // Se nenhuma linha foi atualizada, criar o registro via upsert
+      if (!updated || updated.length === 0) {
+        console.warn(`⚠️ Nenhum registro de prazos encontrado para ${eng_projeto_id}, criando via upsert...`);
+        const { error: upsertError } = await this.supabase
+          .from('prazos')
+          .upsert(
+            { eng_projeto_id, ...campos, updated_at: new Date().toISOString() },
+            { onConflict: 'eng_projeto_id' }
+          );
+
+        if (upsertError) {
+          console.error('❌ Erro ao criar prazos via upsert:', upsertError);
+          return { success: false, error: upsertError.message };
+        }
+
+        console.log(`✅ Prazos criados via upsert para atribuição ${eng_projeto_id}:`, campos);
+        return { success: true };
+      }
+
+      console.log(`✅ Prazos atualizados para atribuição ${eng_projeto_id}:`, campos);
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao atualizar prazos:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Busca atribuição com detalhes para edição (projeto + área + engenheiro + prazos)
+   */
+  async buscarAtribuicaoParaEdicao(atribuicao_id: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      const { data, error } = await this.supabase
+        .from('vw_projetos_completo')
+        .select('*')
+        .eq('atribuicao_id', atribuicao_id)
+        .single();
+
+      if (error) {
+        console.error('❌ Erro ao buscar atribuição para edição:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar atribuição:', error.message);
+      return { success: false, error: error.message };
     }
   }
 

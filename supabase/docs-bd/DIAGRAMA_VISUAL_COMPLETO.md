@@ -885,5 +885,3 @@ Retorna: 3 ✅ (calculado automaticamente via COUNT!)
 
 
 
-
-

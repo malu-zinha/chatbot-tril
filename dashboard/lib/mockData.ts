@@ -494,7 +494,7 @@ export const mockEngenheiros = [
 
 export const mockAreas = [
   {
-    area_id: 1,
+    area_id: '1',
     codigo: 'ELETRICO',
     descricao: 'Elétrico',
     tempo_trabalho_dias: 15,
@@ -504,7 +504,7 @@ export const mockAreas = [
     percentual_conclusao: 37.5,
   },
   {
-    area_id: 2,
+    area_id: '2',
     codigo: 'HIDRAULICO',
     descricao: 'Hidráulico',
     tempo_trabalho_dias: 12,
@@ -514,7 +514,7 @@ export const mockAreas = [
     percentual_conclusao: 50.0,
   },
   {
-    area_id: 3,
+    area_id: '3',
     codigo: 'ESTRUTURAL',
     descricao: 'Estrutural',
     tempo_trabalho_dias: 20,

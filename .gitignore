@@ -4,6 +4,9 @@
 # macOS
 .DS_Store
 
+# Windows NTFS alternate data stream artifacts
+*:Zone.Identifier
+
 # VSCode
 .vscode/
 

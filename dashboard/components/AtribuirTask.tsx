@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { X, UserPlus, AlertCircle, CheckCircle, TrendingUp, Calendar, Layers } from 'lucide-react'
 
 interface Engenheiro {
@@ -14,7 +14,7 @@ interface Engenheiro {
 }
 
 interface Area {
-  area_id: number
+  area_id: string | number
   codigo: string
   descricao: string
   tempo_trabalho_dias: number
@@ -32,7 +32,7 @@ export interface TaskData {
   codigo_projeto: string
   cliente: string
   descricao: string
-  area_id: number
+  area_id: string | number
   eng_id: string
   complexidade: 'baixa' | 'media' | 'alta'
   data_prevista: string
@@ -44,22 +44,37 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
   })
   const [selectedArea, setSelectedArea] = useState<Area | null>(null)
 
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose()
+  }, [onClose])
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown)
+        document.body.style.overflow = ''
+      }
+    }
+  }, [isOpen, handleKeyDown])
+
   if (!isOpen) return null
 
   // Calcular sobrecarga de cada engenheiro (0-100%)
   const calcularSobrecarga = (eng: Engenheiro): number => {
-    const peso_projetos = eng.total_projetos * 15
-    const peso_areas = eng.areas_ativas * 10
-    const peso_dias = Math.min(eng.dias_trabalho_pendentes, 60)
-    const peso_retrabalho = eng.total_retrabalhos * 5
-    const peso_atrasos = eng.areas_atrasadas * 15
+    const peso_projetos = (eng.total_projetos ?? 0) * 15
+    const peso_areas = (eng.areas_ativas ?? 0) * 10
+    const peso_dias = Math.min(eng.dias_trabalho_pendentes ?? 0, 60)
+    const peso_retrabalho = (eng.total_retrabalhos ?? 0) * 5
+    const peso_atrasos = (eng.areas_atrasadas ?? 0) * 15
     
     const sobrecarga = peso_projetos + peso_areas + peso_dias + peso_retrabalho + peso_atrasos
     return Math.min(100, sobrecarga)
   }
 
   // Calcular pontuação de recomendação
-  const calcularPontuacao = (eng: Engenheiro, area_selecionada: Area | null): number => {
+  const calcularPontuacao = (eng: Engenheiro): number => {
     const sobrecarga = calcularSobrecarga(eng)
     
     // Bonus por exclusividade
@@ -69,10 +84,10 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
     const penalidade_sobrecarga = sobrecarga * 0.5
     
     // Bonus por baixo retrabalho
-    const bonus_qualidade = eng.total_retrabalhos === 0 ? 15 : Math.max(0, 15 - eng.total_retrabalhos * 3)
-    
+    const bonus_qualidade = (eng.total_retrabalhos ?? 0) === 0 ? 15 : Math.max(0, 15 - (eng.total_retrabalhos ?? 0) * 3)
+
     // Bonus por não ter atrasos
-    const bonus_pontualidade = eng.areas_atrasadas === 0 ? 15 : 0
+    const bonus_pontualidade = (eng.areas_atrasadas ?? 0) === 0 ? 15 : 0
     
     // Pontuação final (0-100)
     const pontuacao = Math.max(0, Math.min(100, 
@@ -87,7 +102,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
     .map(eng => ({
       ...eng,
       sobrecarga: calcularSobrecarga(eng),
-      pontuacao: calcularPontuacao(eng, selectedArea)
+      pontuacao: calcularPontuacao(eng)
     }))
     .sort((a, b) => b.pontuacao - a.pontuacao)
 
@@ -98,6 +113,22 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
     
     if (!formData.codigo_projeto || !formData.cliente || !formData.area_id || !formData.eng_id || !formData.data_prevista) {
       alert('Por favor, preencha todos os campos obrigatórios')
+      return
+    }
+
+    const codigoRegex = /^[A-Za-z0-9\-]{1,30}$/
+    if (!codigoRegex.test(formData.codigo_projeto)) {
+      alert('Código do projeto deve conter apenas letras, números e hífens (máx. 30 caracteres)')
+      return
+    }
+
+    if (formData.cliente.length > 200) {
+      alert('Nome do cliente não pode exceder 200 caracteres')
+      return
+    }
+
+    if (formData.descricao && formData.descricao.length > 1000) {
+      alert('Descrição não pode exceder 1000 caracteres')
       return
     }
 
@@ -122,15 +153,15 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-fade-in">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-fade-in" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary p-6 rounded-t-xl border-b-4 border-tecpred-orange">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold text-white flex items-center gap-2">
                 <UserPlus className="w-7 h-7" />
-                Atribuir Nova Task
+                Atribuir Novo Projeto
               </h2>
               <p className="text-white text-opacity-90 text-sm mt-1">
                 Distribuição inteligente baseada em carga de trabalho e exclusividade
@@ -149,7 +180,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Formulário */}
             <div className="bg-gray-50 rounded-xl p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Dados da Task</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Dados do Projeto</h3>
               
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -198,11 +229,12 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                     Área *
                   </label>
                   <select
-                    value={formData.area_id || ''}
+                    value={formData.area_id ?? ''}
                     onChange={(e) => {
-                      const areaId = parseInt(e.target.value)
-                      const area = areas.find(a => a.area_id === areaId)
-                      setFormData({ ...formData, area_id: areaId })
+                      const raw = e.target.value
+                      const areaId = Number(raw)
+                      const area = areas.find(a => String(a.area_id) === raw)
+                      setFormData({ ...formData, area_id: isNaN(areaId) ? (raw as any) : areaId })
                       setSelectedArea(area || null)
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
@@ -211,7 +243,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                     <option value="">Selecione uma área</option>
                     {areas.map((area) => (
                       <option key={area.area_id} value={area.area_id}>
-                        {area.descricao} ({area.tempo_trabalho_dias} dias)
+                        {area.descricao ?? area.codigo ?? 'Área'}{area.tempo_trabalho_dias != null ? ` (${area.tempo_trabalho_dias} dias)` : ''}
                       </option>
                     ))}
                   </select>
@@ -270,7 +302,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                   type="submit"
                   className="w-full px-6 py-3 bg-gradient-to-r from-tecpred-orange to-tecpred-coral text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold border-2 border-tecpred-orange"
                 >
-                  Atribuir Task
+                  Atribuir Projeto
                 </button>
               </form>
             </div>

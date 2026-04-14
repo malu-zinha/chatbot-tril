@@ -1,8 +1,8 @@
-import React from 'react'
+import React, { useEffect, useCallback } from 'react'
 import { X, Search, Folder } from 'lucide-react'
 
 interface Area {
-  area_id: number
+  area_id: string | number
   codigo: string
   descricao: string
   tempo_trabalho_dias: number
@@ -21,6 +21,21 @@ interface AreasTableProps {
 export default function AreasTable({ isOpen, onClose, data }: AreasTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
 
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose()
+  }, [onClose])
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.removeEventListener('keydown', handleKeyDown)
+        document.body.style.overflow = ''
+      }
+    }
+  }, [isOpen, handleKeyDown])
+
   if (!isOpen) return null
 
   const filteredData = data.filter(item =>
@@ -29,8 +44,8 @@ export default function AreasTable({ isOpen, onClose, data }: AreasTableProps) {
   )
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col animate-fade-in">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col animate-fade-in" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="bg-gradient-to-r from-tecpred-primary to-tecpred-secondary p-6 rounded-t-xl">
           <div className="flex items-center justify-between">
@@ -120,22 +135,22 @@ export default function AreasTable({ isOpen, onClose, data }: AreasTableProps) {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <span className="text-sm font-medium text-gray-900">
-                        {item.tempo_trabalho_dias} dias
+                        {item.tempo_trabalho_dias ?? 0} dias
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <span className="text-sm font-bold text-gray-900">
-                        {item.total_projetos}
+                        {item.total_projetos ?? 0}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <span className="text-sm font-medium text-info">
-                        {item.areas_ativas}
+                        {item.areas_ativas ?? 0}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <span className="text-sm font-medium text-success">
-                        {item.areas_concluidas}
+                        {item.areas_concluidas ?? 0}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -143,11 +158,11 @@ export default function AreasTable({ isOpen, onClose, data }: AreasTableProps) {
                         <div className="w-20 bg-gray-200 rounded-full h-2">
                           <div
                             className="h-2 rounded-full bg-success"
-                            style={{ width: `${Math.min(item.percentual_conclusao, 100)}%` }}
+                            style={{ width: `${Math.min(item.percentual_conclusao ?? 0, 100)}%` }}
                           ></div>
                         </div>
                         <span className="text-sm font-medium text-gray-900 w-12 text-right">
-                          {item.percentual_conclusao.toFixed(1)}%
+                          {(item.percentual_conclusao ?? 0).toFixed(1)}%
                         </span>
                       </div>
                     </td>

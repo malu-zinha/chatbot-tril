@@ -46,8 +46,10 @@ export default function KPICard({
   trendValue,
   onClick,
 }: KPICardProps) {
+  const Wrapper = onClick ? 'button' : 'div'
+
   return (
-    <button
+    <Wrapper
       onClick={onClick}
       className={`bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 animate-fade-in w-full text-left ${
         onClick ? 'cursor-pointer hover:scale-105 active:scale-95' : ''
@@ -94,7 +96,7 @@ export default function KPICard({
           </div>
         </div>
       </div>
-    </button>
+    </Wrapper>
   )
 }
 
