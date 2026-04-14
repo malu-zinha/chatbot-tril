@@ -5,9 +5,10 @@ import Image from 'next/image'
 interface HeaderProps {
   lastUpdate: Date | null
   isLoading: boolean
+  isConnected?: boolean
 }
 
-export default function Header({ lastUpdate, isLoading }: HeaderProps) {
+export default function Header({ lastUpdate, isLoading, isConnected = true }: HeaderProps) {
   return (
     <header className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary shadow-lg border-b-4 border-tecpred-orange overflow-visible">
       <div className="container mx-auto px-0 py-1 pl-0">
@@ -34,7 +35,7 @@ export default function Header({ lastUpdate, isLoading }: HeaderProps) {
           </div>
 
           {/* Status */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-4 pr-6">
             <div className="flex items-center space-x-2 bg-white bg-opacity-10 backdrop-blur-sm px-4 py-2 rounded-lg border border-white border-opacity-20">
               <RefreshCw 
                 className={`w-4 h-4 text-tecpred-orange ${isLoading ? 'animate-spin' : ''}`} 
@@ -51,10 +52,18 @@ export default function Header({ lastUpdate, isLoading }: HeaderProps) {
               </div>
             </div>
             
-            <div className="flex items-center space-x-2 bg-success bg-opacity-20 px-3 py-2 rounded-lg border border-success">
-              <div className="w-3 h-3 bg-success rounded-full animate-pulse-slow shadow-lg shadow-success"></div>
+            <div className={`flex items-center space-x-2 px-3 py-2 rounded-lg border ${
+              isConnected
+                ? 'bg-success bg-opacity-20 border-success'
+                : 'bg-danger bg-opacity-20 border-danger'
+            }`}>
+              <div className={`w-3 h-3 rounded-full shadow-lg ${
+                isConnected
+                  ? 'bg-success animate-pulse-slow shadow-success'
+                  : 'bg-danger shadow-danger'
+              }`}></div>
               <span className="text-white text-sm font-medium">
-                Conectado
+                {isConnected ? 'Conectado' : 'Desconectado'}
               </span>
             </div>
           </div>
@@ -63,4 +72,3 @@ export default function Header({ lastUpdate, isLoading }: HeaderProps) {
     </header>
   )
 }
-
