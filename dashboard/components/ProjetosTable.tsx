@@ -92,6 +92,10 @@ export default function ProjetosTable({
     item.descricao?.trim() ||
     'Sem motivo de aguardo registrado.'
 
+  const getMotivoAtraso = (item: Projeto) =>
+    item.motivo_aguardo?.trim() ||
+    `Projeto atrasado há ${item.dias_atraso} dia(s). Nenhuma observação registrada.`
+
   const filteredData = data.filter(item => {
     const matchesSearch = 
       item.codigo_projeto.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -229,25 +233,37 @@ export default function ProjetosTable({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {isStatusAguardando(item.status_descricao) ? (
-                        <div className="relative inline-block">
-                          <button
-                            type="button"
-                            onClick={() => setTooltipOpen(tooltipOpen === item.projeto_id ? null : item.projeto_id)}
-                            className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              item.data_conclusao
-                                ? 'bg-success text-white'
-                                : item.dias_atraso > 0
-                                ? 'bg-danger text-white'
-                                : 'bg-info text-white'
-                            }`}
-                          >
+                        <div
+                          className="relative inline-block"
+                          onMouseEnter={() => setTooltipOpen(item.projeto_id)}
+                          onMouseLeave={() => setTooltipOpen(null)}
+                        >
+                          <span className="px-2 py-1 text-xs font-medium rounded-full cursor-help bg-yellow-400 text-white">
                             {item.status_descricao}
-                          </button>
+                          </span>
                           {tooltipOpen === item.projeto_id && (
-                            <div className="absolute left-0 top-full mt-2 z-20 w-72 rounded-lg border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg">
-                              <div className="mb-1 font-semibold text-gray-900">Motivo do aguardo</div>
+                            <div className="absolute left-0 top-full mt-2 z-50 w-72 rounded-lg border border-yellow-200 bg-white p-3 text-xs text-gray-700 shadow-xl">
+                              <div className="mb-1 font-semibold text-yellow-700">Motivo do aguardo</div>
                               <div className="whitespace-normal leading-relaxed">
                                 {getMotivoAguardo(item)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : item.dias_atraso > 0 ? (
+                        <div
+                          className="relative inline-block"
+                          onMouseEnter={() => setTooltipOpen(item.projeto_id)}
+                          onMouseLeave={() => setTooltipOpen(null)}
+                        >
+                          <span className="px-2 py-1 text-xs font-medium rounded-full cursor-help bg-danger text-white">
+                            {item.status_descricao}
+                          </span>
+                          {tooltipOpen === item.projeto_id && (
+                            <div className="absolute left-0 top-full mt-2 z-50 w-72 rounded-lg border border-red-200 bg-white p-3 text-xs text-gray-700 shadow-xl">
+                              <div className="mb-1 font-semibold text-red-700">Motivo do atraso</div>
+                              <div className="whitespace-normal leading-relaxed">
+                                {getMotivoAtraso(item)}
                               </div>
                             </div>
                           )}
@@ -256,8 +272,6 @@ export default function ProjetosTable({
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           item.data_conclusao
                             ? 'bg-success text-white'
-                            : item.dias_atraso > 0
-                            ? 'bg-danger text-white'
                             : 'bg-info text-white'
                         }`}>
                           {item.status_descricao}
