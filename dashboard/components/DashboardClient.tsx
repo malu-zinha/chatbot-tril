@@ -380,7 +380,7 @@ export default function DashboardClient() {
               value={visaoGeral?.total_projetos || 0}
               subtitle={`${visaoGeral?.total_areas || 0} áreas`}
               icon={Briefcase}
-              color="primary"
+              color="warning"
               onClick={() => setShowProjetosModal(true)}
             />
             <KPICard
@@ -388,7 +388,7 @@ export default function DashboardClient() {
               value={visaoGeral?.projetos_concluidos || 0}
               subtitle={`${visaoGeral?.areas_concluidas || 0} áreas concluídas`}
               icon={CheckCircle}
-              color="success"
+              color="warning"
               onClick={() => setShowProjetosConcluidosModal(true)}
             />
             <KPICard
@@ -396,7 +396,7 @@ export default function DashboardClient() {
               value={visaoGeral?.projetos_em_execucao || 0}
               subtitle={`${visaoGeral?.areas_ativas || 0} áreas ativas`}
               icon={Play}
-              color="info"
+              color="warning"
               onClick={() => setShowProjetosExecucaoModal(true)}
             />
             <KPICard
@@ -404,7 +404,7 @@ export default function DashboardClient() {
               value={visaoGeral?.projetos_atrasados || 0}
               subtitle="Requer atenção"
               icon={AlertTriangle}
-              color="danger"
+              color="warning"
               onClick={() => setShowAtrasadosModal(true)}
             />
           </div>
