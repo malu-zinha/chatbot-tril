@@ -9,21 +9,19 @@ interface HeaderProps {
 
 export default function Header({ lastUpdate, isLoading }: HeaderProps) {
   return (
-    <header className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary shadow-lg border-b-4 border-tecpred-orange">
-      <div className="container mx-auto px-6 py-4">
+    <header className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary shadow-lg border-b-4 border-tecpred-orange overflow-visible">
+      <div className="container mx-auto px-0 py-1 pl-0">
         <div className="flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center space-x-4">
-            <div className="bg-white px-6 py-3 rounded-lg shadow-lg border-2 border-tecpred-orange">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-tecpred-primary rounded flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">P</span>
-                </div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-tecpred-primary to-tecpred-secondary bg-clip-text text-transparent">
-                  TecPred
-                </h1>
-              </div>
-            </div>
+            <Image
+              src="/logo.png"
+              alt="TecPred"
+              width={560}
+              height={178}
+              priority
+              className="h-40 w-auto -my-8 brightness-110 contrast-125 drop-shadow-[0_2px_10px_rgba(255,255,255,0.45)]"
+            />
             <div className="hidden md:block">
               <h2 className="text-white text-lg font-semibold">
                 Dashboard Executivo

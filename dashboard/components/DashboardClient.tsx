@@ -17,6 +17,7 @@ import ProjetosTable from '@/components/ProjetosTable'
 import EngenheirosTable from '@/components/EngenheirosTable'
 import AreasTable from '@/components/AreasTable'
 import AtribuirTask, { TaskData } from '@/components/AtribuirTask'
+import CriarProjeto from '@/components/CriarProjeto'
 import {
   fetchVisaoGeral,
   fetchAtrasosEngenheiro,
@@ -84,6 +85,7 @@ export default function DashboardClient() {
   const [showEngenheirosModal, setShowEngenheirosModal] = useState(false)
   const [showAreasModal, setShowAreasModal] = useState(false)
   const [showAtribuirTaskModal, setShowAtribuirTaskModal] = useState(false)
+  const [showCriarProjetoModal, setShowCriarProjetoModal] = useState(false)
   const [showRetrabalhoDetalhesModal, setShowRetrabalhoDetalhesModal] = useState(false)
   const [returnProjetosModal, setReturnProjetosModal] = useState<
     'all' | 'concluido' | 'em_execucao' | 'atrasado' | null
@@ -167,6 +169,10 @@ export default function DashboardClient() {
     loadData()
   }
 
+  const handleCriarProjetoSuccess = () => {
+    loadData()
+  }
+
   const openRetrabalhoModal = async (
     projetoId: string,
     codigoProjeto?: string,
@@ -236,10 +242,21 @@ export default function DashboardClient() {
 
       <main className="container mx-auto px-6 py-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-6">Planilhas</h1>
-        <div className="mb-6">
+        <div className="mb-6 flex flex-wrap gap-3">
+          <button
+            onClick={() => setShowCriarProjetoModal(true)}
+            className="px-6 py-3 bg-gradient-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold flex items-center gap-2 border-2 border-tecpred-primary"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              <line x1="12" x2="12" y1="11" y2="17"></line>
+              <line x1="9" x2="15" y1="14" y2="14"></line>
+            </svg>
+            Criar Novo Projeto
+          </button>
           <button
             onClick={() => setShowAtribuirTaskModal(true)}
-            className="px-6 py-3 bg-gradient-to-r from-tecpred-orange to-tecpred-coral text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold flex items-center gap-2 border-2 border-tecpred-orange"
+            className="px-6 py-3 bg-gradient-to-r from-tecpred-primary to-tecpred-secondary text-white rounded-lg hover:shadow-xl hover:scale-105 transition-all font-semibold flex items-center gap-2 border-2 border-tecpred-primary"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
@@ -336,6 +353,11 @@ export default function DashboardClient() {
           isOpen={showAreasModal}
           onClose={() => setShowAreasModal(false)}
           data={areas}
+        />
+        <CriarProjeto
+          isOpen={showCriarProjetoModal}
+          onClose={() => setShowCriarProjetoModal(false)}
+          onSuccess={handleCriarProjetoSuccess}
         />
         <AtribuirTask
           isOpen={showAtribuirTaskModal}
