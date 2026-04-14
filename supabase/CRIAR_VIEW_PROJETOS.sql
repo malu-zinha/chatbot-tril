@@ -22,6 +22,7 @@ SELECT
         THEN (CURRENT_DATE - ep.data_prevista::DATE)
         ELSE 0
     END AS dias_atraso,
+    ep.observacoes AS motivo_aguardo,
     p.ativo,
     p.created_at
 FROM projetos p
