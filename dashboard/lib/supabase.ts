@@ -562,6 +562,25 @@ export async function fetchAreas(): Promise<Area[]> {
   })
 }
 
+export async function criarProjeto(params: {
+  codigo: string
+  cliente: string
+  descricao: string
+}): Promise<{ success: boolean; data?: any; error?: string }> {
+  const { data, error } = await supabase.rpc('criar_projeto', {
+    p_codigo: params.codigo,
+    p_cliente: params.cliente,
+    p_descricao: params.descricao,
+  })
+
+  if (error) {
+    console.error('Erro ao criar projeto:', error)
+    return { success: false, error: error.message }
+  }
+
+  return { success: true, data }
+}
+
 // Setup realtime subscriptions
 export function subscribeToChanges(
   table: string,

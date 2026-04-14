@@ -10,8 +10,8 @@ interface HeaderProps {
 
 export default function Header({ lastUpdate, isLoading, isConnected = true }: HeaderProps) {
   return (
-    <header className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary shadow-lg border-b-4 border-tecpred-orange">
-      <div className="container mx-auto px-6 py-4">
+    <header className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary shadow-lg border-b-4 border-tecpred-orange overflow-visible">
+      <div className="container mx-auto px-0 py-1 pl-0">
         <div className="flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center space-x-4">
@@ -35,7 +35,7 @@ export default function Header({ lastUpdate, isLoading, isConnected = true }: He
           </div>
 
           {/* Status */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-4 pr-6">
             <div className="flex items-center space-x-2 bg-white bg-opacity-10 backdrop-blur-sm px-4 py-2 rounded-lg border border-white border-opacity-20">
               <RefreshCw 
                 className={`w-4 h-4 text-tecpred-orange ${isLoading ? 'animate-spin' : ''}`} 
@@ -72,4 +72,3 @@ export default function Header({ lastUpdate, isLoading, isConnected = true }: He
     </header>
   )
 }
-
