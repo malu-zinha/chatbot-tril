@@ -1961,17 +1961,21 @@ export class SupabaseService {
         return false;
       }
 
-      // Atualizar previsão do dia com o feito
+      // Upsert previsão do dia com o feito (cria registro se manhã não foi preenchida)
       const { error: erroPrevisao } = await this.supabase
         .from('projetos_previsao')
-        .update({
+        .upsert({
+          eng_projeto_id,
+          projeto_id: atrib.projeto_id,
+          eng_id: atrib.eng_id,
+          data_registro: new Date().toISOString().split('T')[0],
           feito_texto,
           data_fim_dia: new Date().toISOString(),
           editavel: false,
           updated_at: new Date().toISOString(),
-        })
-        .eq('eng_projeto_id', eng_projeto_id)
-        .eq('data_registro', new Date().toISOString().split('T')[0]);
+        }, {
+          onConflict: 'eng_projeto_id,data_registro'
+        });
 
       if (erroPrevisao) {
         console.warn('⚠️ Aviso ao atualizar previsão:', erroPrevisao);

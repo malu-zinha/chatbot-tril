@@ -59,6 +59,9 @@ export class MessageHandler {
     // Sessões são mantidas em memória (Map)
     // SessionService (Redis) está disponível mas não integrado ao MessageHandler
     console.log('✅ MessageHandler inicializado com sessões in-memory');
+
+    // Limpar sessões antigas a cada 5 minutos para evitar memory leak
+    setInterval(() => this.limparSessoesAntigas(), 5 * 60 * 1000);
   }
 
   // =====================================================
@@ -67,26 +70,12 @@ export class MessageHandler {
 
   async processarMensagem(whatsapp: string, mensagem: string): Promise<MessageResponse> {
     try {
-      // DEBUG ESPECÍFICO: Número problemático
-      const numeroProblema = '5583988990772';
-      const isNumeroProblema = whatsapp.includes(numeroProblema) || whatsapp.includes('98899');
-
       console.log(`\n🔵 MessageHandler.processarMensagem()`);
       console.log(`   WhatsApp: ${whatsapp}`);
       console.log(`   Mensagem: "${mensagem}"`);
 
-      if (isNumeroProblema) {
-        console.log(`   🔴🔴🔴 NÚMERO PROBLEMÁTICO CHEGOU NO MESSAGEHANDLER! 🔴🔴🔴`);
-      }
-
       // Normalizar WhatsApp
-      console.log(`   🔍 [DEBUG] Normalizando WhatsApp...`);
       const whatsappNormalizado = this.normalizarWhatsapp(whatsapp);
-      console.log(`   🔍 [DEBUG] WhatsApp normalizado: ${whatsappNormalizado}`);
-
-      if (isNumeroProblema) {
-        console.log(`   🔴 WhatsApp normalizado: ${whatsappNormalizado}`);
-      }
 
       // Obter ou criar sessão
       let sessao = this.sessoes.get(whatsappNormalizado);
@@ -203,6 +192,7 @@ export class MessageHandler {
           }
           return { resposta: this.mensagemMenu(sessao.tipo_usuario) };
 
+        case 'desconhecido':
         default:
           // Não tenta mais processar via IA - força uso do menu
           console.log(`   ⚠️ Intenção não reconhecida\n`);
@@ -231,28 +221,22 @@ export class MessageHandler {
   // =====================================================
 
   private async autenticarUsuario(whatsapp: string): Promise<{ tipo: TipoUsuario; user_id?: string }> {
-    console.log(`   🔐 Autenticando usuário: ${whatsapp}`);
-
     // Verificar se é engenheiro
-    console.log(`   🔍 [DEBUG] Buscando engenheiro por telefone...`);
     const engenheiro = await getSupabase().buscarEngenheiroPorTelefone(whatsapp);
-    console.log(`   🔍 [DEBUG] Resultado busca engenheiro: ${engenheiro ? 'ENCONTRADO' : 'NÃO encontrado'}`);
     if (engenheiro) {
-      console.log(`   ✅ Engenheiro identificado: ${engenheiro.nome} (${engenheiro.eng_id})`);
+      console.log(`   ✅ Engenheiro identificado: ${engenheiro.nome}`);
       return { tipo: 'engenheiro', user_id: engenheiro.eng_id };
     }
 
     // Verificar se é dono
-    console.log(`   🔍 [DEBUG] Buscando dono por telefone...`);
     const dono = await getSupabase().buscarDonoPorTelefone(whatsapp);
-    console.log(`   🔍 [DEBUG] Resultado busca dono: ${dono ? 'ENCONTRADO' : 'NÃO encontrado'}`);
     if (dono) {
-      console.log(`   ✅ Dono identificado: ${dono.nome} (${dono.dono_id})`);
+      console.log(`   ✅ Dono identificado: ${dono.nome}`);
       return { tipo: 'dono', user_id: dono.dono_id };
     }
 
     // Não cadastrado
-    console.log(`   ⚠️ Número não cadastrado no sistema`);
+    console.log(`   ⚠️ Número não cadastrado: ${whatsapp}`);
     return { tipo: 'nao_cadastrado' };
   }
 
@@ -338,8 +322,8 @@ export class MessageHandler {
       return 'gerenciar_projeto';
     }
 
-    // Default: menu (força uso de comandos estruturados)
-    return 'menu';
+    // Default: mensagem não reconhecida
+    return 'desconhecido';
   }
 
   // =====================================================
@@ -351,9 +335,10 @@ export class MessageHandler {
     sessao.fluxo_ativo = 'engineer_project';
     sessao.instancia_fluxo = flow;
 
-    // Iniciar fluxo (mostra menu de 3 opções)
-    const resultado = await flow.processarMensagem('iniciar');
-    return { resposta: resultado.mensagem };
+    // Iniciar fluxo (avança state para escolher_acao)
+    await flow.processarMensagem('iniciar');
+    // Mostrar menu do engenheiro (stepInicio retorna mensagem vazia)
+    return { resposta: this.mensagemMenu(sessao.tipo_usuario) };
   }
 
   private async iniciarFluxoDono(sessao: UserSession): Promise<MessageResponse> {
@@ -363,14 +348,7 @@ export class MessageHandler {
       };
     }
 
-    // Se já existe um fluxo ativo do dono, NÃO criar um novo!
-    if (sessao.fluxo_ativo === 'owner' && sessao.instancia_fluxo) {
-      console.log('   ⚠️ [DEBUG] Fluxo do dono já ativo, não criando novo');
-      const resultado = await sessao.instancia_fluxo.processarMensagem('iniciar');
-      return { resposta: resultado.mensagem };
-    }
-
-    console.log('   ✅ [DEBUG] Criando nova instância do OwnerFlow');
+    // Sempre criar nova instância (reset do fluxo) para evitar enviar 'iniciar' ao step atual
     const flow = new OwnerFlow(sessao.whatsapp, sessao.user_id);
     sessao.fluxo_ativo = 'owner';
     sessao.instancia_fluxo = flow;
@@ -526,37 +504,18 @@ Digite *menu* para ver as opções disponíveis`;
       // Remove caracteres especiais e garante formato +55XXXXXXXXXXX
       const cleaned = numero.replace(/[^\d+]/g, '');
 
-      // DEBUG: Número problemático
-      if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
-        console.log(`   🔍 Normalizando número problemático:`);
-        console.log(`   Original: ${whatsapp}`);
-        console.log(`   Após remover @: ${numero}`);
-        console.log(`   Após limpar: ${cleaned}`);
-      }
-
       if (!cleaned.startsWith('+')) {
         // Evitar duplo +55: se o número já começa com 55 (código do país Brasil),
         // não adicionar outro 55
-        let resultado: string;
         if (cleaned.startsWith('55') && cleaned.length >= 12) {
-          resultado = '+' + cleaned;
-        } else {
-          resultado = '+55' + cleaned;
+          return '+' + cleaned;
         }
-        if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
-          console.log(`   Resultado final: ${resultado}`);
-        }
-        return resultado;
-      }
-
-      if (cleaned.includes('98899') || cleaned.includes('5583988990772')) {
-        console.log(`   Resultado final: ${cleaned}`);
+        return '+55' + cleaned;
       }
 
       return cleaned;
     } catch (error: any) {
       console.error(`❌ Erro ao normalizar WhatsApp "${whatsapp}":`, error);
-      // Retornar o original se houver erro
       return whatsapp.replace(/[^\d+]/g, '').replace(/^(\d+)$/, '+55$1');
     }
   }

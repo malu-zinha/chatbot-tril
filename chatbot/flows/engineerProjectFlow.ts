@@ -57,6 +57,7 @@ type FlowStep =
 
 interface FlowState {
   step: FlowStep;
+  stepHistory: FlowStep[];
   mode: 'notif_manha' | 'notif_noite' | 'create' | 'update_morning' | 'update_night' | null;
   periodo?: 'manha' | 'noite';
   projectCode?: string;
@@ -111,6 +112,7 @@ export class EngineerProjectFlow {
     this.whatsapp = whatsapp;
     this.state = {
       step: 'inicio',
+      stepHistory: [],
       mode: null,
       projectData: {},
       engineerName: engineerName || 'Engenheiro' // Nome padrão (não usado mais, mantido por compatibilidade)
@@ -242,6 +244,10 @@ export class EngineerProjectFlow {
       // COMANDO: VOLTAR
       // ═══════════════════════════════════════════
       if (msg.toLowerCase() === 'voltar' || msg === '0') {
+        if (this.state.stepHistory.length > 0) {
+          this.state.step = this.state.stepHistory.pop()!;
+          return { mensagem: '⬅️ Voltando ao passo anterior...\n\nDigite sua opção:', finalizado: false };
+        }
         return this.cancelar();
       }
 
@@ -338,7 +344,7 @@ export class EngineerProjectFlow {
   private async stepInicio(): Promise<FlowResult> {
     // O menu já foi mostrado pelo messageHandler
     // Apenas aguardar escolha (1, 2 ou 3)
-    this.state.step = 'escolher_acao';
+    this.goToStep('escolher_acao');
     return { mensagem: '', finalizado: false };
   }
 
@@ -349,24 +355,24 @@ export class EngineerProjectFlow {
       // Notificacao Matinal
       this.state.mode = 'notif_manha';
       this.state.periodo = 'manha';
-      this.state.step = 'escolher_projeto_manha';
+      this.goToStep('escolher_projeto_manha');
       return await this.stepEscolherProjetoManha('');
 
     } else if (opcao === '2') {
       // Notificacao Noturna
       this.state.mode = 'notif_noite';
       this.state.periodo = 'noite';
-      this.state.step = 'escolher_projeto_noite';
+      this.goToStep('escolher_projeto_noite');
       return await this.stepEscolherProjetoNoite('');
 
     } else if (opcao === '3') {
       // Visualizar projetos
-      this.state.step = 'visualizar_projetos';
+      this.goToStep('visualizar_projetos');
       return await this.stepVisualizarProjetos();
 
     } else if (opcao === '4') {
       // Marcar etapa concluída (progresso ponderado)
-      this.state.step = 'progresso_escolher_projeto';
+      this.goToStep('progresso_escolher_projeto');
       return await this.stepProgressoEscolherProjeto('');
 
     } else {
@@ -792,6 +798,13 @@ export class EngineerProjectFlow {
   // UTILITÁRIOS
   // =====================================================
 
+  private goToStep(step: FlowStep): void {
+    if (this.state.step !== 'inicio') {
+      this.state.stepHistory.push(this.state.step);
+    }
+    this.state.step = step;
+  }
+
   private cancelar(): FlowResult {
     return {
       mensagem: '❌ *Fluxo cancelado*\n\nDigite "menu" para voltar ao início.',
@@ -814,7 +827,7 @@ export class EngineerProjectFlow {
     }
 
     this.state.availableAtribuicoes = atribuicoes;
-    this.state.step = 'escolher_area_manha'; // Avançar step para receber escolha
+    this.goToStep('escolher_area_manha'); // Avançar step para receber escolha
 
     let mensagem = `🌅 *Notificação Matinal*\n\n`;
     mensagem += `📋 Escolha o projeto:\n\n`;
@@ -844,7 +857,7 @@ export class EngineerProjectFlow {
     this.state.projectCode = atribuicao.codigo;
 
     // Prosseguir para status
-    this.state.step = 'status_atual_manha';
+    this.goToStep('status_atual_manha');
     return await this.stepStatusAtualManha('');
   }
 
@@ -878,7 +891,7 @@ export class EngineerProjectFlow {
     }
 
     this.state.statusAtual = statusList[escolha].status_id;
-    this.state.step = 'previsao_dia';
+    this.goToStep('previsao_dia');
 
     return {
       mensagem: `✅ Status: ${statusList[escolha].descricao}\n\n📝 *O que você pretende fazer hoje?*\n\n_Descreva brevemente a previsão para o dia_`,
@@ -935,7 +948,7 @@ export class EngineerProjectFlow {
     }
 
     this.state.availableAtribuicoes = atribuicoes;
-    this.state.step = 'escolher_area_noite'; // Avançar step para receber escolha
+    this.goToStep('escolher_area_noite'); // Avançar step para receber escolha
 
     let mensagem = `🌙 *Notificação Noturna*\n\n`;
     mensagem += `📋 Escolha o projeto:\n\n`;
@@ -967,7 +980,7 @@ export class EngineerProjectFlow {
     this.state.selectedProjetoCodigo = atribuicao.codigo;
 
     // Prosseguir para feito do dia
-    this.state.step = 'feito_dia';
+    this.goToStep('feito_dia');
 
     return {
       mensagem: `✅ Projeto: *${atribuicao.codigo}*\n\n✔️ *O que foi feito hoje?*\n\n_Descreva o trabalho realizado no dia_`,
@@ -986,7 +999,7 @@ export class EngineerProjectFlow {
     }
 
     this.state.feitoTexto = feito;
-    this.state.step = 'retrabalho_pergunta';
+    this.goToStep('retrabalho_pergunta');
 
     return {
       mensagem: `✅ Feito registrado!\n\n🔄 *Teve retrabalho hoje?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
@@ -1000,7 +1013,7 @@ export class EngineerProjectFlow {
     if (resposta === '1') {
       // Teve retrabalho
       this.state.teveRetrabalho = true;
-      this.state.step = 'retrabalho_motivo';
+      this.goToStep('retrabalho_motivo');
 
       let mensagem = `⚠️ *Motivo do Retrabalho*\n\n`;
       mensagem += `1️⃣ Erro de dimensionamento\n`;
@@ -1023,7 +1036,7 @@ export class EngineerProjectFlow {
         undefined   // sem motivo
       );
 
-      this.state.step = 'observacoes_pergunta';
+      this.goToStep('observacoes_pergunta');
 
       return {
         mensagem: `✅ Sem retrabalho!\n\n📝 *Quer adicionar observações?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
@@ -1065,7 +1078,7 @@ export class EngineerProjectFlow {
       motivos[escolha]
     );
 
-    this.state.step = 'observacoes_pergunta';
+    this.goToStep('observacoes_pergunta');
 
     return {
       mensagem: `✅ Motivo registrado: ${motivos[escolha]}\n\n📝 *Quer adicionar observações?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
@@ -1078,7 +1091,7 @@ export class EngineerProjectFlow {
 
     if (resposta === '1') {
       // Quer adicionar observações
-      this.state.step = 'observacoes_texto';
+      this.goToStep('observacoes_texto');
 
       return {
         mensagem: `📝 *Observações*\n\n_Digite suas observações sobre o dia de trabalho_`,
@@ -1155,7 +1168,7 @@ export class EngineerProjectFlow {
 
         if (pavimentosComPendencias.length > 0) {
           this.state.pavimentosDisponiveis = pavimentosComPendencias;
-          this.state.step = 'noite_etapa_pergunta';
+          this.goToStep('noite_etapa_pergunta');
 
           mensagem += `\n📐 *Alguma etapa foi concluída hoje?*\n\n`;
           mensagem += `1️⃣ Sim\n`;
@@ -1215,7 +1228,7 @@ export class EngineerProjectFlow {
     mensagem += `_Ou "menu" para voltar_`;
 
     this.state.availableAtribuicoes = atribuicoes;
-    this.state.step = 'escolher_projeto_viz';
+    this.goToStep('escolher_projeto_viz');
 
     return { mensagem, finalizado: false };
   }
@@ -1280,7 +1293,7 @@ export class EngineerProjectFlow {
     msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
     msg += `_Digite "menu" para voltar ao menu principal_`;
 
-    this.state.step = 'mostrar_detalhes_projeto';
+    this.goToStep('mostrar_detalhes_projeto');
 
     return { mensagem: msg, finalizado: true };
   }
@@ -1325,7 +1338,7 @@ export class EngineerProjectFlow {
 
       mensagem += `\n_Digite o número do projeto_`;
 
-      this.state.step = 'progresso_escolher_projeto';
+      this.goToStep('progresso_escolher_projeto');
       return { mensagem, finalizado: false };
     }
 
@@ -1367,7 +1380,7 @@ export class EngineerProjectFlow {
     }
 
     this.state.pavimentosDisponiveis = pavimentosComPendencias;
-    this.state.step = 'progresso_escolher_pavimento';
+    this.goToStep('progresso_escolher_pavimento');
 
     let mensagem = `📐 *${projeto.codigo}* - Pavimentos\n\n`;
 
@@ -1403,7 +1416,7 @@ export class EngineerProjectFlow {
     // Filtrar etapas pendentes
     const etapasPendentes = pavimento.etapas.filter((e: any) => !e.concluida);
     this.state.etapasDisponiveis = etapasPendentes;
-    this.state.step = 'progresso_escolher_etapa';
+    this.goToStep('progresso_escolher_etapa');
 
     let mensagem = `📐 *${this.state.selectedProjetoCodigo}* > *${pavimento.nome}*\n\n`;
     mensagem += `📋 Etapas pendentes:\n\n`;
@@ -1452,7 +1465,7 @@ export class EngineerProjectFlow {
     mensagem += `📊 *Progresso ponderado: ${progresso ?? 0}%*\n\n`;
     mensagem += `_Digite "menu" para voltar ao menu principal_`;
 
-    this.state.step = 'fim';
+    this.goToStep('fim');
 
     return { mensagem, finalizado: true };
   }
@@ -1479,7 +1492,7 @@ export class EngineerProjectFlow {
 
       mensagem += `_Digite o número do pavimento_`;
 
-      this.state.step = 'noite_etapa_pavimento';
+      this.goToStep('noite_etapa_pavimento');
       return { mensagem, finalizado: false };
 
     } else if (resposta === '2') {
@@ -1514,7 +1527,7 @@ export class EngineerProjectFlow {
     // Filtrar etapas pendentes
     const etapasPendentes = pavimento.etapas.filter((e: any) => !e.concluida);
     this.state.etapasDisponiveis = etapasPendentes;
-    this.state.step = 'noite_etapa_escolher';
+    this.goToStep('noite_etapa_escolher');
 
     let mensagem = `📐 *${this.state.projectCode}* > *${pavimento.nome}*\n\n`;
     mensagem += `📋 Etapas pendentes:\n\n`;
@@ -1561,7 +1574,7 @@ export class EngineerProjectFlow {
     mensagem += `2️⃣ Não\n\n`;
     mensagem += `_Digite 1 ou 2_`;
 
-    this.state.step = 'noite_etapa_mais';
+    this.goToStep('noite_etapa_mais');
     return { mensagem, finalizado: false };
   }
 
@@ -1596,7 +1609,7 @@ export class EngineerProjectFlow {
 
       mensagem += `_Digite o número do pavimento_`;
 
-      this.state.step = 'noite_etapa_pavimento';
+      this.goToStep('noite_etapa_pavimento');
       return { mensagem, finalizado: false };
 
     } else if (resposta === '2') {

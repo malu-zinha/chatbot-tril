@@ -71,6 +71,10 @@ function normalizeWhatsapp(whatsapp: string): string {
   // Remove caracteres especiais e garante formato +55XXXXXXXXXXX
   const cleaned = whatsapp.replace(/[^\d+]/g, '');
   if (!cleaned.startsWith('+')) {
+    // Evitar duplo +55: se já começa com 55 e tem tamanho de celular BR (12-13 dígitos)
+    if (cleaned.startsWith('55') && cleaned.length >= 12) {
+      return '+' + cleaned;
+    }
     return '+55' + cleaned;
   }
   return cleaned;
