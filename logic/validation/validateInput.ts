@@ -297,7 +297,7 @@ export function validateProjectData(data: ProjectData): ValidationResult {
   }
 
   // Validar área (valores sugeridos)
-  const areasSugeridas = ['Elétrico', 'Hidráulico', 'Estrutural', 'Civil', 'Mecânico'];
+  const areasSugeridas = ['Elétrico', 'Hidrossanitário', 'Estrutural', 'Civil', 'Mecânico'];
   if (data.area && !areasSugeridas.includes(data.area)) {
     avisos.push(`Área '${data.area}' não é padrão. Valores sugeridos: ${areasSugeridas.join(', ')}`);
   }

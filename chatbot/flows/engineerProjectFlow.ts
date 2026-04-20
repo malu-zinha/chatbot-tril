@@ -513,7 +513,7 @@ export class EngineerProjectFlow {
               'rede de água': 'H1',
               'esgoto': 'H1',
               'solar fotovoltaico': 'E1',
-              'hidráulico piscina': 'H1',
+              'hidrossanitário piscina': 'H1',
             };
 
             let areaCodigo = areaMap[areaNome] || 'E1'; // Fallback para E1

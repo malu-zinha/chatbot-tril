@@ -240,7 +240,7 @@ function extrairCliente(prompt: string): string {
 function extrairArea(prompt: string): string {
   const areas: Record<string, string> = {
     'eletric': 'ELETRICO',
-    'hidraul': 'HIDRAULICO',
+    'hidrossanit': 'HIDROSSANITARIO',
     'estrutur': 'ESTRUTURAL',
     'climatiz': 'CLIMATIZACAO',
     'incendio': 'PREVENCAO_INCENDIO',
