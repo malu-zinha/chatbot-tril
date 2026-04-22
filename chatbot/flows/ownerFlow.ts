@@ -31,7 +31,7 @@ interface FlowResult {
 
 type StepFunction = (mensagem: string) => Promise<FlowResult>;
 
-type FlowMode = 'visualizar' | 'distribuir' | 'criar' | 'editar' | 'deletar';
+type FlowMode = 'visualizar' | 'distribuir' | 'criar' | 'editar' | 'deletar' | 'transferir';
 type VizTipo = 'projeto' | 'engenheiro' | 'retrabalhos';
 
 // =====================================================
@@ -92,6 +92,15 @@ export class OwnerFlow {
     edit_dados_atuais?: any;
     edit_campo?: string;
     edit_novo_valor?: any;
+
+    // Transferência
+    transf_eng_origem_id?: string;
+    transf_eng_origem_nome?: string;
+    transf_atribuicao_id?: string;
+    transf_atribuicao_desc?: string;
+    transf_eng_destino_id?: string;
+    transf_eng_destino_nome?: string;
+    transf_atribuicoes?: any[];
 
     // Listas
     engenheiros?: any[];
@@ -178,6 +187,12 @@ export class OwnerFlow {
       excluir_projeto_confirmar: this.stepExcluirProjetoConfirmar.bind(this),
       area_excluir_selecionar: this.stepAreaExcluirSelecionar.bind(this),
       area_excluir_confirmar: this.stepAreaExcluirConfirmar.bind(this),
+
+      // Transferir tarefa
+      transf_escolher_eng_origem: this.stepTransfEscolherEngOrigem.bind(this),
+      transf_escolher_atribuicao: this.stepTransfEscolherAtribuicao.bind(this),
+      transf_escolher_eng_destino: this.stepTransfEscolherEngDestino.bind(this),
+      transf_confirmar: this.stepTransfConfirmar.bind(this),
     };
 
     const stepFunction = steps[this.stepAtual];
@@ -224,7 +239,8 @@ export class OwnerFlow {
                 `3️⃣ Criar novo projeto\n` +
                 `4️⃣ Editar projeto\n` +
                 `5️⃣ Gerenciar Engenheiros\n` +
-                `6️⃣ Excluir (Projeto/Área)\n\n` +
+                `6️⃣ Excluir (Projeto/Área)\n` +
+                `7️⃣ Transferir tarefa entre engenheiros\n\n` +
                 `_Digite o número da opção desejada_`,
       finalizado: false,
     };
@@ -274,10 +290,14 @@ export class OwnerFlow {
         this.contexto.modo = 'deletar';
         return await this.iniciarExclusaoUnificada();
 
+      case '7':
+        this.contexto.modo = 'transferir';
+        return await this.iniciarTransferencia();
+
       default:
         return {
           mensagem: `❌ Opção inválida.\n\n` +
-                    `Digite uma opção entre 1 e 6.`,
+                    `Digite uma opção entre 1 e 7.`,
           finalizado: false,
         };
     }
@@ -1944,5 +1964,162 @@ export class OwnerFlow {
       return { mensagem: `❌ Erro ao remover área: ${res.error || 'Erro desconhecido'}\n\n_Digite "menu"_`, finalizado: true };
     }
     return { mensagem: `❌ Cancelado.\n\n_Digite "menu"_`, finalizado: true };
+  }
+
+  // =====================================================
+  // TRANSFERIR TAREFA ENTRE ENGENHEIROS
+  // =====================================================
+
+  private async iniciarTransferencia(): Promise<FlowResult> {
+    const resultado = await getSupabase().listarEngenheiros();
+    if (!resultado.success || !resultado.data?.length) {
+      return { mensagem: '❌ Nenhum engenheiro cadastrado.', finalizado: true };
+    }
+
+    this.contexto.engenheiros = resultado.data;
+    this.stepAtual = 'transf_escolher_eng_origem';
+
+    let msg = `🔄 *Transferir Tarefa*\n\n`;
+    msg += `Escolha o engenheiro que possui a tarefa:\n\n`;
+    resultado.data.forEach((eng: any, i: number) => {
+      msg += `${i + 1}️⃣ ${eng.nome}\n`;
+    });
+    msg += `\n_Digite o número do engenheiro_`;
+
+    return { mensagem: msg, finalizado: false };
+  }
+
+  private async stepTransfEscolherEngOrigem(msg: string): Promise<FlowResult> {
+    const escolha = parseInt(msg.trim()) - 1;
+    const engenheiros = this.contexto.engenheiros || [];
+
+    if (isNaN(escolha) || escolha < 0 || escolha >= engenheiros.length) {
+      return { mensagem: `❌ Opção inválida. Digite um número entre 1 e ${engenheiros.length}.`, finalizado: false };
+    }
+
+    const engOrigem = engenheiros[escolha];
+    this.contexto.transf_eng_origem_id = engOrigem.eng_id;
+    this.contexto.transf_eng_origem_nome = engOrigem.nome;
+
+    // Buscar atribuições do engenheiro
+    const atribuicoes = await getSupabase().listarAtribuicoesEngenheiro(engOrigem.eng_id);
+
+    if (atribuicoes.length === 0) {
+      return { mensagem: `❌ ${engOrigem.nome} não tem tarefas atribuídas.\n\n_Digite "menu"_`, finalizado: true };
+    }
+
+    // Enriquecer com dados de projeto e área
+    const atribsEnriquecidas = [];
+    for (const atrib of atribuicoes) {
+      const projeto = await getSupabase().buscarProjetoPorId(atrib.projeto_id);
+      const area = await getSupabase().buscarAreaPorId(atrib.area_id);
+      atribsEnriquecidas.push({
+        ...atrib,
+        codigo_projeto: projeto?.codigo_projeto || '?',
+        cliente: projeto?.cliente || '?',
+        area_descricao: area?.descricao || '?',
+      });
+    }
+
+    this.contexto.transf_atribuicoes = atribsEnriquecidas;
+    this.stepAtual = 'transf_escolher_atribuicao';
+
+    let mensagem = `📋 Tarefas de *${engOrigem.nome}*:\n\n`;
+    atribsEnriquecidas.forEach((atrib: any, i: number) => {
+      mensagem += `${i + 1}️⃣ *${atrib.codigo_projeto}* - ${atrib.area_descricao}\n`;
+      mensagem += `   Cliente: ${atrib.cliente}\n\n`;
+    });
+    mensagem += `_Digite o número da tarefa para transferir_`;
+
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepTransfEscolherAtribuicao(msg: string): Promise<FlowResult> {
+    const escolha = parseInt(msg.trim()) - 1;
+    const atribuicoes = this.contexto.transf_atribuicoes || [];
+
+    if (isNaN(escolha) || escolha < 0 || escolha >= atribuicoes.length) {
+      return { mensagem: `❌ Opção inválida. Digite um número entre 1 e ${atribuicoes.length}.`, finalizado: false };
+    }
+
+    const atrib = atribuicoes[escolha];
+    this.contexto.transf_atribuicao_id = atrib.id;
+    this.contexto.transf_atribuicao_desc = `${atrib.codigo_projeto} - ${atrib.area_descricao}`;
+
+    // Listar engenheiros destino (excluindo o de origem)
+    const resultado = await getSupabase().listarEngenheiros();
+    const engDestinos = (resultado.data || []).filter((eng: any) => eng.eng_id !== this.contexto.transf_eng_origem_id);
+
+    if (engDestinos.length === 0) {
+      return { mensagem: `❌ Não há outros engenheiros para transferir.\n\n_Digite "menu"_`, finalizado: true };
+    }
+
+    this.contexto.engenheiros = engDestinos;
+    this.stepAtual = 'transf_escolher_eng_destino';
+
+    let mensagem = `👷 Escolha o engenheiro destino:\n\n`;
+    engDestinos.forEach((eng: any, i: number) => {
+      mensagem += `${i + 1}️⃣ ${eng.nome}\n`;
+    });
+    mensagem += `\n_Digite o número do engenheiro_`;
+
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepTransfEscolherEngDestino(msg: string): Promise<FlowResult> {
+    const escolha = parseInt(msg.trim()) - 1;
+    const engenheiros = this.contexto.engenheiros || [];
+
+    if (isNaN(escolha) || escolha < 0 || escolha >= engenheiros.length) {
+      return { mensagem: `❌ Opção inválida. Digite um número entre 1 e ${engenheiros.length}.`, finalizado: false };
+    }
+
+    const engDestino = engenheiros[escolha];
+    this.contexto.transf_eng_destino_id = engDestino.eng_id;
+    this.contexto.transf_eng_destino_nome = engDestino.nome;
+
+    this.stepAtual = 'transf_confirmar';
+
+    return {
+      mensagem: `🔄 *Confirmar Transferência*\n\n` +
+                `📋 Tarefa: *${this.contexto.transf_atribuicao_desc}*\n` +
+                `👷 De: *${this.contexto.transf_eng_origem_nome}*\n` +
+                `👷 Para: *${this.contexto.transf_eng_destino_nome}*\n\n` +
+                `1️⃣ Confirmar\n` +
+                `2️⃣ Cancelar`,
+      finalizado: false,
+    };
+  }
+
+  private async stepTransfConfirmar(msg: string): Promise<FlowResult> {
+    const opcao = msg.trim();
+
+    if (opcao === '1') {
+      const resultado = await getSupabase().transferirAtribuicao(
+        this.contexto.transf_atribuicao_id!,
+        this.contexto.transf_eng_destino_id!
+      );
+
+      if (resultado.success) {
+        return {
+          mensagem: `✅ Tarefa transferida com sucesso!\n\n` +
+                    `*${this.contexto.transf_atribuicao_desc}*\n` +
+                    `${this.contexto.transf_eng_origem_nome} → ${this.contexto.transf_eng_destino_nome}\n\n` +
+                    `_Digite "menu" para voltar_`,
+          finalizado: true,
+        };
+      }
+
+      return {
+        mensagem: `❌ Erro ao transferir: ${resultado.error}\n\n_Digite "menu"_`,
+        finalizado: true,
+      };
+    }
+
+    if (opcao === '2') {
+      return { mensagem: `❌ Transferência cancelada.\n\n_Digite "menu"_`, finalizado: true };
+    }
+
+    return { mensagem: `❌ Opção inválida. Digite *1* para confirmar ou *2* para cancelar.`, finalizado: false };
   }
 }

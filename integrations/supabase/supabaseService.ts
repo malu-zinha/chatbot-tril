@@ -862,6 +862,60 @@ export class SupabaseService {
     }
   }
 
+  /**
+   * Transfere uma atribuição (área) de um engenheiro para outro
+   */
+  async transferirAtribuicao(
+    atribuicao_id: string,
+    novo_eng_id: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.connected) return { success: false, error: 'Supabase não conectado' };
+
+    try {
+      // Buscar atribuição atual para verificar duplicata
+      const { data: atribAtual, error: fetchError } = await this.supabase
+        .from('engenheiros_projetos')
+        .select('*')
+        .eq('id', atribuicao_id)
+        .eq('ativo', true)
+        .single();
+
+      if (fetchError || !atribAtual) {
+        return { success: false, error: 'Atribuição não encontrada' };
+      }
+
+      // Verificar se o novo engenheiro já tem essa mesma área/projeto
+      const { data: duplicata } = await this.supabase
+        .from('engenheiros_projetos')
+        .select('id')
+        .eq('eng_id', novo_eng_id)
+        .eq('projeto_id', atribAtual.projeto_id)
+        .eq('area_id', atribAtual.area_id)
+        .eq('ativo', true)
+        .maybeSingle();
+
+      if (duplicata) {
+        return { success: false, error: 'O engenheiro destino já possui essa mesma área/projeto' };
+      }
+
+      // Transferir: atualizar eng_id
+      const { error } = await this.supabase
+        .from('engenheiros_projetos')
+        .update({ eng_id: novo_eng_id, updated_at: new Date().toISOString() })
+        .eq('id', atribuicao_id);
+
+      if (error) {
+        console.error('❌ Erro ao transferir atribuição:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('❌ Erro ao transferir atribuição:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
   // =====================================================
   // PREVISÕES E RETRABALHOS
   // =====================================================
