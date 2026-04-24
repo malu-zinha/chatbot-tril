@@ -223,10 +223,45 @@ export class WhatsAppService {
   }
 
   /**
-   * Envia mensagem via WhatsApp
+   * Envia mensagem via WhatsApp.
+   * Mensagens acima de 1600 caracteres são divididas automaticamente.
    */
   async sendMessage(to: string, message: string): Promise<boolean> {
-    return await this.provider.sendMessage(to, message);
+    const MAX_LENGTH = 1600;
+
+    if (message.length <= MAX_LENGTH) {
+      return await this.provider.sendMessage(to, message);
+    }
+
+    const parts = this.splitMessage(message, MAX_LENGTH);
+    for (let i = 0; i < parts.length; i++) {
+      const partLabel = `[${i + 1}/${parts.length}]\n`;
+      const success = await this.provider.sendMessage(to, partLabel + parts[i]);
+      if (!success) return false;
+      if (i < parts.length - 1) await this.sleep(1000);
+    }
+    return true;
+  }
+
+  /**
+   * Divide mensagem em partes respeitando quebras de linha e palavras.
+   */
+  private splitMessage(message: string, maxLength: number): string[] {
+    // Reserva espaço para o label "[X/Y]\n"
+    const reservado = 10;
+    const limit = maxLength - reservado;
+    const parts: string[] = [];
+    let remaining = message;
+
+    while (remaining.length > limit) {
+      let cutAt = remaining.lastIndexOf('\n', limit);
+      if (cutAt <= 0) cutAt = remaining.lastIndexOf(' ', limit);
+      if (cutAt <= 0) cutAt = limit;
+      parts.push(remaining.slice(0, cutAt).trimEnd());
+      remaining = remaining.slice(cutAt).trimStart();
+    }
+    if (remaining.length > 0) parts.push(remaining);
+    return parts;
   }
 
   /**
