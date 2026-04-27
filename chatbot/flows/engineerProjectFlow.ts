@@ -44,6 +44,7 @@ type FlowStep =
 
   // Progresso Ponderado
   | 'progresso_escolher_projeto'
+  | 'progresso_escolher_area'
   | 'progresso_escolher_pavimento'
   | 'progresso_escolher_etapa'
 
@@ -79,6 +80,7 @@ interface FlowState {
   // Dados temporarios do progresso ponderado
   selectedProjetoId?: string;
   selectedProjetoCodigo?: string;
+  areasDisponiveisProjeto?: Array<{ area_id: string | number; area: string }>;
   pavimentosDisponiveis?: any[];
   etapasDisponiveis?: any[];
   selectedPavimentoId?: string;
@@ -305,6 +307,8 @@ export class EngineerProjectFlow {
         // Progresso Ponderado
         case 'progresso_escolher_projeto':
           return await this.stepProgressoEscolherProjeto(msg);
+        case 'progresso_escolher_area':
+          return await this.stepProgressoEscolherArea(msg);
         case 'progresso_escolher_pavimento':
           return await this.stepProgressoEscolherPavimento(msg);
         case 'progresso_escolher_etapa':
@@ -1318,6 +1322,9 @@ export class EngineerProjectFlow {
         };
       }
 
+      // Guardar todas as atribuições (com áreas) para uso posterior
+      (this.state as any).todasAtribuicoes = atribuicoes;
+
       // Filtrar projetos únicos (pode ter múltiplas áreas)
       const projetosUnicos = new Map<string, typeof atribuicoes[0]>();
       atribuicoes.forEach(a => {
@@ -1342,7 +1349,7 @@ export class EngineerProjectFlow {
       return { mensagem, finalizado: false };
     }
 
-    // Segunda chamada: processar escolha
+    // Segunda chamada: processar escolha do projeto
     const escolha = parseInt(msg.trim()) - 1;
 
     if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.availableAtribuicoes?.length || 0)) {
@@ -1356,12 +1363,62 @@ export class EngineerProjectFlow {
     this.state.selectedProjetoId = projeto.projeto_id;
     this.state.selectedProjetoCodigo = projeto.codigo;
 
-    // Buscar pavimentos do projeto
-    const pavimentos = await this.supabase.buscarPavimentosComEtapas(projeto.projeto_id);
+    // Filtrar áreas do engenheiro neste projeto
+    const todas = ((this.state as any).todasAtribuicoes || []) as Array<{ projeto_id: string; area_id: string | number; area: string }>;
+    const areasDoProjeto = todas
+      .filter(a => a.projeto_id === projeto.projeto_id)
+      .map(a => ({ area_id: a.area_id, area: a.area }));
+
+    // Deduplicar áreas (caso haja duplicatas)
+    const areasUnicas = Array.from(
+      new Map(areasDoProjeto.map(a => [String(a.area_id), a])).values()
+    );
+
+    // Se só tem uma área, pular seleção e ir direto pra pavimentos
+    if (areasUnicas.length <= 1) {
+      this.state.selectedAreaId = areasUnicas[0]?.area_id ? String(areasUnicas[0].area_id) : undefined;
+      return await this.carregarPavimentosDoProjeto();
+    }
+
+    // Múltiplas áreas: pedir escolha
+    this.state.areasDisponiveisProjeto = areasUnicas;
+    this.goToStep('progresso_escolher_area');
+
+    let mensagem = `📦 *Áreas do Projeto ${projeto.codigo}:*\n\n`;
+    areasUnicas.forEach((a, idx) => {
+      mensagem += `${idx + 1}️⃣ ${a.area}\n`;
+    });
+    mensagem += `\n_Digite o número da área_`;
+
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepProgressoEscolherArea(msg: string): Promise<FlowResult> {
+    const areas = this.state.areasDisponiveisProjeto || [];
+    const escolha = parseInt(msg.trim()) - 1;
+
+    if (isNaN(escolha) || escolha < 0 || escolha >= areas.length) {
+      return {
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${areas.length}`,
+        finalizado: false
+      };
+    }
+
+    const area = areas[escolha];
+    this.state.selectedAreaId = String(area.area_id);
+
+    return await this.carregarPavimentosDoProjeto();
+  }
+
+  private async carregarPavimentosDoProjeto(): Promise<FlowResult> {
+    const projetoId = this.state.selectedProjetoId!;
+    const codigo = this.state.selectedProjetoCodigo!;
+
+    const pavimentos = await this.supabase.buscarPavimentosComEtapas(projetoId);
 
     if (pavimentos.length === 0) {
       return {
-        mensagem: `⚠️ O projeto *${projeto.codigo}* ainda não tem pavimentos configurados.\n\nPeça ao gestor para configurar os pavimentos e etapas pelo dashboard.\n\n_Digite "menu" para voltar_`,
+        mensagem: `⚠️ O projeto *${codigo}* ainda não tem pavimentos configurados.\n\nPeça ao gestor para configurar os pavimentos e etapas pelo dashboard.\n\n_Digite "menu" para voltar_`,
         finalizado: true
       };
     }
@@ -1372,9 +1429,9 @@ export class EngineerProjectFlow {
     );
 
     if (pavimentosComPendencias.length === 0) {
-      const progresso = await this.supabase.buscarProgressoPonderado(projeto.projeto_id);
+      const progresso = await this.supabase.buscarProgressoPonderado(projetoId);
       return {
-        mensagem: `✅ Todas as etapas do projeto *${projeto.codigo}* já estão concluídas!\n\n📊 Progresso ponderado: ${progresso ?? 0}%\n\n_Digite "menu" para voltar_`,
+        mensagem: `✅ Todas as etapas do projeto *${codigo}* já estão concluídas!\n\n📊 Progresso ponderado: ${progresso ?? 0}%\n\n_Digite "menu" para voltar_`,
         finalizado: true
       };
     }
@@ -1382,7 +1439,7 @@ export class EngineerProjectFlow {
     this.state.pavimentosDisponiveis = pavimentosComPendencias;
     this.goToStep('progresso_escolher_pavimento');
 
-    let mensagem = `📐 *${projeto.codigo}* - Pavimentos\n\n`;
+    let mensagem = `📐 *${codigo}* - Pavimentos\n\n`;
 
     pavimentosComPendencias.forEach((pav: any, idx: number) => {
       const totalEtapas = pav.etapas.length;
