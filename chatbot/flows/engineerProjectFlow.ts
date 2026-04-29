@@ -982,6 +982,7 @@ export class EngineerProjectFlow {
     this.state.projectCode = atribuicao.codigo;
     this.state.selectedProjetoId = atribuicao.projeto_id;
     this.state.selectedProjetoCodigo = atribuicao.codigo;
+    this.state.selectedAreaId = String(atribuicao.area_id);
 
     // Prosseguir para feito do dia
     this.goToStep('feito_dia');
@@ -1165,7 +1166,10 @@ export class EngineerProjectFlow {
     // Verificar se o projeto tem pavimentos com etapas pendentes
     if (this.state.selectedProjetoId) {
       try {
-        const pavimentos = await this.supabase.buscarPavimentosComEtapas(this.state.selectedProjetoId);
+        const pavimentos = await this.supabase.buscarPavimentosComEtapas(
+          this.state.selectedProjetoId,
+          this.state.selectedAreaId
+        );
         const pavimentosComPendencias = pavimentos.filter(
           (p: any) => p.etapas.some((e: any) => !e.concluida)
         );
@@ -1414,7 +1418,10 @@ export class EngineerProjectFlow {
     const projetoId = this.state.selectedProjetoId!;
     const codigo = this.state.selectedProjetoCodigo!;
 
-    const pavimentos = await this.supabase.buscarPavimentosComEtapas(projetoId);
+    const pavimentos = await this.supabase.buscarPavimentosComEtapas(
+      projetoId,
+      this.state.selectedAreaId
+    );
 
     if (pavimentos.length === 0) {
       return {
@@ -1640,7 +1647,10 @@ export class EngineerProjectFlow {
 
     if (resposta === '1') {
       // Recarregar pavimentos com etapas pendentes atualizadas
-      const pavimentos = await this.supabase.buscarPavimentosComEtapas(this.state.selectedProjetoId!);
+      const pavimentos = await this.supabase.buscarPavimentosComEtapas(
+        this.state.selectedProjetoId!,
+        this.state.selectedAreaId
+      );
       const pavimentosComPendencias = pavimentos.filter(
         (p: any) => p.etapas.some((e: any) => !e.concluida)
       );
