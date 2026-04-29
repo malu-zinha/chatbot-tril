@@ -2342,7 +2342,7 @@ export class SupabaseService {
         .eq('projeto_id', projetoId)
         .eq('ativo', true);
       if (areaId !== undefined && areaId !== null && areaId !== '') {
-        pavQuery = pavQuery.eq('area_id', Number(areaId));
+        pavQuery = pavQuery.eq('area_id', areaId);
       }
       const { data: pavimentos, error: pavError } = await pavQuery.order('ordem', { ascending: true });
 
@@ -2401,7 +2401,7 @@ export class SupabaseService {
         .eq('projeto_id', projetoId)
         .eq('ativo', true);
       if (areaId !== undefined && areaId !== null && areaId !== '') {
-        q = q.eq('area_id', Number(areaId));
+        q = q.eq('area_id', areaId);
       }
       const { data, error } = await q.order('created_at', { ascending: true });
 
