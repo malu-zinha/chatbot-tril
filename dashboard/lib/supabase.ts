@@ -45,7 +45,7 @@ export interface AtrasosEngenheiro {
 }
 
 export interface AtrasosArea {
-  area_id: number
+  area_id: string
   area_codigo: string
   area: string
   qtde_atrasados: number
@@ -97,7 +97,7 @@ export interface RetrabalhoDetalheProjeto {
   eng_id: string
   engenheiro_nome: string
   motivo_retrabalho: string | null
-  area_id: number
+  area_id: string
   area_codigo: string
   area_descricao: string
 }
@@ -106,7 +106,7 @@ export interface RetrabalhoAreaProjeto {
   projeto_id: string
   codigo_projeto: string
   cliente: string
-  area_id: number
+  area_id: string
   area_codigo: string
   area: string
   total_retrabalhos_area: number
