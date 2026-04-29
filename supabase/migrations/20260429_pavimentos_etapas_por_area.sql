@@ -8,6 +8,7 @@
 -- automaticamente quando uma atribuição é criada.
 --
 -- DEPENDE DE: 20260319_progresso_ponderado.sql
+-- NOTA: areas.area_id é UUID (não INTEGER)
 -- =====================================================
 
 -- =====================================================
@@ -23,10 +24,10 @@ ON CONFLICT (codigo) DO NOTHING;
 -- =====================================================
 
 ALTER TABLE projeto_pavimentos
-    ADD COLUMN IF NOT EXISTS area_id INTEGER REFERENCES areas(area_id) ON DELETE CASCADE;
+    ADD COLUMN IF NOT EXISTS area_id UUID REFERENCES areas(area_id) ON DELETE CASCADE;
 
 ALTER TABLE projeto_etapas_globais
-    ADD COLUMN IF NOT EXISTS area_id INTEGER REFERENCES areas(area_id) ON DELETE CASCADE;
+    ADD COLUMN IF NOT EXISTS area_id UUID REFERENCES areas(area_id) ON DELETE CASCADE;
 
 -- UNIQUE permite mesmo nome em áreas diferentes do mesmo projeto
 ALTER TABLE projeto_pavimentos
@@ -52,7 +53,7 @@ CREATE INDEX IF NOT EXISTS idx_etapa_global_area_id ON projeto_etapas_globais(ar
 
 CREATE TABLE IF NOT EXISTS area_pavimentos_template (
     id SERIAL PRIMARY KEY,
-    area_id INTEGER NOT NULL REFERENCES areas(area_id) ON DELETE CASCADE,
+    area_id UUID NOT NULL REFERENCES areas(area_id) ON DELETE CASCADE,
     nome TEXT NOT NULL,
     ordem INTEGER NOT NULL DEFAULT 0,
     ativo BOOLEAN DEFAULT true,
@@ -61,7 +62,7 @@ CREATE TABLE IF NOT EXISTS area_pavimentos_template (
 
 CREATE TABLE IF NOT EXISTS area_etapas_template (
     id SERIAL PRIMARY KEY,
-    area_id INTEGER NOT NULL REFERENCES areas(area_id) ON DELETE CASCADE,
+    area_id UUID NOT NULL REFERENCES areas(area_id) ON DELETE CASCADE,
     nome TEXT NOT NULL,
     -- 'pavimento': aplicada a cada pavimento; 'global': etapa global do projeto
     tipo TEXT NOT NULL CHECK (tipo IN ('pavimento', 'global')),
@@ -206,7 +207,7 @@ ON CONFLICT (area_id, tipo, nome) DO NOTHING;
 -- Idempotente: se já existem pavimentos para esse par, retorna sem alterar.
 -- =====================================================
 
-CREATE OR REPLACE FUNCTION seed_pavimentos_etapas(p_projeto_id UUID, p_area_id INTEGER)
+CREATE OR REPLACE FUNCTION seed_pavimentos_etapas(p_projeto_id UUID, p_area_id UUID)
 RETURNS VOID AS $$
 DECLARE
     v_pav_count INTEGER;
@@ -279,7 +280,7 @@ COMMENT ON FUNCTION seed_pavimentos_etapas IS
 --   nível 2: etapas dentro de cada pavimento = 100
 -- =====================================================
 
-CREATE OR REPLACE FUNCTION ajustar_residuo_pesos(p_projeto_id UUID, p_area_id INTEGER)
+CREATE OR REPLACE FUNCTION ajustar_residuo_pesos(p_projeto_id UUID, p_area_id UUID)
 RETURNS VOID AS $$
 DECLARE
     v_soma_n1 NUMERIC(5,2);
