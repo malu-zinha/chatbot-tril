@@ -2331,17 +2331,20 @@ export class SupabaseService {
   /**
    * Busca todos os pavimentos de um projeto com suas etapas aninhadas
    */
-  async buscarPavimentosComEtapas(projetoId: string): Promise<any[]> {
+  async buscarPavimentosComEtapas(projetoId: string, areaId?: string | number): Promise<any[]> {
     if (!this.connected) return [];
 
     try {
       // Buscar pavimentos
-      const { data: pavimentos, error: pavError } = await this.supabase
+      let pavQuery = this.supabase
         .from('projeto_pavimentos')
         .select('*')
         .eq('projeto_id', projetoId)
-        .eq('ativo', true)
-        .order('ordem', { ascending: true });
+        .eq('ativo', true);
+      if (areaId !== undefined && areaId !== null && areaId !== '') {
+        pavQuery = pavQuery.eq('area_id', Number(areaId));
+      }
+      const { data: pavimentos, error: pavError } = await pavQuery.order('ordem', { ascending: true });
 
       if (pavError) {
         console.error('❌ Erro ao buscar pavimentos:', pavError);
@@ -2388,16 +2391,19 @@ export class SupabaseService {
   /**
    * Busca todas as etapas globais de um projeto
    */
-  async buscarEtapasGlobais(projetoId: string): Promise<any[]> {
+  async buscarEtapasGlobais(projetoId: string, areaId?: string | number): Promise<any[]> {
     if (!this.connected) return [];
 
     try {
-      const { data, error } = await this.supabase
+      let q = this.supabase
         .from('projeto_etapas_globais')
         .select('*')
         .eq('projeto_id', projetoId)
-        .eq('ativo', true)
-        .order('created_at', { ascending: true });
+        .eq('ativo', true);
+      if (areaId !== undefined && areaId !== null && areaId !== '') {
+        q = q.eq('area_id', Number(areaId));
+      }
+      const { data, error } = await q.order('created_at', { ascending: true });
 
       if (error) {
         console.error('❌ Erro ao buscar etapas globais:', error);
