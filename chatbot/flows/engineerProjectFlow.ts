@@ -10,6 +10,12 @@ import {
   getEngineerSheetService,
 } from '../../integrations/sheets/engineerSheetService.ts';
 import { getSupabaseService } from '../../integrations/supabase/supabaseService.ts';
+import {
+  filterEtapasPendentes,
+  filterPavimentosPendentes,
+  filterAreasPendentes,
+  isProjetoTotalmenteConcluido,
+} from '../../logic/execucao/filtros.ts';
 
 // =====================================================
 // TIPOS E INTERFACES
@@ -1377,9 +1383,21 @@ export class EngineerProjectFlow {
       .map(a => ({ area_id: a.area_id, area: a.area }));
 
     // Deduplicar áreas (caso haja duplicatas)
-    const areasUnicas = Array.from(
+    const areasUnicasTodas = Array.from(
       new Map(areasDoProjeto.map(a => [String(a.area_id), a])).values()
     );
+
+    // Filtrar áreas que ainda têm pavimentos/etapas pendentes
+    const todosPavsDoProjeto = await this.supabase.buscarPavimentosComEtapas(projeto.projeto_id);
+    const areasUnicas = filterAreasPendentes(areasUnicasTodas, todosPavsDoProjeto as any);
+
+    if (areasUnicas.length === 0) {
+      const progresso = await this.supabase.buscarProgressoPonderado(projeto.projeto_id);
+      return {
+        mensagem: `🎉 Todas as disciplinas do projeto *${projeto.codigo}* já foram concluídas!\n\n📊 Progresso ponderado: ${progresso ?? 0}%\n\n_Digite "menu" para voltar_`,
+        finalizado: true
+      };
+    }
 
     // Se só tem uma área, pular seleção e ir direto pra pavimentos
     if (areasUnicas.length <= 1) {
@@ -1433,10 +1451,8 @@ export class EngineerProjectFlow {
       };
     }
 
-    // Filtrar pavimentos que ainda têm etapas pendentes
-    const pavimentosComPendencias = pavimentos.filter(
-      (p: any) => p.etapas.some((e: any) => !e.concluida)
-    );
+    // Filtrar pavimentos que ainda têm etapas pendentes (helper centralizado)
+    const pavimentosComPendencias = filterPavimentosPendentes(pavimentos as any);
 
     if (pavimentosComPendencias.length === 0) {
       const progresso = await this.supabase.buscarProgressoPonderado(projetoId);
@@ -1452,10 +1468,9 @@ export class EngineerProjectFlow {
     let mensagem = `📐 *${codigo}* - Pavimentos\n\n`;
 
     pavimentosComPendencias.forEach((pav: any, idx: number) => {
-      const totalEtapas = pav.etapas.length;
-      const concluidas = pav.etapas.filter((e: any) => e.concluida).length;
+      // pav.etapas aqui já está filtrado para pendentes; mostramos apenas o pendente
       mensagem += `${idx + 1}️⃣ *${pav.nome}* (peso ${pav.peso}%)\n`;
-      mensagem += `   ${concluidas}/${totalEtapas} etapas concluídas\n\n`;
+      mensagem += `   ${pav.etapas.length} etapa(s) pendente(s)\n\n`;
     });
 
     mensagem += `_Digite o número do pavimento_`;
@@ -1481,7 +1496,7 @@ export class EngineerProjectFlow {
     this.state.selectedPavimentoNome = pavimento.nome;
 
     // Filtrar etapas pendentes
-    const etapasPendentes = pavimento.etapas.filter((e: any) => !e.concluida);
+    const etapasPendentes = filterEtapasPendentes(pavimento.etapas as any);
     this.state.etapasDisponiveis = etapasPendentes;
     this.goToStep('progresso_escolher_etapa');
 
@@ -1558,7 +1573,7 @@ export class EngineerProjectFlow {
       );
 
       const etapasPendentes = pavimentoAtual
-        ? pavimentoAtual.etapas.filter((e: any) => !e.concluida)
+        ? filterEtapasPendentes(pavimentoAtual.etapas as any)
         : [];
 
       if (etapasPendentes.length === 0) {
@@ -1570,9 +1585,7 @@ export class EngineerProjectFlow {
       }
 
       // Atualizar lista de pavimentos disponíveis e etapas pendentes
-      this.state.pavimentosDisponiveis = pavimentos.filter(
-        (p: any) => p.etapas.some((e: any) => !e.concluida)
-      );
+      this.state.pavimentosDisponiveis = filterPavimentosPendentes(pavimentos as any);
       this.state.etapasDisponiveis = etapasPendentes;
 
       let mensagem = `📐 *${this.state.selectedProjetoCodigo}* > *${this.state.selectedPavimentoNome}*\n\n`;
@@ -1657,7 +1670,7 @@ export class EngineerProjectFlow {
     this.state.selectedPavimentoNome = pavimento.nome;
 
     // Filtrar etapas pendentes
-    const etapasPendentes = pavimento.etapas.filter((e: any) => !e.concluida);
+    const etapasPendentes = filterEtapasPendentes(pavimento.etapas as any);
     this.state.etapasDisponiveis = etapasPendentes;
     this.goToStep('noite_etapa_escolher');
 
