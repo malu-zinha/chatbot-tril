@@ -2008,17 +2008,27 @@ export class OwnerFlow {
       return { mensagem: `❌ ${engOrigem.nome} não tem tarefas atribuídas.\n\n_Digite "menu"_`, finalizado: true };
     }
 
-    // Enriquecer com dados de projeto e área
+    // Enriquecer com dados de projeto e área (e filtrar 100% concluídas)
     const atribsEnriquecidas = [];
     for (const atrib of atribuicoes) {
       const projeto = await getSupabase().buscarProjetoPorId(atrib.projeto_id);
       const area = await getSupabase().buscarAreaPorId(atrib.area_id);
+      // pular atribuições onde a (projeto, área) já está 100% concluída
+      const pavs = await getSupabase().buscarPavimentosComEtapas(atrib.projeto_id, String(atrib.area_id));
+      const aindaPendente = pavs.length === 0 || pavs.some((p: any) =>
+        (p.ativo !== false) && p.etapas.some((e: any) => !e.concluida && e.ativo !== false)
+      );
+      if (!aindaPendente) continue;
       atribsEnriquecidas.push({
         ...atrib,
         codigo_projeto: projeto?.codigo_projeto || '?',
         cliente: projeto?.cliente || '?',
         area_descricao: area?.descricao || '?',
       });
+    }
+
+    if (atribsEnriquecidas.length === 0) {
+      return { mensagem: `🎉 ${engOrigem.nome} não tem tarefas pendentes para transferir.\n\n_Digite "menu"_`, finalizado: true };
     }
 
     this.contexto.transf_atribuicoes = atribsEnriquecidas;
