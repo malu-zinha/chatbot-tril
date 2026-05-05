@@ -960,7 +960,7 @@ export class EngineerProjectFlow {
       mensagem += `   Status: ${atrib.status || 'N/A'}\n\n`;
     });
 
-    mensagem += `_Digite o número do projeto_`;
+    mensagem += `_Digite o número do projeto_\n\n*0.* Voltar | *menu* — início`;
     return { mensagem, finalizado: false };
   }
 
@@ -995,7 +995,7 @@ export class EngineerProjectFlow {
         mensagem += `${index + 1}️⃣ ${status.descricao}\n`;
       });
 
-      mensagem += `\n_Digite o número do status_`;
+      mensagem += `\n_Digite o número do status_\n\n*0.* Voltar | *menu* — início`;
 
       // Armazenar lista para referência
       (this.state as any).statusList = statusList;
@@ -1089,7 +1089,7 @@ export class EngineerProjectFlow {
       mensagem += `   Status: ${atrib.status || 'N/A'}\n\n`;
     });
 
-    mensagem += `_Digite o número do projeto_`;
+    mensagem += `_Digite o número do projeto_\n\n*0.* Voltar | *menu* — início`;
     return { mensagem, finalizado: false };
   }
 
@@ -1152,7 +1152,7 @@ export class EngineerProjectFlow {
       mensagem += `3️⃣ Falta de informações\n`;
       mensagem += `4️⃣ Erro de comunicação\n`;
       mensagem += `5️⃣ Outro\n\n`;
-      mensagem += `_Digite o número do motivo_`;
+      mensagem += `_Digite o número do motivo_\n\n*0.* Voltar | *menu* — início`;
 
       return { mensagem, finalizado: false };
 
@@ -1482,7 +1482,7 @@ export class EngineerProjectFlow {
         mensagem += `${idx + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
       });
 
-      mensagem += `\n_Digite o número do projeto_`;
+      mensagem += `\n_Digite o número do projeto_\n\n*0.* Voltar | *menu* — início`;
 
       this.goToStep('progresso_escolher_projeto');
       return { mensagem, finalizado: false };
@@ -1539,13 +1539,24 @@ export class EngineerProjectFlow {
     areasUnicas.forEach((a, idx) => {
       mensagem += `${idx + 1}️⃣ ${a.area}\n`;
     });
-    mensagem += `\n_Digite o número da área_`;
+    mensagem += `\n_Digite o número da área_\n\n*0.* Voltar | *menu* — início`;
 
     return { mensagem, finalizado: false };
   }
 
   private async stepProgressoEscolherArea(msg: string): Promise<FlowResult> {
     const areas = this.state.areasDisponiveisProjeto || [];
+
+    // Re-render quando voltando (msg vazio)
+    if (!msg.trim()) {
+      let mensagem = `📦 *Áreas do Projeto ${this.state.selectedProjetoCodigo ?? ''}:*\n\n`;
+      areas.forEach((a: any, idx: number) => {
+        mensagem += `${idx + 1}️⃣ ${a.area}\n`;
+      });
+      mensagem += `\n_Digite o número da área_\n\n*0.* Voltar | *menu* — início`;
+      return { mensagem, finalizado: false };
+    }
+
     const escolha = parseInt(msg.trim()) - 1;
 
     if (isNaN(escolha) || escolha < 0 || escolha >= areas.length) {
@@ -1599,7 +1610,7 @@ export class EngineerProjectFlow {
       mensagem += `   ${pav.etapas.length} etapa(s) pendente(s)\n\n`;
     });
 
-    mensagem += `_Digite o número do pavimento_`;
+    mensagem += `_Digite o número do pavimento_\n\n*0.* Voltar | *menu* — início`;
 
     return { mensagem, finalizado: false };
   }
@@ -1608,6 +1619,11 @@ export class EngineerProjectFlow {
    * STEP: Escolher pavimento e listar etapas pendentes
    */
   private async stepProgressoEscolherPavimento(msg: string): Promise<FlowResult> {
+    // Re-render quando voltando (msg vazio): re-listar pavimentos
+    if (!msg.trim()) {
+      return await this.carregarPavimentosDoProjeto();
+    }
+
     const escolha = parseInt(msg.trim()) - 1;
 
     if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.pavimentosDisponiveis?.length || 0)) {
@@ -1633,7 +1649,7 @@ export class EngineerProjectFlow {
       mensagem += `${idx + 1}️⃣ ${etapa.nome} (peso ${etapa.peso}%)\n`;
     });
 
-    mensagem += `\n_Digite o número da etapa para marcar como concluída_`;
+    mensagem += `\n_Digite o número da etapa para marcar como concluída_\n\n*0.* Voltar | *menu* — início`;
 
     return { mensagem, finalizado: false };
   }
@@ -1642,6 +1658,18 @@ export class EngineerProjectFlow {
    * STEP: Marcar etapa como concluída e mostrar resultado
    */
   private async stepProgressoEscolherEtapa(msg: string): Promise<FlowResult> {
+    // Re-render quando voltando (msg vazio)
+    if (!msg.trim()) {
+      const etapas = this.state.etapasDisponiveis ?? [];
+      let mensagem = `📐 *${this.state.selectedProjetoCodigo}* > *${this.state.selectedPavimentoNome}*\n\n`;
+      mensagem += `📋 Etapas pendentes:\n\n`;
+      etapas.forEach((etapa: any, idx: number) => {
+        mensagem += `${idx + 1}️⃣ ${etapa.nome} (peso ${etapa.peso}%)\n`;
+      });
+      mensagem += `\n_Digite o número da etapa para marcar como concluída_\n\n*0.* Voltar | *menu* — início`;
+      return { mensagem, finalizado: false };
+    }
+
     const escolha = parseInt(msg.trim()) - 1;
 
     if (isNaN(escolha) || escolha < 0 || escolha >= (this.state.etapasDisponiveis?.length || 0)) {
@@ -1721,7 +1749,7 @@ export class EngineerProjectFlow {
         mensagem += `${idx + 1}️⃣ ${etapa.nome} (peso ${etapa.peso}%)\n`;
       });
 
-      mensagem += `\n_Digite o número da etapa para marcar como concluída_`;
+      mensagem += `\n_Digite o número da etapa para marcar como concluída_\n\n*0.* Voltar | *menu* — início`;
 
       this.goToStep('progresso_escolher_etapa');
       return { mensagem, finalizado: false };
@@ -1768,7 +1796,7 @@ export class EngineerProjectFlow {
         mensagem += `   ${pav.etapas.length} etapa(s) pendente(s)\n\n`;
       });
 
-      mensagem += `_Digite o número do pavimento_`;
+      mensagem += `_Digite o número do pavimento_\n\n*0.* Voltar | *menu* — início`;
 
       this.goToStep('noite_etapa_pavimento');
       return { mensagem, finalizado: false };
@@ -1814,7 +1842,7 @@ export class EngineerProjectFlow {
       mensagem += `${idx + 1}️⃣ ${etapa.nome} (peso ${etapa.peso}%)\n`;
     });
 
-    mensagem += `\n_Digite o número da etapa para marcar como concluída_`;
+    mensagem += `\n_Digite o número da etapa para marcar como concluída_\n\n*0.* Voltar | *menu* — início`;
     return { mensagem, finalizado: false };
   }
 
@@ -1884,7 +1912,7 @@ export class EngineerProjectFlow {
         mensagem += `   ${pav.etapas.length} etapa(s) pendente(s)\n\n`;
       });
 
-      mensagem += `_Digite o número do pavimento_`;
+      mensagem += `_Digite o número do pavimento_\n\n*0.* Voltar | *menu* — início`;
 
       this.goToStep('noite_etapa_pavimento');
       return { mensagem, finalizado: false };
