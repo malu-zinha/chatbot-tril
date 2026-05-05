@@ -63,9 +63,15 @@ type FlowStep =
 
   | 'fim';
 
+interface StepSnapshot {
+  step: FlowStep;
+  data: Record<string, any>;
+}
+
 interface FlowState {
   step: FlowStep;
   stepHistory: FlowStep[];
+  snapshotHistory?: StepSnapshot[];
   mode: 'notif_manha' | 'notif_noite' | 'create' | 'update_morning' | 'update_night' | null;
   periodo?: 'manha' | 'noite';
   projectCode?: string;
@@ -122,6 +128,7 @@ export class EngineerProjectFlow {
     this.state = {
       step: 'inicio',
       stepHistory: [],
+      snapshotHistory: [],
       mode: null,
       projectData: {},
       engineerName: engineerName || 'Engenheiro' // Nome padrão (não usado mais, mantido por compatibilidade)
@@ -250,18 +257,38 @@ export class EngineerProjectFlow {
       const msg = mensagem.trim();
 
       // ═══════════════════════════════════════════
-      // COMANDO: VOLTAR
+      // COMANDOS GLOBAIS: MENU / VOLTAR / CANCELAR
       // ═══════════════════════════════════════════
-      if (msg.toLowerCase() === 'voltar' || msg === '0') {
-        if (this.state.stepHistory.length > 0) {
-          this.state.step = this.state.stepHistory.pop()!;
-          return { mensagem: '⬅️ Voltando ao passo anterior...\n\nDigite sua opção:', finalizado: false };
+      const lower = msg.toLowerCase();
+
+      if (lower === 'menu') {
+        this.resetToMenu();
+        return await this.stepInicio();
+      }
+
+      if (lower === 'voltar' || msg === '0') {
+        if (this.isTerminalStep(this.state.step)) {
+          return {
+            mensagem: 'ℹ️ Esta ação já foi registrada. Digite *menu* para voltar ao início.',
+            finalizado: false
+          };
+        }
+        if (this.popStep()) {
+          // Se voltou ao menu raiz, devolver controle para messageHandler
+          if (this.state.step === 'escolher_acao' || this.state.step === 'inicio') {
+            return {
+              mensagem: '⬅️ Voltando ao menu principal...\n\nDigite *menu* para ver as opções.',
+              finalizado: true
+            };
+          }
+          // Re-renderizar o step anterior chamando seu handler com input vazio.
+          // A maioria dos steps navegáveis (progresso_*, noite_etapa_*) já renderizam quando msg=''.
+          return await this.processarMensagem('');
         }
         return this.cancelar();
       }
 
-      // Comandos globais
-      if (msg.toLowerCase() === 'cancelar') {
+      if (lower === 'cancelar') {
         return this.cancelar();
       }
 
@@ -814,8 +841,58 @@ export class EngineerProjectFlow {
   private goToStep(step: FlowStep): void {
     if (this.state.step !== 'inicio') {
       this.state.stepHistory.push(this.state.step);
+      // Snapshot: deep clone do state (para conseguir restaurar ao voltar)
+      try {
+        const snap: StepSnapshot = {
+          step: this.state.step,
+          data: JSON.parse(JSON.stringify({ ...this.state, snapshotHistory: undefined })),
+        };
+        if (!this.state.snapshotHistory) this.state.snapshotHistory = [];
+        this.state.snapshotHistory.push(snap);
+      } catch (e) {
+        // se snapshot falhar (ciclo, etc), seguir sem ele
+      }
     }
     this.state.step = step;
+  }
+
+  /**
+   * Volta 1 passo, restaurando snapshot do estado anterior.
+   * Retorna true se voltou; false se pilha vazia.
+   */
+  private popStep(): boolean {
+    const hist = this.state.snapshotHistory ?? [];
+    if (hist.length === 0) {
+      this.state.stepHistory.pop();
+      return false;
+    }
+    const snap = hist.pop()!;
+    // Preservar o snapshotHistory atual (não restaurar do snapshot)
+    const preservedHist = this.state.snapshotHistory;
+    Object.keys(this.state).forEach(k => delete (this.state as any)[k]);
+    Object.assign(this.state, snap.data);
+    this.state.snapshotHistory = preservedHist;
+    this.state.step = snap.step;
+    this.state.stepHistory.pop();
+    return true;
+  }
+
+  /**
+   * Reseta o flow para o início, limpando todo o estado.
+   */
+  private resetToMenu(): void {
+    this.state = {
+      step: 'inicio',
+      stepHistory: [],
+      snapshotHistory: [],
+      mode: null,
+      projectData: {},
+      engineerName: this.state.engineerName,
+    };
+  }
+
+  private isTerminalStep(step: FlowStep): boolean {
+    return step === 'fim';
   }
 
   /**
