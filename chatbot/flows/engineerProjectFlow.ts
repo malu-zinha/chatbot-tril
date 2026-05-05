@@ -818,6 +818,30 @@ export class EngineerProjectFlow {
     this.state.step = step;
   }
 
+  /**
+   * Remove atribuições onde a (projeto, área) já está 100% concluída.
+   * Usado nas listagens onde o engenheiro escolhe um projeto para AGIR.
+   */
+  private async filtrarAtribuicoesPendentes<T extends { projeto_id: string; area_id: string | number }>(
+    atribuicoes: T[]
+  ): Promise<T[]> {
+    const result: T[] = [];
+    for (const atrib of atribuicoes) {
+      const pavs = await this.supabase.buscarPavimentosComEtapas(atrib.projeto_id, String(atrib.area_id));
+      // se houver pavimentos e todos estão totalmente concluídos, pular
+      if (pavs.length === 0) {
+        // sem pavimentos configurados — manter para que o engenheiro veja a mensagem apropriada
+        result.push(atrib);
+        continue;
+      }
+      const aindaPendente = pavs.some((p: any) =>
+        (p.ativo !== false) && p.etapas.some((e: any) => !e.concluida && e.ativo !== false)
+      );
+      if (aindaPendente) result.push(atrib);
+    }
+    return result;
+  }
+
   private cancelar(): FlowResult {
     return {
       mensagem: '❌ *Fluxo cancelado*\n\nDigite "menu" para voltar ao início.',
@@ -830,11 +854,19 @@ export class EngineerProjectFlow {
   // =====================================================
 
   private async stepEscolherProjetoManha(msg: string): Promise<FlowResult> {
-    const atribuicoes = await this.buscarAtribuicoesEngenheiro();
+    const todasAtribuicoes = await this.buscarAtribuicoesEngenheiro();
 
-    if (atribuicoes.length === 0) {
+    if (todasAtribuicoes.length === 0) {
       return {
         mensagem: '❌ Você não tem projetos atribuídos.\n\nContate o dono da empresa.',
+        finalizado: true
+      };
+    }
+
+    const atribuicoes = await this.filtrarAtribuicoesPendentes(todasAtribuicoes);
+    if (atribuicoes.length === 0) {
+      return {
+        mensagem: '🎉 Todas as suas disciplinas/projetos já foram concluídos!\n\n_Digite "menu" para voltar._',
         finalizado: true
       };
     }
@@ -951,11 +983,19 @@ export class EngineerProjectFlow {
   // =====================================================
 
   private async stepEscolherProjetoNoite(msg: string): Promise<FlowResult> {
-    const atribuicoes = await this.buscarAtribuicoesEngenheiro();
+    const todasAtribuicoes = await this.buscarAtribuicoesEngenheiro();
 
-    if (atribuicoes.length === 0) {
+    if (todasAtribuicoes.length === 0) {
       return {
         mensagem: '❌ Você não tem projetos atribuídos.\n\nContate o dono da empresa.',
+        finalizado: true
+      };
+    }
+
+    const atribuicoes = await this.filtrarAtribuicoesPendentes(todasAtribuicoes);
+    if (atribuicoes.length === 0) {
+      return {
+        mensagem: '🎉 Todas as suas disciplinas/projetos já foram concluídos!\n\n_Digite "menu" para voltar._',
         finalizado: true
       };
     }
@@ -1326,11 +1366,20 @@ export class EngineerProjectFlow {
   private async stepProgressoEscolherProjeto(msg: string): Promise<FlowResult> {
     // Primeira chamada (msg vazio): listar projetos
     if (!msg) {
-      const atribuicoes = await this.buscarAtribuicoesEngenheiro();
+      const todasAtribuicoes = await this.buscarAtribuicoesEngenheiro();
 
-      if (atribuicoes.length === 0) {
+      if (todasAtribuicoes.length === 0) {
         return {
           mensagem: '📭 Você não tem projetos atribuídos no momento.',
+          finalizado: true
+        };
+      }
+
+      // Filtrar atribuições onde a (projeto, área) já está 100% concluída
+      const atribuicoes = await this.filtrarAtribuicoesPendentes(todasAtribuicoes);
+      if (atribuicoes.length === 0) {
+        return {
+          mensagem: '🎉 Todas as suas disciplinas/projetos já foram concluídos!\n\n_Digite "menu" para voltar._',
           finalizado: true
         };
       }
@@ -1623,16 +1672,23 @@ export class EngineerProjectFlow {
     const resposta = msg.trim();
 
     if (resposta === '1') {
-      // Sim, concluiu etapa — mostrar pavimentos
-      const pavimentos = this.state.pavimentosDisponiveis!;
+      // Sim, concluiu etapa — mostrar pavimentos pendentes
+      const pavimentosTodos = this.state.pavimentosDisponiveis ?? [];
+      const pavimentos = filterPavimentosPendentes(pavimentosTodos as any);
+      this.state.pavimentosDisponiveis = pavimentos;
+
+      if (pavimentos.length === 0) {
+        return {
+          mensagem: '🎉 Todas as etapas desta disciplina já estão concluídas!\n\nDescanse bem! 🌙',
+          finalizado: true
+        };
+      }
 
       let mensagem = `📐 *${this.state.projectCode}* - Pavimentos\n\n`;
 
       pavimentos.forEach((pav: any, idx: number) => {
-        const totalEtapas = pav.etapas.length;
-        const concluidas = pav.etapas.filter((e: any) => e.concluida).length;
         mensagem += `${idx + 1}️⃣ *${pav.nome}* (peso ${pav.peso}%)\n`;
-        mensagem += `   ${concluidas}/${totalEtapas} etapas concluídas\n\n`;
+        mensagem += `   ${pav.etapas.length} etapa(s) pendente(s)\n\n`;
       });
 
       mensagem += `_Digite o número do pavimento_`;
@@ -1732,9 +1788,7 @@ export class EngineerProjectFlow {
         this.state.selectedProjetoId!,
         this.state.selectedAreaId
       );
-      const pavimentosComPendencias = pavimentos.filter(
-        (p: any) => p.etapas.some((e: any) => !e.concluida)
-      );
+      const pavimentosComPendencias = filterPavimentosPendentes(pavimentos as any);
 
       if (pavimentosComPendencias.length === 0) {
         const progresso = await this.supabase.buscarProgressoPonderado(this.state.selectedProjetoId!);
@@ -1749,10 +1803,8 @@ export class EngineerProjectFlow {
       let mensagem = `📐 *${this.state.projectCode}* - Pavimentos\n\n`;
 
       pavimentosComPendencias.forEach((pav: any, idx: number) => {
-        const totalEtapas = pav.etapas.length;
-        const concluidas = pav.etapas.filter((e: any) => e.concluida).length;
         mensagem += `${idx + 1}️⃣ *${pav.nome}* (peso ${pav.peso}%)\n`;
-        mensagem += `   ${concluidas}/${totalEtapas} etapas concluídas\n\n`;
+        mensagem += `   ${pav.etapas.length} etapa(s) pendente(s)\n\n`;
       });
 
       mensagem += `_Digite o número do pavimento_`;
