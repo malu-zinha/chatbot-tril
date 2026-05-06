@@ -16,6 +16,7 @@ import {
   filterAreasPendentes,
   isProjetoTotalmenteConcluido,
 } from '../../logic/execucao/filtros.ts';
+import { parseMultiSelection, MultiSelectionError } from '../../logic/execucao/parseMultiSelection.ts';
 
 // =====================================================
 // TIPOS E INTERFACES
@@ -54,6 +55,14 @@ type FlowStep =
   | 'progresso_escolher_pavimento'
   | 'progresso_escolher_etapa'
   | 'progresso_continuar'
+
+  // Progresso Ponderado — Multi-seleção
+  | 'progresso_modo_multiselecao'
+  | 'progresso_multi_etapas_pavimento'
+  | 'progresso_multi_etapas_selecionar'
+  | 'progresso_multi_etapa_escolher'
+  | 'progresso_multi_etapa_pavimentos'
+  | 'progresso_multi_confirmar'
 
   // Progresso Ponderado (integrado na noite)
   | 'noite_etapa_pergunta'
@@ -105,6 +114,11 @@ interface FlowState {
   teveRetrabalho?: boolean;
   motivoRetrabalho?: string;
   observacoesTexto?: string;
+  // Multi-seleção (Fase 3)
+  modoMultiSelecao?: 1 | 2;
+  etapasNomesUnicos?: string[];
+  etapaNomeSelecionado?: string;
+  etapaIdsSelecionados?: string[];
 }
 
 interface FlowResult {
@@ -349,6 +363,20 @@ export class EngineerProjectFlow {
           return await this.stepProgressoEscolherEtapa(msg);
         case 'progresso_continuar':
           return await this.stepProgressoContinuar(msg);
+
+        // Multi-seleção
+        case 'progresso_modo_multiselecao':
+          return await this.stepProgressoModoMultiselecao(msg);
+        case 'progresso_multi_etapas_pavimento':
+          return await this.stepProgressoMultiEtapasPavimento(msg);
+        case 'progresso_multi_etapas_selecionar':
+          return await this.stepProgressoMultiEtapasSelecionar(msg);
+        case 'progresso_multi_etapa_escolher':
+          return await this.stepProgressoMultiEtapaEscolher(msg);
+        case 'progresso_multi_etapa_pavimentos':
+          return await this.stepProgressoMultiEtapaPavimentos(msg);
+        case 'progresso_multi_confirmar':
+          return await this.stepProgressoMultiConfirmar(msg);
 
         // Progresso ponderado integrado na noite
         case 'noite_etapa_pergunta':
@@ -1600,19 +1628,234 @@ export class EngineerProjectFlow {
     }
 
     this.state.pavimentosDisponiveis = pavimentosComPendencias;
-    this.goToStep('progresso_escolher_pavimento');
+    // Em vez de listar pavimentos direto, perguntar qual modo de marcação
+    this.goToStep('progresso_modo_multiselecao');
+    return await this.renderProgressoModoMultiselecao();
+  }
 
-    let mensagem = `📐 *${codigo}* - Pavimentos\n\n`;
+  // =====================================================
+  // STEPS: MULTI-SELEÇÃO DE ETAPAS (Fase 3)
+  // =====================================================
 
-    pavimentosComPendencias.forEach((pav: any, idx: number) => {
-      // pav.etapas aqui já está filtrado para pendentes; mostramos apenas o pendente
-      mensagem += `${idx + 1}️⃣ *${pav.nome}* (peso ${pav.peso}%)\n`;
-      mensagem += `   ${pav.etapas.length} etapa(s) pendente(s)\n\n`;
+  private async renderProgressoModoMultiselecao(): Promise<FlowResult> {
+    return {
+      mensagem:
+        `📋 *Como você quer marcar as etapas?*\n\n` +
+        `1️⃣ Várias etapas no mesmo pavimento\n` +
+        `2️⃣ Mesma etapa em vários pavimentos\n\n` +
+        `*0.* Voltar | *menu* — início`,
+      finalizado: false
+    };
+  }
+
+  private async stepProgressoModoMultiselecao(msg: string): Promise<FlowResult> {
+    if (!msg.trim()) return await this.renderProgressoModoMultiselecao();
+    const opcao = msg.trim();
+    if (opcao === '1') {
+      this.state.modoMultiSelecao = 1;
+      this.goToStep('progresso_multi_etapas_pavimento');
+      return await this.renderProgressoMultiEtapasPavimento();
+    }
+    if (opcao === '2') {
+      this.state.modoMultiSelecao = 2;
+      this.goToStep('progresso_multi_etapa_escolher');
+      return await this.renderProgressoMultiEtapaEscolher();
+    }
+    return { mensagem: '❌ Opção inválida. Digite *1* ou *2*.', finalizado: false };
+  }
+
+  // ---------------- MODO 1: várias etapas, mesmo pavimento ----------------
+
+  private async renderProgressoMultiEtapasPavimento(): Promise<FlowResult> {
+    const pavs = this.state.pavimentosDisponiveis ?? [];
+    let mensagem = `🏗️ *${this.state.selectedProjetoCodigo}* - Pavimentos\n\n`;
+    pavs.forEach((p: any, i: number) => {
+      mensagem += `${i + 1}️⃣ *${p.nome}* (${p.etapas.length} etapa(s) pendente(s))\n`;
     });
-
-    mensagem += `_Digite o número do pavimento_\n\n*0.* Voltar | *menu* — início`;
-
+    mensagem += `\n_Digite o número do pavimento_\n\n*0.* Voltar | *menu* — início`;
     return { mensagem, finalizado: false };
+  }
+
+  private async stepProgressoMultiEtapasPavimento(msg: string): Promise<FlowResult> {
+    if (!msg.trim()) return await this.renderProgressoMultiEtapasPavimento();
+    const pavs = this.state.pavimentosDisponiveis ?? [];
+    const idx = parseInt(msg.trim(), 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= pavs.length) {
+      return { mensagem: `❌ Digite um número entre 1 e ${pavs.length}`, finalizado: false };
+    }
+    const pav = pavs[idx];
+    this.state.selectedPavimentoId = pav.pavimento_id;
+    this.state.selectedPavimentoNome = pav.nome;
+    this.state.etapasDisponiveis = pav.etapas;
+    this.goToStep('progresso_multi_etapas_selecionar');
+    return await this.renderProgressoMultiEtapasSelecionar();
+  }
+
+  private async renderProgressoMultiEtapasSelecionar(): Promise<FlowResult> {
+    const etapas = this.state.etapasDisponiveis ?? [];
+    let mensagem = `📋 *${this.state.selectedPavimentoNome}* — etapas pendentes\n\n`;
+    etapas.forEach((e: any, i: number) => {
+      mensagem += `${i + 1}. ${e.nome} (peso ${e.peso ?? 0}%)\n`;
+    });
+    mensagem += `\n📝 *Como selecionar:*\n`;
+    mensagem += `• Uma: \`3\`\n`;
+    mensagem += `• Várias: \`1,3,5\`\n`;
+    mensagem += `• Intervalo: \`2-4\`\n`;
+    mensagem += `• Misto: \`1,3-5\`\n`;
+    mensagem += `• Todas: \`todas\`\n\n`;
+    mensagem += `*0.* Voltar | *menu* — início`;
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepProgressoMultiEtapasSelecionar(msg: string): Promise<FlowResult> {
+    if (!msg.trim()) return await this.renderProgressoMultiEtapasSelecionar();
+    const etapas = this.state.etapasDisponiveis ?? [];
+    try {
+      const indices = parseMultiSelection(msg, etapas.length);
+      this.state.etapaIdsSelecionados = indices.map(i => etapas[i].etapa_id);
+      this.goToStep('progresso_multi_confirmar');
+      return await this.renderProgressoMultiConfirmar();
+    } catch (e: any) {
+      if (e instanceof MultiSelectionError) return { mensagem: e.userMessage, finalizado: false };
+      throw e;
+    }
+  }
+
+  // ---------------- MODO 2: mesma etapa, vários pavimentos ----------------
+
+  private async renderProgressoMultiEtapaEscolher(): Promise<FlowResult> {
+    const pavs = this.state.pavimentosDisponiveis ?? [];
+    // Coletar nomes únicos de etapas pendentes (preservando ordem da primeira ocorrência)
+    const nomesUnicos: string[] = [];
+    for (const p of pavs) {
+      for (const e of (p.etapas ?? [])) {
+        if (!nomesUnicos.includes(e.nome)) nomesUnicos.push(e.nome);
+      }
+    }
+    this.state.etapasNomesUnicos = nomesUnicos;
+
+    if (nomesUnicos.length === 0) {
+      return {
+        mensagem: '🎉 Não há etapas pendentes nesta disciplina.\n\n_Digite "menu"_',
+        finalizado: true
+      };
+    }
+
+    let mensagem = `📋 *Escolha a etapa* (em qualquer pavimento desta disciplina)\n\n`;
+    nomesUnicos.forEach((nome, i) => {
+      mensagem += `${i + 1}️⃣ ${nome}\n`;
+    });
+    mensagem += `\n_Digite o número da etapa_\n\n*0.* Voltar | *menu* — início`;
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepProgressoMultiEtapaEscolher(msg: string): Promise<FlowResult> {
+    if (!msg.trim()) return await this.renderProgressoMultiEtapaEscolher();
+    const nomes = this.state.etapasNomesUnicos ?? [];
+    const idx = parseInt(msg.trim(), 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= nomes.length) {
+      return { mensagem: `❌ Digite um número entre 1 e ${nomes.length}`, finalizado: false };
+    }
+    this.state.etapaNomeSelecionado = nomes[idx];
+    this.goToStep('progresso_multi_etapa_pavimentos');
+    return await this.renderProgressoMultiEtapaPavimentos();
+  }
+
+  private async renderProgressoMultiEtapaPavimentos(): Promise<FlowResult> {
+    const todosPavs = this.state.pavimentosDisponiveis ?? [];
+    const nomeEtapa = this.state.etapaNomeSelecionado!;
+    // Filtrar pavimentos que têm essa etapa pendente; cada item carrega só essa etapa
+    const pavsComEtapa = todosPavs
+      .map((p: any) => ({ ...p, etapas: (p.etapas ?? []).filter((e: any) => e.nome === nomeEtapa) }))
+      .filter((p: any) => p.etapas.length > 0);
+
+    // Sobrescrever em state para uso na confirmação (usado ao montar etapaIdsSelecionados)
+    (this.state as any).pavimentosComEtapaSelecionada = pavsComEtapa;
+
+    if (pavsComEtapa.length === 0) {
+      return {
+        mensagem: `🎉 A etapa "${nomeEtapa}" já está concluída em todos os pavimentos.\n\n_Digite "menu"_`,
+        finalizado: true
+      };
+    }
+
+    let mensagem = `🏗️ *Pavimentos com "${nomeEtapa}" pendente*\n\n`;
+    pavsComEtapa.forEach((p: any, i: number) => {
+      mensagem += `${i + 1}. ${p.nome}\n`;
+    });
+    mensagem += `\n📝 *Como selecionar:*\n`;
+    mensagem += `• Um: \`2\`\n`;
+    mensagem += `• Vários: \`1,3,5\`\n`;
+    mensagem += `• Intervalo: \`2-4\`\n`;
+    mensagem += `• Misto: \`1,3-5\`\n`;
+    mensagem += `• Todos: \`todos\`\n\n`;
+    mensagem += `*0.* Voltar | *menu* — início`;
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepProgressoMultiEtapaPavimentos(msg: string): Promise<FlowResult> {
+    if (!msg.trim()) return await this.renderProgressoMultiEtapaPavimentos();
+    const pavs = ((this.state as any).pavimentosComEtapaSelecionada ?? []) as any[];
+    try {
+      const indices = parseMultiSelection(msg, pavs.length);
+      // cada pav tem exatamente 1 etapa filtrada (a selecionada)
+      this.state.etapaIdsSelecionados = indices.map(i => pavs[i].etapas[0].etapa_id);
+      this.goToStep('progresso_multi_confirmar');
+      return await this.renderProgressoMultiConfirmar();
+    } catch (e: any) {
+      if (e instanceof MultiSelectionError) return { mensagem: e.userMessage, finalizado: false };
+      throw e;
+    }
+  }
+
+  // ---------------- CONFIRMAÇÃO + GRAVAÇÃO BATCH ----------------
+
+  private async renderProgressoMultiConfirmar(): Promise<FlowResult> {
+    const ids = this.state.etapaIdsSelecionados ?? [];
+    const pavs = this.state.pavimentosDisponiveis ?? [];
+    const labels: string[] = [];
+    for (const p of pavs) {
+      for (const e of (p.etapas ?? [])) {
+        if (ids.includes(e.etapa_id)) {
+          labels.push(this.state.modoMultiSelecao === 1 ? e.nome : `${p.nome} → ${e.nome}`);
+        }
+      }
+    }
+    let mensagem = `🔎 *Confirme a marcação:*\n\n`;
+    labels.forEach(l => mensagem += `✅ ${l}\n`);
+    mensagem += `\n1️⃣ Confirmar e gravar\n2️⃣ Refazer seleção\n\n*0.* Voltar | *menu* — início`;
+    return { mensagem, finalizado: false };
+  }
+
+  private async stepProgressoMultiConfirmar(msg: string): Promise<FlowResult> {
+    if (!msg.trim()) return await this.renderProgressoMultiConfirmar();
+    const opcao = msg.trim();
+    if (opcao === '1') {
+      const ids = this.state.etapaIdsSelecionados ?? [];
+      const result = await this.supabase.marcarEtapasBatch(ids, true);
+      const progresso = await this.supabase.buscarProgressoPonderado(this.state.selectedProjetoId!);
+
+      let mensagem = `✅ *${result.ok} etapa(s) marcada(s) como concluída(s)!*\n\n`;
+      if (result.falhas.length > 0) {
+        mensagem += `⚠️ ${result.falhas.length} falharam ao gravar.\n\n`;
+      }
+      mensagem += `📊 Progresso ponderado: *${progresso ?? 0}%*\n\n`;
+      mensagem += `_Digite "menu" para voltar ao menu principal_`;
+
+      // Limpar pilha — não permite voltar a algo já gravado
+      this.state.snapshotHistory = [];
+      this.state.stepHistory = [];
+      this.goToStep('fim');
+      return { mensagem, finalizado: true };
+    }
+    if (opcao === '2') {
+      // Refazer = voltar 1 passo na pilha (volta para a tela de seleção)
+      if (this.popStep()) {
+        return await this.processarMensagem('');
+      }
+      return this.cancelar();
+    }
+    return { mensagem: '❌ Digite *1* para confirmar ou *2* para refazer.', finalizado: false };
   }
 
   /**
