@@ -36,7 +36,12 @@ export function filterPavimentosPendentes(pavimentos: PavimentoLike[]): Paviment
 export function isAreaConcluida(pavimentos: PavimentoLike[], areaId: string | number): boolean {
   const dessaArea = pavimentos.filter(p => String(p.area_id) === String(areaId) && p.ativo !== false);
   if (dessaArea.length === 0) return false;
-  return dessaArea.every(p => p.etapas.every(e => e.concluida || e.ativo === false));
+  // Pavimento sem etapas configuradas → NÃO é "concluído" (é não-configurado)
+  return dessaArea.every(p => {
+    const etapasAtivas = p.etapas.filter(e => e.ativo !== false);
+    if (etapasAtivas.length === 0) return false;
+    return etapasAtivas.every(e => e.concluida);
+  });
 }
 
 export function filterAreasPendentes<T extends { area_id: string | number }>(
@@ -48,7 +53,10 @@ export function filterAreasPendentes<T extends { area_id: string | number }>(
 
 export function isProjetoTotalmenteConcluido(pavimentos: PavimentoLike[]): boolean {
   if (pavimentos.length === 0) return false;
-  return pavimentos.every(p =>
-    p.ativo === false || p.etapas.every(e => e.concluida || e.ativo === false)
-  );
+  return pavimentos.every(p => {
+    if (p.ativo === false) return true;
+    const etapasAtivas = p.etapas.filter(e => e.ativo !== false);
+    if (etapasAtivas.length === 0) return false; // sem etapas: não é concluído
+    return etapasAtivas.every(e => e.concluida);
+  });
 }

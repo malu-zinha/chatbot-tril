@@ -54,5 +54,12 @@ const todasA1ConcA2Pend = pavsTodasConcluidas.filter(p => p.area_id === 'a1').co
 const filtAreas = filterAreasPendentes(areas, todasA1ConcA2Pend);
 assert(filtAreas.length === 1 && filtAreas[0].area_id === 'a2', 'filterAreasPendentes remove a1 concluída');
 
+// Edge case: pavimento sem etapas configuradas NÃO é "concluído"
+const pavSemEtapas = [
+  { pavimento_id: 'p1', nome: 'X', area_id: 'a1', ativo: true, etapas: [] },
+];
+assert(isAreaConcluida(pavSemEtapas, 'a1') === false, 'área com pavimento sem etapas NÃO está concluída');
+assert(isProjetoTotalmenteConcluido(pavSemEtapas) === false, 'projeto com pavimento sem etapas NÃO está concluído');
+
 console.log(`\n${pass} pass, ${fail} fail`);
 process.exit(fail > 0 ? 1 : 0);

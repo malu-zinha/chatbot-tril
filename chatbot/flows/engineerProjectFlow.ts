@@ -933,16 +933,19 @@ export class EngineerProjectFlow {
     const result: T[] = [];
     for (const atrib of atribuicoes) {
       const pavs = await this.supabase.buscarPavimentosComEtapas(atrib.projeto_id, String(atrib.area_id));
-      // se houver pavimentos e todos estão totalmente concluídos, pular
+      // sem pavimentos configurados → manter (engenheiro precisa ver a mensagem)
       if (pavs.length === 0) {
-        // sem pavimentos configurados — manter para que o engenheiro veja a mensagem apropriada
         result.push(atrib);
         continue;
       }
-      const aindaPendente = pavs.some((p: any) =>
-        (p.ativo !== false) && p.etapas.some((e: any) => !e.concluida && e.ativo !== false)
+      // pavimento sem etapas configuradas conta como pendente (não-configurado ≠ concluído)
+      const temPavimentoSemEtapas = pavs.some((p: any) =>
+        p.ativo !== false && (p.etapas ?? []).filter((e: any) => e.ativo !== false).length === 0
       );
-      if (aindaPendente) result.push(atrib);
+      const temEtapaPendente = pavs.some((p: any) =>
+        p.ativo !== false && (p.etapas ?? []).some((e: any) => !e.concluida && e.ativo !== false)
+      );
+      if (temPavimentoSemEtapas || temEtapaPendente) result.push(atrib);
     }
     return result;
   }
