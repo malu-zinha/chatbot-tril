@@ -288,11 +288,13 @@ export class EngineerProjectFlow {
           };
         }
         if (this.popStep()) {
-          // Se voltou ao menu raiz, devolver controle para messageHandler
+          // Se voltou à raiz, mostrar o menu do engenheiro inline
           if (this.state.step === 'escolher_acao' || this.state.step === 'inicio') {
+            this.resetToMenu();
+            this.goToStep('escolher_acao');
             return {
-              mensagem: '⬅️ Voltando ao menu principal...\n\nDigite *menu* para ver as opções.',
-              finalizado: true
+              mensagem: this.renderMenuEngenheiro(),
+              finalizado: false
             };
           }
           // Re-renderizar o step anterior chamando seu handler com input vazio.
@@ -921,6 +923,22 @@ export class EngineerProjectFlow {
 
   private isTerminalStep(step: FlowStep): boolean {
     return step === 'fim';
+  }
+
+  private renderMenuEngenheiro(): string {
+    return `⬅️ *Voltando ao menu principal*
+
+📋 *Menu do Engenheiro*
+
+🔔 *Atualizações Diárias*
+1️⃣ Notificação Matinal
+2️⃣ Notificação Noturna
+
+📊 *Gestão*
+3️⃣ Visualizar Meus Projetos
+4️⃣ Marcar Etapa Concluída
+
+_Digite o número da opção desejada_`;
   }
 
   /**
