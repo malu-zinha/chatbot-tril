@@ -14,6 +14,7 @@
     "test:update": "node tests/test-sheet-update.js",
     "test:interactive": "ts-node --esm tests/test-interactive.ts",
     "test:flow": "ts-node --esm tests/test-interactive.ts",
+    "test:marcar-etapa": "ts-node --esm tests/test-marcar-etapa.ts",
     "test:notifications": "ts-node --esm tests/test-notifications.ts",
     "test:planilha": "ts-node --esm tests/test-planilha-real.ts",
     "test:supabase": "ts-node --esm tests/test-supabase-connection.ts",
