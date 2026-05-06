@@ -2444,6 +2444,36 @@ export class SupabaseService {
   }
 
   /**
+   * Marca várias etapas de pavimento de uma só vez (UPDATE WHERE IN).
+   * Retorna { ok: número de etapas atualizadas, falhas: ids que não foram atualizados }.
+   */
+  async marcarEtapasBatch(etapaIds: string[], concluida = true): Promise<{ ok: number; falhas: string[] }> {
+    if (!this.connected || etapaIds.length === 0) return { ok: 0, falhas: [...etapaIds] };
+
+    try {
+      const { data, error } = await this.supabase
+        .from('pavimento_etapas')
+        .update({ concluida })
+        .in('etapa_id', etapaIds)
+        .eq('ativo', true)
+        .select('etapa_id');
+
+      if (error) {
+        console.error('❌ Erro ao marcar etapas em batch:', error);
+        return { ok: 0, falhas: [...etapaIds] };
+      }
+
+      const okIds = new Set((data ?? []).map((r: any) => r.etapa_id));
+      const falhas = etapaIds.filter(id => !okIds.has(id));
+      console.log(`✅ ${okIds.size}/${etapaIds.length} etapa(s) marcada(s) como ${concluida ? 'concluída' : 'pendente'}`);
+      return { ok: okIds.size, falhas };
+    } catch (error: any) {
+      console.error('❌ Erro ao marcar etapas em batch:', error.message);
+      return { ok: 0, falhas: [...etapaIds] };
+    }
+  }
+
+  /**
    * Marca uma etapa global como concluída ou não concluída
    */
   async marcarEtapaGlobalConcluida(etapaGlobalId: string, concluida: boolean): Promise<boolean> {
