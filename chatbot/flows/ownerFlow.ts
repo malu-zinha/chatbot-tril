@@ -677,7 +677,7 @@ export class OwnerFlow {
     msg += `📊 *Status:* ${info.status_descricao || 'N/A'}\n`;
     const progressoPonderado = await getSupabase().buscarProgressoPonderado(info.projeto_id);
     const andamento = progressoPonderado ?? info.percentual_andamento ?? 0;
-    msg += `⚡ *Andamento:* ${andamento}%\n\n`;
+    msg += `⚡ *Andamento Global do Projeto:* ${andamento}%\n\n`;
     
     msg += `📅 *Data Início:* ${info.data_inicio || 'N/A'}\n`;
     msg += `⏰ *Data Prevista:* ${info.data_prevista || 'N/A'}\n`;

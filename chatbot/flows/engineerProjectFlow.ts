@@ -1476,8 +1476,8 @@ _Digite o número da opção desejada_`;
 
     msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
     msg += `📊 *Status Atual*\n\n`;
-    msg += `📊 Status: ${atribuicao.status}\n`;
-    msg += `⚡ Andamento: ${atribuicao.percentual || 0}%\n`;
+    msg += `📊 Status da Área: ${atribuicao.status}\n`;
+    msg += `⚡ Andamento Global do Projeto: ${atribuicao.percentual || 0}%\n`;
     msg += `\n`;
 
     if (atribuicao.data_inicio || atribuicao.data_prevista || atribuicao.data_conclusao) {
