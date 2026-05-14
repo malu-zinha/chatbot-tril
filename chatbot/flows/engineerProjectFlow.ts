@@ -198,6 +198,10 @@ export class EngineerProjectFlow {
             const status = atrib.status_id ? await this.supabase.buscarStatusPorId(atrib.status_id) : null;
             console.log('🔍 [DEBUG] Status:', status?.descricao);
 
+            // Percentual: ponderado (etapas) se existir, senão andamento (status)
+            const ponderado = await this.supabase.buscarProgressoPonderado(atrib.projeto_id);
+            const percentualFinal = ponderado ?? atrib.percentual_andamento ?? 0;
+
             atribuicoesEnriquecidas.push({
               id: atrib.id,  // eng_projeto_id
               codigo: projeto?.codigo_projeto || '',
@@ -205,7 +209,9 @@ export class EngineerProjectFlow {
               area: area?.descricao || '',
               area_id: atrib.area_id,
               status: status?.descricao || '',
-              projeto_id: atrib.projeto_id
+              projeto_id: atrib.projeto_id,
+              percentual: percentualFinal,
+              data_prevista: atrib.data_prevista,
             });
           }
 
@@ -975,6 +981,20 @@ _Digite o número da opção desejada_`;
     };
   }
 
+  /**
+   * Verifica se uma atribuição (projeto+área) está 100% concluída.
+   * Retorna false se não há pavimentos configurados (não-configurado ≠ concluído).
+   */
+  private async _isAtribuicaoConcluida(
+    atrib: { projeto_id: string; area_id: string | number }
+  ): Promise<boolean> {
+    const pavs = await this.supabase.buscarPavimentosComEtapas(
+      atrib.projeto_id, String(atrib.area_id)
+    );
+    if (pavs.length === 0) return false;
+    return isProjetoTotalmenteConcluido(pavs as any);
+  }
+
   // =====================================================
   // STEPS: NOTIFICAÇÃO MATINAL
   // =====================================================
@@ -989,13 +1009,7 @@ _Digite o número da opção desejada_`;
       };
     }
 
-    const atribuicoes = await this.filtrarAtribuicoesPendentes(todasAtribuicoes);
-    if (atribuicoes.length === 0) {
-      return {
-        mensagem: '🎉 Todas as suas disciplinas/projetos já foram concluídos!\n\n_Digite "menu" para voltar._',
-        finalizado: true
-      };
-    }
+    const atribuicoes = todasAtribuicoes;
 
     this.state.availableAtribuicoes = atribuicoes;
     this.goToStep('escolher_area_manha'); // Avançar step para receber escolha
@@ -1003,11 +1017,14 @@ _Digite o número da opção desejada_`;
     let mensagem = `🌅 *Notificação Matinal*\n\n`;
     mensagem += `📋 Escolha o projeto:\n\n`;
 
-    atribuicoes.forEach((atrib, index) => {
-      mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}\n`;
+    for (let index = 0; index < atribuicoes.length; index++) {
+      const atrib = atribuicoes[index];
+      const concluido = await this._isAtribuicaoConcluida(atrib);
+      const flag = concluido ? ' ✅' : '';
+      mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}${flag}\n`;
       mensagem += `   Área: ${atrib.area}\n`;
       mensagem += `   Status: ${atrib.status || 'N/A'}\n\n`;
-    });
+    }
 
     mensagem += `_Digite o número do projeto_\n\n*0.* Voltar | *menu* — início`;
     return { mensagem, finalizado: false };
@@ -1024,6 +1041,15 @@ _Digite o número da opção desejada_`;
     }
 
     const atribuicao = this.state.availableAtribuicoes![escolha];
+
+    // Bloquear ação se atribuição já está concluída
+    if (await this._isAtribuicaoConcluida(atribuicao)) {
+      return {
+        mensagem: `✅ *${atribuicao.codigo}* (${atribuicao.area}) já está concluída!\n\n⚡ Andamento: ${atribuicao.percentual || 0}%\n\n_Escolha outro projeto ou digite "menu"_`,
+        finalizado: false
+      };
+    }
+
     this.state.selectedAtribuicaoId = atribuicao.id;
     this.state.projectCode = atribuicao.codigo;
 
@@ -1118,13 +1144,7 @@ _Digite o número da opção desejada_`;
       };
     }
 
-    const atribuicoes = await this.filtrarAtribuicoesPendentes(todasAtribuicoes);
-    if (atribuicoes.length === 0) {
-      return {
-        mensagem: '🎉 Todas as suas disciplinas/projetos já foram concluídos!\n\n_Digite "menu" para voltar._',
-        finalizado: true
-      };
-    }
+    const atribuicoes = todasAtribuicoes;
 
     this.state.availableAtribuicoes = atribuicoes;
     this.goToStep('escolher_area_noite'); // Avançar step para receber escolha
@@ -1132,11 +1152,14 @@ _Digite o número da opção desejada_`;
     let mensagem = `🌙 *Notificação Noturna*\n\n`;
     mensagem += `📋 Escolha o projeto:\n\n`;
 
-    atribuicoes.forEach((atrib, index) => {
-      mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}\n`;
+    for (let index = 0; index < atribuicoes.length; index++) {
+      const atrib = atribuicoes[index];
+      const concluido = await this._isAtribuicaoConcluida(atrib);
+      const flag = concluido ? ' ✅' : '';
+      mensagem += `${index + 1}️⃣ *${atrib.codigo}* - ${atrib.cliente}${flag}\n`;
       mensagem += `   Área: ${atrib.area}\n`;
       mensagem += `   Status: ${atrib.status || 'N/A'}\n\n`;
-    });
+    }
 
     mensagem += `_Digite o número do projeto_\n\n*0.* Voltar | *menu* — início`;
     return { mensagem, finalizado: false };
@@ -1153,6 +1176,15 @@ _Digite o número da opção desejada_`;
     }
 
     const atribuicao = this.state.availableAtribuicoes![escolha];
+
+    // Bloquear ação se atribuição já está concluída
+    if (await this._isAtribuicaoConcluida(atribuicao)) {
+      return {
+        mensagem: `✅ *${atribuicao.codigo}* (${atribuicao.area}) já está concluída!\n\n⚡ Andamento: ${atribuicao.percentual || 0}%\n\n_Escolha outro projeto ou digite "menu"_`,
+        finalizado: false
+      };
+    }
+
     this.state.selectedAtribuicaoId = atribuicao.id;
     this.state.projectCode = atribuicao.codigo;
     this.state.selectedProjetoId = atribuicao.projeto_id;
@@ -1392,14 +1424,12 @@ _Digite o número da opção desejada_`;
 
     for (let idx = 0; idx < atribuicoes.length; idx++) {
       const proj = atribuicoes[idx];
-      mensagem += `${idx + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
+      const concluido = await this._isAtribuicaoConcluida(proj);
+      const flag = concluido ? ' ✅' : '';
+      mensagem += `${idx + 1}️⃣ *${proj.codigo}* - ${proj.cliente}${flag}\n`;
       mensagem += `   📦 Área: ${proj.area}\n`;
       mensagem += `   📊 Status: ${proj.status}\n`;
       mensagem += `   ⚡ Andamento: ${proj.percentual || 0}%\n`;
-      const ponderado = await this.supabase.buscarProgressoPonderado(proj.projeto_id);
-      if (ponderado !== null) {
-        mensagem += `   📐 Progresso ponderado: ${ponderado}%\n`;
-      }
       if (proj.data_prevista) {
         const data = new Date(proj.data_prevista).toLocaleDateString('pt-BR');
         mensagem += `   📅 Previsto: ${data}\n`;
@@ -1448,10 +1478,6 @@ _Digite o número da opção desejada_`;
     msg += `📊 *Status Atual*\n\n`;
     msg += `📊 Status: ${atribuicao.status}\n`;
     msg += `⚡ Andamento: ${atribuicao.percentual || 0}%\n`;
-    const ponderado = await this.supabase.buscarProgressoPonderado(atribuicao.projeto_id);
-    if (ponderado !== null) {
-      msg += `📐 Progresso ponderado: ${ponderado}%\n`;
-    }
     msg += `\n`;
 
     if (atribuicao.data_inicio || atribuicao.data_prevista || atribuicao.data_conclusao) {
@@ -1501,21 +1527,12 @@ _Digite o número da opção desejada_`;
         };
       }
 
-      // Filtrar atribuições onde a (projeto, área) já está 100% concluída
-      const atribuicoes = await this.filtrarAtribuicoesPendentes(todasAtribuicoes);
-      if (atribuicoes.length === 0) {
-        return {
-          mensagem: '🎉 Todas as suas disciplinas/projetos já foram concluídos!\n\n_Digite "menu" para voltar._',
-          finalizado: true
-        };
-      }
-
       // Guardar todas as atribuições (com áreas) para uso posterior
-      (this.state as any).todasAtribuicoes = atribuicoes;
+      (this.state as any).todasAtribuicoes = todasAtribuicoes;
 
       // Filtrar projetos únicos (pode ter múltiplas áreas)
-      const projetosUnicos = new Map<string, typeof atribuicoes[0]>();
-      atribuicoes.forEach(a => {
+      const projetosUnicos = new Map<string, typeof todasAtribuicoes[0]>();
+      todasAtribuicoes.forEach(a => {
         if (!projetosUnicos.has(a.projeto_id)) {
           projetosUnicos.set(a.projeto_id, a);
         }
@@ -1527,9 +1544,12 @@ _Digite o número da opção desejada_`;
       let mensagem = `📐 *Marcar Etapa Concluída*\n\n`;
       mensagem += `📋 Escolha o projeto:\n\n`;
 
-      projetos.forEach((proj, idx) => {
-        mensagem += `${idx + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
-      });
+      for (let idx = 0; idx < projetos.length; idx++) {
+        const proj = projetos[idx];
+        const concluido = await this._isAtribuicaoConcluida(proj);
+        const flag = concluido ? ' ✅' : '';
+        mensagem += `${idx + 1}️⃣ *${proj.codigo}* - ${proj.cliente}${flag}\n`;
+      }
 
       mensagem += `\n_Digite o número do projeto_\n\n*0.* Voltar | *menu* — início`;
 
@@ -1567,9 +1587,8 @@ _Digite o número da opção desejada_`;
     const areasUnicas = filterAreasPendentes(areasUnicasTodas, todosPavsDoProjeto as any);
 
     if (areasUnicas.length === 0) {
-      const progresso = await this.supabase.buscarProgressoPonderado(projeto.projeto_id);
       return {
-        mensagem: `🎉 Todas as disciplinas do projeto *${projeto.codigo}* já foram concluídas!\n\n📊 Progresso ponderado: ${progresso ?? 0}%\n\n_Digite "menu" para voltar_`,
+        mensagem: `🎉 Todas as disciplinas do projeto *${projeto.codigo}* já foram concluídas!\n\n⚡ Andamento: ${projeto.percentual ?? 0}%\n\n_Digite "menu" para voltar_`,
         finalizado: true
       };
     }
@@ -1631,8 +1650,12 @@ _Digite o número da opção desejada_`;
     );
 
     if (pavimentos.length === 0) {
+      // Sem pavimentos: mostrar andamento baseado em status
+      const atrib = this.state.availableAtribuicoes?.find(
+        a => a.projeto_id === projetoId && (!this.state.selectedAreaId || String(a.area_id) === this.state.selectedAreaId)
+      );
       return {
-        mensagem: `⚠️ O projeto *${codigo}* ainda não tem pavimentos configurados.\n\nPeça ao gestor para configurar os pavimentos e etapas pelo dashboard.\n\n_Digite "menu" para voltar_`,
+        mensagem: `ℹ️ O projeto *${codigo}* não possui etapas configuradas para marcação.\n\n⚡ Andamento atual: ${atrib?.percentual || 0}%\n\n_O andamento é calculado com base no status do projeto._\n\n_Digite "menu" para voltar_`,
         finalizado: true
       };
     }
@@ -1643,7 +1666,7 @@ _Digite o número da opção desejada_`;
     if (pavimentosComPendencias.length === 0) {
       const progresso = await this.supabase.buscarProgressoPonderado(projetoId);
       return {
-        mensagem: `✅ Todas as etapas do projeto *${codigo}* já estão concluídas!\n\n📊 Progresso ponderado: ${progresso ?? 0}%\n\n_Digite "menu" para voltar_`,
+        mensagem: `✅ Todas as etapas do projeto *${codigo}* já estão concluídas!\n\n⚡ Andamento: ${progresso ?? 0}%\n\n_Digite "menu" para voltar_`,
         finalizado: true
       };
     }
@@ -1860,7 +1883,7 @@ _Digite o número da opção desejada_`;
       if (result.falhas.length > 0) {
         mensagem += `⚠️ ${result.falhas.length} falharam ao gravar.\n\n`;
       }
-      mensagem += `📊 Progresso ponderado: *${progresso ?? 0}%*\n\n`;
+      mensagem += `⚡ Andamento: *${progresso ?? 0}%*\n\n`;
       mensagem += `_Digite "menu" para voltar ao menu principal_`;
 
       // Limpar pilha — não permite voltar a algo já gravado
@@ -1962,7 +1985,7 @@ _Digite o número da opção desejada_`;
     mensagem += `📐 *${this.state.selectedProjetoCodigo}*\n`;
     mensagem += `🏗️ Pavimento: ${this.state.selectedPavimentoNome}\n`;
     mensagem += `✔️ Etapa: ${etapa.nome}\n\n`;
-    mensagem += `📊 *Progresso ponderado: ${progresso ?? 0}%*\n\n`;
+    mensagem += `⚡ *Andamento: ${progresso ?? 0}%*\n\n`;
     mensagem += `Deseja marcar outra etapa neste mesmo pavimento?\n\n`;
     mensagem += `1️⃣ Sim\n`;
     mensagem += `2️⃣ Não, voltar ao menu\n\n`;
@@ -1997,7 +2020,7 @@ _Digite o número da opção desejada_`;
       if (etapasPendentes.length === 0) {
         const progresso = await this.supabase.buscarProgressoPonderado(this.state.selectedProjetoId!);
         return {
-          mensagem: `✅ Todas as etapas do pavimento *${this.state.selectedPavimentoNome}* já estão concluídas!\n\n📊 *Progresso ponderado: ${progresso ?? 0}%*\n\n_Digite "menu" para voltar ao menu principal_`,
+          mensagem: `✅ Todas as etapas do pavimento *${this.state.selectedPavimentoNome}* já estão concluídas!\n\n⚡ *Andamento: ${progresso ?? 0}%*\n\n_Digite "menu" para voltar ao menu principal_`,
           finalizado: true
         };
       }
@@ -2138,7 +2161,7 @@ _Digite o número da opção desejada_`;
     let mensagem = `✅ Etapa marcada como concluída!\n\n`;
     mensagem += `🏗️ Pavimento: ${this.state.selectedPavimentoNome}\n`;
     mensagem += `✔️ Etapa: ${etapa.nome}\n`;
-    mensagem += `📊 *Progresso ponderado: ${progresso ?? 0}%*\n\n`;
+    mensagem += `⚡ *Andamento: ${progresso ?? 0}%*\n\n`;
     mensagem += `Deseja marcar outra etapa?\n\n`;
     mensagem += `1️⃣ Sim\n`;
     mensagem += `2️⃣ Não\n\n`;
@@ -2162,7 +2185,7 @@ _Digite o número da opção desejada_`;
       if (pavimentosComPendencias.length === 0) {
         const progresso = await this.supabase.buscarProgressoPonderado(this.state.selectedProjetoId!);
         return {
-          mensagem: `✅ Todas as etapas do projeto estão concluídas!\n\n📊 *Progresso ponderado: ${progresso ?? 0}%*\n\nDescanse bem! 🌙`,
+          mensagem: `✅ Todas as etapas do projeto estão concluídas!\n\n⚡ *Andamento: ${progresso ?? 0}%*\n\nDescanse bem! 🌙`,
           finalizado: true
         };
       }
