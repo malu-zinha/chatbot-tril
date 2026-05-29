@@ -270,34 +270,21 @@ export async function fetchRetrabalhoGeral(): Promise<RetrabalhoGeral | null> {
   }
 }
 
-export async function fetchRetrabalhoPorProjeto(): Promise<RetrabalhoPorProjeto[]> {
-  // View vw_retrabalho_por_projeto não existe — calcular a partir das tabelas base
-  const [retRes, projRes, epRes] = await Promise.all([
-    supabase.from('retrabalho_projetos').select('projeto_id'),
-    supabase.from('projetos').select('projeto_id, codigo_projeto, cliente').eq('ativo', true),
-    supabase.from('engenheiros_projetos').select('projeto_id, eng_id').eq('ativo', true),
-  ])
-
-  if (projRes.error || retRes.error) {
-    console.error('Erro ao buscar retrabalho por projeto:', projRes.error || retRes.error)
-    return []
-  }
-
-  // Contar retrabalhos por projeto
+export function aggregateRetrabalhoPorProjeto(
+  retrabalhos: { projeto_id: string }[],
+  projetos: { projeto_id: string; codigo_projeto: string; cliente: string }[],
+  engProjetos: { projeto_id: string; eng_id: string }[],
+): RetrabalhoPorProjeto[] {
   const retByProj = new Map<string, number>()
-  for (const r of (retRes.data || [])) {
+  for (const r of retrabalhos) {
     retByProj.set(r.projeto_id, (retByProj.get(r.projeto_id) || 0) + 1)
   }
-
-  // Contar engenheiros distintos por projeto
   const engByProj = new Map<string, Set<string>>()
-  for (const ep of (epRes.data || [])) {
+  for (const ep of engProjetos) {
     if (!engByProj.has(ep.projeto_id)) engByProj.set(ep.projeto_id, new Set())
     engByProj.get(ep.projeto_id)!.add(ep.eng_id)
   }
-
-  // Construir resultado — somente projetos com retrabalho
-  const result: RetrabalhoPorProjeto[] = (projRes.data || [])
+  return projetos
     .filter(p => retByProj.has(p.projeto_id))
     .map(p => {
       const totalRet = retByProj.get(p.projeto_id) || 0
@@ -312,8 +299,19 @@ export async function fetchRetrabalhoPorProjeto(): Promise<RetrabalhoPorProjeto[
       }
     })
     .sort((a, b) => b.percentual_retrabalho_projeto - a.percentual_retrabalho_projeto)
+}
 
-  return result
+export async function fetchRetrabalhoPorProjeto(): Promise<RetrabalhoPorProjeto[]> {
+  const [retRes, projRes, epRes] = await Promise.all([
+    supabase.from('retrabalho_projetos').select('projeto_id'),
+    supabase.from('projetos').select('projeto_id, codigo_projeto, cliente'),       // sem .eq('ativo', true)
+    supabase.from('engenheiros_projetos').select('projeto_id, eng_id'),            // sem .eq('ativo', true)
+  ])
+  if (projRes.error || retRes.error || epRes.error) {
+    console.error('Erro ao buscar retrabalho por projeto:', projRes.error || retRes.error || epRes.error)
+    return []
+  }
+  return aggregateRetrabalhoPorProjeto(retRes.data || [], projRes.data || [], epRes.data || [])
 }
 
 export async function fetchRetrabalhoDetalhesPorProjeto(
