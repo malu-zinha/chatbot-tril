@@ -19,6 +19,7 @@ import AreasTable from '@/components/AreasTable'
 import AtribuirTask, { TaskData } from '@/components/AtribuirTask'
 import CriarProjeto from '@/components/CriarProjeto'
 import { dedupeProjetos } from '@/lib/dedupe'
+import { debounce } from '@/lib/debounce'
 import { computeKpis } from '@/lib/kpis'
 import {
   mockVisaoGeral,
@@ -188,10 +189,11 @@ export default function DashboardClient() {
       )
       return
     }
+    const onChange = debounce(loadData, 500)
     const channels = [
-      subscribeToChanges('engenheiros_projetos', loadData),
-      subscribeToChanges('projetos', loadData),
-      subscribeToChanges('retrabalho_projetos', loadData),
+      subscribeToChanges('engenheiros_projetos', onChange),
+      subscribeToChanges('projetos', onChange),
+      subscribeToChanges('retrabalho_projetos', onChange),
     ]
     return () => {
       channels.forEach((channel) => {
