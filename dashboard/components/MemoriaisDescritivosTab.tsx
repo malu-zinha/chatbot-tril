@@ -64,6 +64,10 @@ export default function MemoriaisDescritivosTab() {
         </p>
       </div>
 
+      <div className="mb-4 rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+        ⚠️ Funcionalidade em desenvolvimento — o botão &quot;Gerar memorial&quot; ainda não chama o backend.
+      </div>
+
       <form onSubmit={handleGerarMemorial} className="space-y-6">
         {/* Bloco 1 – Upload de arquivo */}
         <div className="bg-white rounded-xl shadow-lg p-6">
