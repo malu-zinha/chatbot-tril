@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { 
   Briefcase, 
@@ -18,6 +18,8 @@ import EngenheirosTable from '@/components/EngenheirosTable'
 import AreasTable from '@/components/AreasTable'
 import AtribuirTask, { TaskData } from '@/components/AtribuirTask'
 import CriarProjeto from '@/components/CriarProjeto'
+import { dedupeProjetos } from '@/lib/dedupe'
+import { computeKpis } from '@/lib/kpis'
 import {
   mockVisaoGeral,
   mockAtrasosEngenheiro,
@@ -108,6 +110,8 @@ export default function DashboardClient() {
   const [projetoSelecionadoCodigo, setProjetoSelecionadoCodigo] = useState<string | undefined>()
   const [projetoSelecionadoCliente, setProjetoSelecionadoCliente] = useState<string | undefined>()
 
+  const kpis = useMemo(() => computeKpis(projetos), [projetos])
+
   const loadData = async () => {
     setIsLoading(true)
     try {
@@ -121,7 +125,7 @@ export default function DashboardClient() {
         setRetrabalhoMotivosGeral([])
         setRetrabalhoTaxaArea([])
         setProjetosStatus(mockProjetosStatus)
-        setProjetos(mockProjetos)
+        setProjetos(dedupeProjetos(mockProjetos as any))
         setEngenheiros(mockEngenheiros)
         setAreas(mockAreas)
         setLastUpdate(new Date())
@@ -165,7 +169,7 @@ export default function DashboardClient() {
       setRetrabalhoMotivosGeral(motivosGeralData)
       setRetrabalhoTaxaArea(taxaAreaData)
       setProjetosStatus(statusData)
-      setProjetos(projetosData)
+      setProjetos(dedupeProjetos(projetosData))
       setEngenheiros(engenheirosData)
       setAreas(areasData)
       setLastUpdate(new Date())
@@ -377,7 +381,7 @@ export default function DashboardClient() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <KPICard
               title="Total de Projetos"
-              value={visaoGeral?.total_projetos || 0}
+              value={kpis.total}
               subtitle={`${visaoGeral?.total_areas || 0} áreas`}
               icon={Briefcase}
               color="warning"
@@ -385,7 +389,7 @@ export default function DashboardClient() {
             />
             <KPICard
               title="Projetos Concluídos"
-              value={visaoGeral?.projetos_concluidos || 0}
+              value={kpis.concluidos}
               subtitle={`${visaoGeral?.areas_concluidas || 0} áreas concluídas`}
               icon={CheckCircle}
               color="warning"
@@ -393,7 +397,7 @@ export default function DashboardClient() {
             />
             <KPICard
               title="Em Execução"
-              value={visaoGeral?.projetos_em_execucao || 0}
+              value={kpis.emExecucao}
               subtitle={`${visaoGeral?.areas_ativas || 0} áreas ativas`}
               icon={Play}
               color="warning"
@@ -401,7 +405,7 @@ export default function DashboardClient() {
             />
             <KPICard
               title="Atrasados"
-              value={visaoGeral?.projetos_atrasados || 0}
+              value={kpis.atrasados}
               subtitle="Requer atenção"
               icon={AlertTriangle}
               color="warning"
@@ -484,13 +488,13 @@ export default function DashboardClient() {
                     Percentual Concluído Médio
                   </span>
                   <span className="text-2xl font-bold text-tecpred-primary">
-                    {(visaoGeral?.percentual_concluido_medio ?? 0).toFixed(1)}%
+                    {kpis.pctMedio.toFixed(1)}%
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-4">
                   <div
                     className="bg-gradient-to-r from-tecpred-primary to-tecpred-secondary h-4 rounded-full transition-all duration-500"
-                    style={{ width: `${visaoGeral?.percentual_concluido_medio || 0}%` }}
+                    style={{ width: `${kpis.pctMedio}%` }}
                   ></div>
                 </div>
               </div>

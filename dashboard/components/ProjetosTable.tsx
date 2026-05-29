@@ -1,22 +1,7 @@
 import React, { useEffect, useCallback } from 'react'
 import { X, Search, AlertTriangle } from 'lucide-react'
-
-interface Projeto {
-  projeto_id: string
-  codigo_projeto: string
-  cliente: string
-  descricao?: string
-  engenheiro_nome: string
-  area_descricao: string
-  status_descricao: string
-  percentual_andamento: number
-  data_inicio?: string
-  data_prevista?: string
-  data_conclusao?: string | null
-  dias_atraso: number
-  created_at?: string
-  motivo_aguardo?: string
-}
+import type { Projeto } from '@/lib/supabase'
+import { isConcluido, isAtrasado, isEmExecucao } from '@/lib/kpis'
 
 interface ProjetosTableProps {
   isOpen: boolean
@@ -103,23 +88,16 @@ export default function ProjetosTable({
       item.engenheiro_nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.area_descricao.toLowerCase().includes(searchTerm.toLowerCase())
     
-    // Filtro mais preciso baseado no estado real do projeto
     let matchesFilter = false
-    
+
     if (filterStatus === 'all') {
       matchesFilter = true
     } else if (filterStatus === 'concluido') {
-      // Projeto concluído: tem data_conclusao OU percentual = 100%
-      matchesFilter = (item.data_conclusao !== null && item.data_conclusao !== undefined) || 
-                      item.percentual_andamento >= 100
+      matchesFilter = isConcluido(item)
     } else if (filterStatus === 'em_execucao') {
-      // Em execução: não concluído (sem data_conclusao E percentual < 100) E não atrasado
-      matchesFilter = (item.data_conclusao === null || item.data_conclusao === undefined) && 
-                      item.percentual_andamento < 100 && 
-                      item.dias_atraso === 0
+      matchesFilter = isEmExecucao(item)
     } else if (filterStatus === 'atrasado') {
-      // Atrasado: tem dias de atraso
-      matchesFilter = item.dias_atraso > 0
+      matchesFilter = isAtrasado(item)
     }
     
     return matchesSearch && matchesFilter
