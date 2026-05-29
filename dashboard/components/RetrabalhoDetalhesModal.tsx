@@ -31,7 +31,7 @@ export default function RetrabalhoDetalhesModal({
   motivosProjeto,
 }: RetrabalhoDetalhesModalProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('areas')
-  const [expandedAreas, setExpandedAreas] = useState<Set<number>>(new Set())
+  const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set())
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose()
@@ -57,7 +57,7 @@ export default function RetrabalhoDetalhesModal({
   ]
 
   // Agrupar detalhes por área
-  const detalhesPorArea = detalhes.reduce<Record<number, RetrabalhoDetalheProjeto[]>>(
+  const detalhesPorArea = detalhes.reduce<Record<string, RetrabalhoDetalheProjeto[]>>(
     (acc, item) => {
       const id = item.area_id
       if (!acc[id]) acc[id] = []
@@ -67,7 +67,7 @@ export default function RetrabalhoDetalhesModal({
     {}
   )
 
-  const toggleArea = (areaId: number) => {
+  const toggleArea = (areaId: string) => {
     setExpandedAreas((prev) => {
       const next = new Set(prev)
       if (next.has(areaId)) {
