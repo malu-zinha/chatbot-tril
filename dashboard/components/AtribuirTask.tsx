@@ -292,7 +292,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                     {engenheirosOrdenados.map((eng) => (
                       <option key={eng.eng_id} value={eng.eng_id}>
                         {eng.nome} - Sobrecarga: {eng.sobrecarga.toFixed(0)}% 
-                        {eng.eng_id === melhorEngenheiro.eng_id && ' ⭐ Recomendado'}
+                        {eng.eng_id === melhorEngenheiro?.eng_id && ' ⭐ Recomendado'}
                       </option>
                     ))}
                   </select>
@@ -316,7 +316,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                   <div
                     key={eng.eng_id}
                     className={`bg-white rounded-lg p-4 border-2 transition-all ${
-                      eng.eng_id === melhorEngenheiro.eng_id
+                      eng.eng_id === melhorEngenheiro?.eng_id
                         ? 'border-tecpred-orange shadow-xl shadow-tecpred-orange/20'
                         : 'border-gray-200 hover:border-tecpred-primary'
                     }`}
@@ -325,7 +325,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <h4 className="font-bold text-gray-900">{eng.nome}</h4>
-                          {eng.eng_id === melhorEngenheiro.eng_id && (
+                          {eng.eng_id === melhorEngenheiro?.eng_id && (
                             <span className="px-2 py-1 bg-gradient-to-r from-tecpred-orange to-tecpred-coral text-white text-xs rounded-full flex items-center gap-1 shadow-lg">
                               <CheckCircle className="w-3 h-3" />
                               Recomendado
