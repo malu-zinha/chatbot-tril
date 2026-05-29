@@ -33,6 +33,7 @@ import {
 } from '@/lib/mockData'
 import {
   supabase,
+  criarProjeto,
   fetchVisaoGeral,
   fetchAtrasosEngenheiro,
   fetchCargaTrabalho,
@@ -220,22 +221,17 @@ export default function DashboardClient() {
       if (existente) {
         projetoId = existente.projeto_id
       } else {
-        const { data: novoProjeto, error: errProjeto } = await supabase
-          .from('projetos')
-          .insert({
-            codigo_projeto: data.codigo_projeto,
-            cliente: data.cliente,
-            descricao: data.descricao || null,
-          })
-          .select('projeto_id')
-          .single()
-
-        if (errProjeto || !novoProjeto) {
-          console.error('Erro ao criar projeto:', errProjeto)
-          alert(`Erro ao criar projeto: ${errProjeto?.message}`)
+        const resultado = await criarProjeto({
+          codigo: data.codigo_projeto,
+          cliente: data.cliente,
+          descricao: data.descricao || data.codigo_projeto,
+        })
+        if (!resultado.success) {
+          alert(`Erro ao criar projeto: ${resultado.error}`)
           return
         }
-        projetoId = novoProjeto.projeto_id
+        // criarProjeto retorna o ID em `data.projeto_id`
+        projetoId = resultado.data?.projeto_id
       }
 
       // 2. Buscar complexidade_id correspondente

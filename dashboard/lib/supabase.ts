@@ -560,6 +560,20 @@ export async function fetchAreas(): Promise<Area[]> {
   })
 }
 
+/** Puro: traduz a resposta bruta da RPC `criar_projeto` para o shape padrão { success, data?, error? }. */
+export function translateCriarProjetoResponse(
+  data: any,
+  error: { message: string } | null,
+): { success: boolean; data?: any; error?: string } {
+  if (error) {
+    return { success: false, error: error.message }
+  }
+  if (data && data.sucesso === false) {
+    return { success: false, error: data.mensagem ?? 'Erro desconhecido ao criar projeto' }
+  }
+  return { success: true, data }
+}
+
 export async function criarProjeto(params: {
   codigo: string
   cliente: string
@@ -573,10 +587,9 @@ export async function criarProjeto(params: {
 
   if (error) {
     console.error('Erro ao criar projeto:', error)
-    return { success: false, error: error.message }
   }
 
-  return { success: true, data }
+  return translateCriarProjetoResponse(data, error)
 }
 
 // Setup realtime subscriptions
