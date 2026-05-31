@@ -1946,7 +1946,7 @@ export class SupabaseService {
    */
   async registrarPrevisaoDia(
     eng_projeto_id: string,
-    status_id: number,
+    status_id: number | null,
     previsao_texto: string
   ): Promise<boolean> {
     if (!this.connected) return false;
@@ -1973,7 +1973,7 @@ export class SupabaseService {
           eng_id: atrib.eng_id,
           data_registro: new Date().toISOString().split('T')[0],
           previsao_texto,
-          status_id,
+          status_id: status_id ?? null,
           editavel: true,
         }, {
           onConflict: 'eng_projeto_id,data_registro'
@@ -2184,7 +2184,7 @@ export class SupabaseService {
    */
   async atualizarProjeto(
     projeto_id: string,
-    campos: Partial<{ codigo_projeto: string; cliente: string; descricao: string }>
+    campos: Partial<{ codigo_projeto: string; cliente: string; descricao: string; percentual_ponderado: number }>
   ): Promise<{ success: boolean; error?: string }> {
     if (!this.connected) return { success: false, error: 'Supabase não conectado' };
 
@@ -2521,6 +2521,33 @@ export class SupabaseService {
       return (data as any)?.percentual_ponderado ?? null;
     } catch (error: any) {
       console.error('❌ Erro ao buscar progresso ponderado:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Marca (100%) ou desmarca (0%) um projeto como concluído.
+   * Usado para projetos SEM etapas configuradas, onde não há marcação por etapa.
+   * Grava em projetos.percentual_ponderado (fonte única) via RPC.
+   */
+  async marcarProjetoConcluido(projetoId: string, concluido = true): Promise<number | null> {
+    if (!this.connected) return null;
+
+    try {
+      const { data, error } = await this.supabase.rpc('marcar_projeto_concluido', {
+        p_projeto_id: projetoId,
+        p_concluido: concluido,
+      });
+
+      if (error) {
+        console.error('❌ Erro ao marcar projeto como concluído:', error);
+        return null;
+      }
+
+      console.log(`✅ Projeto ${projetoId} ${concluido ? 'concluído (100%)' : 'reaberto (0%)'}`);
+      return typeof data === 'number' ? data : (concluido ? 100 : 0);
+    } catch (error: any) {
+      console.error('❌ Erro ao marcar projeto como concluído:', error.message);
       return null;
     }
   }

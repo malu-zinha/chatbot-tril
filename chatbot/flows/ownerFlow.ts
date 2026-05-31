@@ -1371,13 +1371,13 @@ export class OwnerFlow {
 
       case '3': {
         this.stepAtual = 'edit_menu_campos';
-        let msg = `📊 *Status e Andamento*\n\n`;
+        let msg = `📊 *Andamento*\n\n`;
         msg += `Valores atuais:\n`;
-        msg += `  • Status: ${dados?.status_descricao || 'N/A'}\n`;
+        msg += `  • Status: ${dados?.status_descricao || 'N/A'} _(derivado do andamento)_\n`;
         msg += `  • Andamento: ${dados?.percentual_andamento ?? 'N/A'}%\n\n`;
-        msg += `Qual campo deseja editar?\n\n`;
-        msg += `a) Status do projeto\n`;
-        msg += `b) Percentual de andamento\n\n`;
+        msg += `O status é calculado automaticamente a partir do andamento ` +
+               `(0% = Aguardando Início, 1–99% = Em Andamento, 100% = Concluído).\n\n`;
+        msg += `a) Percentual de andamento (0 a 100)\n\n`;
         msg += `_Digite a letra do campo_`;
         this.contexto.edit_campo = 'cat_status';
         return { mensagem: msg, finalizado: false };
@@ -1458,19 +1458,7 @@ export class OwnerFlow {
 
     if (categoria === 'cat_status') {
       switch (opcao) {
-        case 'a': {
-          this.contexto.edit_campo = 'status_id';
-          const statusList = await getSupabase().listarStatus();
-          this.contexto.status_list = statusList;
-
-          let msg = `📊 Escolha o novo status:\n\n`;
-          statusList.forEach((st: any, idx: number) => {
-            msg += `${idx + 1}️⃣ ${st.descricao}\n`;
-          });
-          msg += `\n_Digite o número do status_`;
-          return { mensagem: msg, finalizado: false };
-        }
-        case 'b':
+        case 'a':
           this.contexto.edit_campo = 'percentual_andamento';
           return {
             mensagem: `📊 Digite o novo percentual de andamento:\n\n(0 a 100)\n\n_Atual: ${this.contexto.edit_dados_atuais?.percentual_andamento ?? 'N/A'}%_`,
@@ -1478,7 +1466,7 @@ export class OwnerFlow {
           };
         default:
           this.stepAtual = 'edit_menu_campos';
-          return { mensagem: `❌ Opção inválida. Digite a ou b`, finalizado: false };
+          return { mensagem: `❌ Opção inválida. Digite a`, finalizado: false };
       }
     }
 
@@ -1514,15 +1502,6 @@ export class OwnerFlow {
         return { mensagem: `❌ Formato inválido.\n\nUse: DD/MM/AAAA ou "hoje"`, finalizado: false };
       }
       this.contexto.edit_novo_valor = data;
-    } else if (campo === 'status_id') {
-      const escolha = parseInt(input) - 1;
-      if (isNaN(escolha) || escolha < 0 || escolha >= (this.contexto.status_list?.length || 0)) {
-        return { mensagem: `❌ Opção inválida. Digite um número da lista.`, finalizado: false };
-      }
-      const status = this.contexto.status_list![escolha];
-      this.contexto.edit_novo_valor = status.status_id;
-      // Guardar descrição para confirmação
-      this.contexto.edit_campo = `status_id||${status.descricao}`;
     } else if (campo === 'percentual_andamento') {
       const valor = parseInt(input);
       if (isNaN(valor) || valor < 0 || valor > 100) {
@@ -1593,8 +1572,16 @@ export class OwnerFlow {
         { [campo]: valor }
       );
     }
-    // Campos da atribuição (engenheiros_projetos)
-    else if (['data_inicio', 'data_prevista', 'status_id', 'percentual_andamento', 'observacoes'].includes(campo)) {
+    // Andamento: grava na fonte única (projetos.percentual_ponderado).
+    // O status e a data_conclusão derivam automaticamente via trigger no banco.
+    else if (campo === 'percentual_andamento') {
+      resultado = await getSupabase().atualizarProjeto(
+        this.contexto.edit_projeto_id!,
+        { percentual_ponderado: valor }
+      );
+    }
+    // Demais campos da atribuição (engenheiros_projetos)
+    else if (['data_inicio', 'data_prevista', 'observacoes'].includes(campo)) {
       resultado = await getSupabase().atualizarAtribuicaoDono(
         this.contexto.edit_atribuicao_id!,
         { [campo]: valor }
