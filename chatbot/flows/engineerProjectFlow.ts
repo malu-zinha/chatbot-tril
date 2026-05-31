@@ -29,7 +29,6 @@ type FlowStep =
   // Notificacao Manha
   | 'escolher_projeto_manha'
   | 'escolher_area_manha'
-  | 'status_atual_manha'
   | 'previsao_dia'
 
   // Notificacao Noite
@@ -58,6 +57,7 @@ type FlowStep =
 
   // Progresso Ponderado — Multi-seleção
   | 'progresso_modo_multiselecao'
+  | 'progresso_sem_etapas_concluir'
   | 'progresso_multi_etapas_pavimento'
   | 'progresso_multi_etapas_selecionar'
   | 'progresso_multi_etapa_escolher'
@@ -108,7 +108,7 @@ interface FlowState {
   selectedPavimentoId?: string;
   selectedPavimentoNome?: string;
   // Dados temporarios das notificacoes
-  statusAtual?: number;  // status_id
+  statusAtual?: number | null;  // status_id (não usado — status deriva do ponderado)
   previsaoTexto?: string;
   feitoTexto?: string;
   teveRetrabalho?: boolean;
@@ -327,8 +327,6 @@ export class EngineerProjectFlow {
           return await this.stepEscolherProjetoManha(msg);
         case 'escolher_area_manha':
           return await this.stepEscolherAreaManha(msg); // Processa escolha do projeto
-        case 'status_atual_manha':
-          return await this.stepStatusAtualManha(msg);
         case 'previsao_dia':
           return await this.stepPrevisaoDia(msg);
 
@@ -375,6 +373,8 @@ export class EngineerProjectFlow {
         // Multi-seleção
         case 'progresso_modo_multiselecao':
           return await this.stepProgressoModoMultiselecao(msg);
+        case 'progresso_sem_etapas_concluir':
+          return await this.stepProgressoSemEtapasConcluir(msg);
         case 'progresso_multi_etapas_pavimento':
           return await this.stepProgressoMultiEtapasPavimento(msg);
         case 'progresso_multi_etapas_selecionar':
@@ -1052,52 +1052,27 @@ _Digite o número da opção desejada_`;
 
     this.state.selectedAtribuicaoId = atribuicao.id;
     this.state.projectCode = atribuicao.codigo;
+    // Status não é mais escolhido manualmente — deriva do progresso ponderado (etapas)
+    this.state.statusAtual = null;
 
-    // Prosseguir para status
-    this.goToStep('status_atual_manha');
-    return await this.stepStatusAtualManha('');
-  }
-
-  private async stepStatusAtualManha(msg: string): Promise<FlowResult> {
-    if (msg === '') {
-      // Primeira vez, mostrar lista de status
-      const statusList = await this.supabase.listarStatus();
-
-      let mensagem = `📊 *Status Atual do Projeto*\n\n`;
-      mensagem += `Qual o status atual?\n\n`;
-
-      statusList.forEach((status, index) => {
-        mensagem += `${index + 1}️⃣ ${status.descricao}\n`;
-      });
-
-      mensagem += `\n_Digite o número do status_\n\n*0.* Voltar | *menu* — início`;
-
-      // Armazenar lista para referência
-      (this.state as any).statusList = statusList;
-      return { mensagem, finalizado: false };
-    }
-
-    const escolha = parseInt(msg.trim()) - 1;
-    const statusList = (this.state as any).statusList || [];
-
-    if (isNaN(escolha) || escolha < 0 || escolha >= statusList.length) {
-      return {
-        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${statusList.length}.`,
-        finalizado: false
-      };
-    }
-
-    this.state.statusAtual = statusList[escolha].status_id;
+    // Prosseguir direto para a previsão do dia
     this.goToStep('previsao_dia');
-
     return {
-      mensagem: `✅ Status: ${statusList[escolha].descricao}\n\n📝 *O que você pretende fazer hoje?*\n\n_Descreva brevemente a previsão para o dia_`,
+      mensagem: `📝 *O que você pretende fazer hoje?*\n\n_Descreva brevemente a previsão para o dia_\n\n*0.* Voltar | *menu* — início`,
       finalizado: false
     };
   }
 
   private async stepPrevisaoDia(msg: string): Promise<FlowResult> {
     const previsao = msg.trim();
+
+    // Re-render do prompt quando voltando (msg vazio)
+    if (!previsao) {
+      return {
+        mensagem: `📝 *O que você pretende fazer hoje?*\n\n_Descreva brevemente a previsão para o dia_\n\n*0.* Voltar | *menu* — início`,
+        finalizado: false
+      };
+    }
 
     if (previsao.length < 5) {
       return {
@@ -1111,7 +1086,7 @@ _Digite o número da opção desejada_`;
     // Salvar no Supabase
     const sucesso = await this.supabase.registrarPrevisaoDia(
       this.state.selectedAtribuicaoId!,
-      this.state.statusAtual!,
+      this.state.statusAtual ?? null,
       previsao
     );
 
@@ -1650,14 +1625,9 @@ _Digite o número da opção desejada_`;
     );
 
     if (pavimentos.length === 0) {
-      // Sem pavimentos: mostrar andamento baseado em status
-      const atrib = this.state.availableAtribuicoes?.find(
-        a => a.projeto_id === projetoId && (!this.state.selectedAreaId || String(a.area_id) === this.state.selectedAreaId)
-      );
-      return {
-        mensagem: `ℹ️ O projeto *${codigo}* não possui etapas configuradas para marcação.\n\n⚡ Andamento atual: ${atrib?.percentual || 0}%\n\n_O andamento é calculado com base no status do projeto._\n\n_Digite "menu" para voltar_`,
-        finalizado: true
-      };
+      // Projeto sem etapas configuradas: permitir marcar/desmarcar concluído manualmente
+      this.goToStep('progresso_sem_etapas_concluir');
+      return await this.renderProgressoSemEtapasConcluir();
     }
 
     // Filtrar pavimentos que ainda têm etapas pendentes (helper centralizado)
@@ -1675,6 +1645,58 @@ _Digite o número da opção desejada_`;
     // Em vez de listar pavimentos direto, perguntar qual modo de marcação
     this.goToStep('progresso_modo_multiselecao');
     return await this.renderProgressoModoMultiselecao();
+  }
+
+  // =====================================================
+  // STEP: PROJETO SEM ETAPAS — MARCAR/DESMARCAR CONCLUÍDO
+  // =====================================================
+
+  private async renderProgressoSemEtapasConcluir(): Promise<FlowResult> {
+    const projetoId = this.state.selectedProjetoId!;
+    const codigo = this.state.selectedProjetoCodigo!;
+    const pct = (await this.supabase.buscarProgressoPonderado(projetoId)) ?? 0;
+    const jaConcluido = pct >= 100;
+
+    return {
+      mensagem:
+        `ℹ️ O projeto *${codigo}* não possui etapas cadastradas.\n\n` +
+        `⚡ Andamento atual: ${pct}%\n\n` +
+        (jaConcluido
+          ? `1️⃣ Reabrir projeto (volta para 0% / Aguardando Início)\n`
+          : `1️⃣ Marcar Projeto Concluído (100%)\n`) +
+        `\n*0.* Voltar | *menu* — início`,
+      finalizado: false
+    };
+  }
+
+  private async stepProgressoSemEtapasConcluir(msg: string): Promise<FlowResult> {
+    if (!msg.trim()) return await this.renderProgressoSemEtapasConcluir();
+
+    if (msg.trim() !== '1') {
+      return {
+        mensagem: '❌ Opção inválida. Digite *1* para confirmar ou *0* para voltar.',
+        finalizado: false
+      };
+    }
+
+    const projetoId = this.state.selectedProjetoId!;
+    const codigo = this.state.selectedProjetoCodigo!;
+    const jaConcluido = ((await this.supabase.buscarProgressoPonderado(projetoId)) ?? 0) >= 100;
+    const novoValor = await this.supabase.marcarProjetoConcluido(projetoId, !jaConcluido);
+
+    if (novoValor === null) {
+      return {
+        mensagem: '❌ Erro ao atualizar o projeto. Tente novamente ou digite "menu".',
+        finalizado: false
+      };
+    }
+
+    return {
+      mensagem: jaConcluido
+        ? `🔄 Projeto *${codigo}* reaberto.\n\n⚡ Andamento: ${novoValor}% — *Aguardando Início*\n\n_Digite "menu" para voltar_`
+        : `✅ Projeto *${codigo}* marcado como *Concluído*!\n\n⚡ Andamento: ${novoValor}%\n\n_Digite "menu" para voltar_`,
+      finalizado: true
+    };
   }
 
   // =====================================================
