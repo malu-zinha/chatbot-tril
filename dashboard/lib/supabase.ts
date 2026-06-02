@@ -1,4 +1,5 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || ''
@@ -11,7 +12,11 @@ const placeholderUrl = 'https://placeholder.supabase.co'
 const placeholderKey =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
 
-export const supabase: SupabaseClient = createClient(
+// Cliente do browser baseado em cookies (@supabase/ssr). A sessão fica em
+// cookie -> compartilhada com o middleware do Next.js, que protege as rotas.
+// Quando o usuário está logado, o token de acesso é enviado automaticamente
+// nas queries, fazendo a RLS liberar os dados para o papel `authenticated`.
+export const supabase: SupabaseClient = createBrowserClient(
   isSupabaseConfigured ? supabaseUrl : placeholderUrl,
   isSupabaseConfigured ? supabaseAnonKey : placeholderKey,
   {
