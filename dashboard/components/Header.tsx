@@ -1,6 +1,11 @@
-import React from 'react'
-import { RefreshCw } from 'lucide-react'
+'use client'
+
+import React, { useEffect, useState } from 'react'
+import { RefreshCw, LogOut, Shield } from 'lucide-react'
 import Image from 'next/image'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 interface HeaderProps {
   lastUpdate: Date | null
@@ -9,6 +14,40 @@ interface HeaderProps {
 }
 
 export default function Header({ lastUpdate, isLoading, isConnected = true }: HeaderProps) {
+  const router = useRouter()
+  const [isOwner, setIsOwner] = useState(false)
+
+  // Mostra o link do painel admin só pro owner ativo. A RLS de user_profiles
+  // libera o select do próprio perfil; quem não for owner não vê o botão (e a
+  // página /admin também redireciona não-owners).
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    let cancelled = false
+    ;(async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role, status')
+        .eq('user_id', user.id)
+        .single()
+      if (!cancelled && profile?.role === 'owner' && profile?.status === 'active') {
+        setIsOwner(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.replace('/login')
+    router.refresh()
+  }
+
   return (
     <header className="bg-gradient-to-r from-tecpred-primary via-tecpred-secondary to-tecpred-primary shadow-lg border-b-4 border-tecpred-orange overflow-visible">
       <div className="container mx-auto px-0 py-1 pl-0">
@@ -66,6 +105,26 @@ export default function Header({ lastUpdate, isLoading, isConnected = true }: He
                 {isConnected ? 'Conectado' : 'Desconectado'}
               </span>
             </div>
+
+            {isOwner && (
+              <Link
+                href="/admin"
+                title="Painel administrativo"
+                className="flex items-center space-x-2 px-3 py-2 rounded-lg border border-white border-opacity-20 bg-white bg-opacity-10 hover:bg-opacity-20 transition text-white text-sm font-medium"
+              >
+                <Shield className="w-4 h-4" />
+                <span className="hidden md:inline">Admin</span>
+              </Link>
+            )}
+
+            <button
+              onClick={handleLogout}
+              title="Sair"
+              className="flex items-center space-x-2 px-3 py-2 rounded-lg border border-white border-opacity-20 bg-white bg-opacity-10 hover:bg-opacity-20 transition text-white text-sm font-medium"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden md:inline">Sair</span>
+            </button>
           </div>
         </div>
       </div>
