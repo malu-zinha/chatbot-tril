@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from 'react'
 import { X, Search, Folder } from 'lucide-react'
-import { searchMatches } from '@/lib/search'
+import { filterAndRank } from '@/lib/search'
 
 interface Area {
   area_id: string | number
@@ -39,9 +39,7 @@ export default function AreasTable({ isOpen, onClose, data }: AreasTableProps) {
 
   if (!isOpen) return null
 
-  const filteredData = data.filter(item =>
-    searchMatches(searchTerm, [item.descricao, item.codigo])
-  )
+  const filteredData = filterAndRank(data, searchTerm, item => [item.descricao, item.codigo])
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>

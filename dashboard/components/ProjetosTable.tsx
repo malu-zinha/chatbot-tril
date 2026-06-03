@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback } from 'react'
 import { X, Search, AlertTriangle } from 'lucide-react'
-import { searchMatches } from '@/lib/search'
+import { searchScore } from '@/lib/search'
 
 interface Projeto {
   projeto_id: string
@@ -97,35 +97,42 @@ export default function ProjetosTable({
     item.motivo_aguardo?.trim() ||
     `Projeto atrasado há ${item.dias_atraso} dia(s). Nenhuma observação registrada.`
 
-  const filteredData = data.filter(item => {
-    const matchesSearch = searchMatches(searchTerm, [
-      item.codigo_projeto,
-      item.cliente,
-      item.engenheiro_nome,
-      item.area_descricao,
-    ])
-    
-    // Filtro mais preciso baseado no estado real do projeto
-    let matchesFilter = false
-    
-    if (filterStatus === 'all') {
-      matchesFilter = true
-    } else if (filterStatus === 'concluido') {
-      // Projeto concluído: tem data_conclusao OU percentual = 100%
-      matchesFilter = (item.data_conclusao !== null && item.data_conclusao !== undefined) || 
-                      item.percentual_andamento >= 100
-    } else if (filterStatus === 'em_execucao') {
-      // Em execução: não concluído (sem data_conclusao E percentual < 100) E não atrasado
-      matchesFilter = (item.data_conclusao === null || item.data_conclusao === undefined) && 
-                      item.percentual_andamento < 100 && 
-                      item.dias_atraso === 0
-    } else if (filterStatus === 'atrasado') {
-      // Atrasado: tem dias de atraso
-      matchesFilter = item.dias_atraso > 0
-    }
-    
-    return matchesSearch && matchesFilter
-  })
+  const filteredData = data
+    .map(item => {
+      // Filtro mais preciso baseado no estado real do projeto
+      let matchesFilter = false
+
+      if (filterStatus === 'all') {
+        matchesFilter = true
+      } else if (filterStatus === 'concluido') {
+        // Projeto concluído: tem data_conclusao OU percentual = 100%
+        matchesFilter = (item.data_conclusao !== null && item.data_conclusao !== undefined) ||
+                        item.percentual_andamento >= 100
+      } else if (filterStatus === 'em_execucao') {
+        // Em execução: não concluído (sem data_conclusao E percentual < 100) E não atrasado
+        matchesFilter = (item.data_conclusao === null || item.data_conclusao === undefined) &&
+                        item.percentual_andamento < 100 &&
+                        item.dias_atraso === 0
+      } else if (filterStatus === 'atrasado') {
+        // Atrasado: tem dias de atraso
+        matchesFilter = item.dias_atraso > 0
+      }
+
+      // Pontuação de relevância da busca (0 = não casa). Só pontua se passou no filtro.
+      const score = matchesFilter
+        ? searchScore(searchTerm, [
+            item.codigo_projeto,
+            item.cliente,
+            item.engenheiro_nome,
+            item.area_descricao,
+          ])
+        : 0
+
+      return { item, score }
+    })
+    .filter(entry => entry.score > 0)
+    .sort((a, b) => b.score - a.score) // mais relevantes primeiro (empate mantém ordem)
+    .map(entry => entry.item)
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
