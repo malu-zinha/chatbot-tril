@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback } from 'react'
 import { X, Search, User } from 'lucide-react'
+import { searchMatches } from '@/lib/search'
 
 interface Engenheiro {
   eng_id: string
@@ -39,9 +40,7 @@ export default function EngenheirosTable({ isOpen, onClose, data }: EngenheirosT
 
   if (!isOpen) return null
 
-  const filteredData = data.filter(item =>
-    item.nome.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredData = data.filter(item => searchMatches(searchTerm, [item.nome]))
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>

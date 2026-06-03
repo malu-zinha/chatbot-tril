@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback } from 'react'
 import { X, Search, Folder } from 'lucide-react'
+import { searchMatches } from '@/lib/search'
 
 interface Area {
   area_id: string | number
@@ -39,8 +40,7 @@ export default function AreasTable({ isOpen, onClose, data }: AreasTableProps) {
   if (!isOpen) return null
 
   const filteredData = data.filter(item =>
-    item.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.codigo.toLowerCase().includes(searchTerm.toLowerCase())
+    searchMatches(searchTerm, [item.descricao, item.codigo])
   )
 
   return (

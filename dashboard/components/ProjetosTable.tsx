@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback } from 'react'
 import { X, Search, AlertTriangle } from 'lucide-react'
+import { searchMatches } from '@/lib/search'
 
 interface Projeto {
   projeto_id: string
@@ -97,11 +98,12 @@ export default function ProjetosTable({
     `Projeto atrasado há ${item.dias_atraso} dia(s). Nenhuma observação registrada.`
 
   const filteredData = data.filter(item => {
-    const matchesSearch = 
-      item.codigo_projeto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.engenheiro_nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.area_descricao.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesSearch = searchMatches(searchTerm, [
+      item.codigo_projeto,
+      item.cliente,
+      item.engenheiro_nome,
+      item.area_descricao,
+    ])
     
     // Filtro mais preciso baseado no estado real do projeto
     let matchesFilter = false
