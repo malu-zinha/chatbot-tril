@@ -120,9 +120,27 @@ export class MessageHandler {
 
       // VERIFICAR SE É NÚMERO NÃO CADASTRADO
       if (sessao.tipo_usuario === 'nao_cadastrado') {
-        return {
-          resposta: this.mensagemNaoCadastrado(),
-        };
+        // Reautenticar: o número pode ter sido cadastrado no Supabase DEPOIS
+        // desta sessão ter sido criada. Como as sessões ficam em memória, sem
+        // isto só um redeploy reconheceria o número recém-cadastrado.
+        console.log(`   🔁 Sessão 'nao_cadastrado' — reautenticando no banco...`);
+        const reauth = await this.autenticarUsuario(sessao.whatsapp);
+
+        if (reauth.tipo === 'nao_cadastrado') {
+          return { resposta: this.mensagemNaoCadastrado() };
+        }
+
+        // Número agora reconhecido → atualizar a sessão e dar o ponto de entrada certo
+        console.log(`   ✅ Número agora reconhecido: ${reauth.tipo}`);
+        sessao.tipo_usuario = reauth.tipo;
+        sessao.user_id = reauth.user_id;
+        sessao.fluxo_ativo = null;
+        sessao.instancia_fluxo = null;
+
+        if (reauth.tipo === 'dono') {
+          return await this.iniciarFluxoDono(sessao);
+        }
+        return { resposta: this.mensagemMenu(reauth.tipo) };
       }
 
       // Verificar comandos globais
