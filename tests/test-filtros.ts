@@ -5,6 +5,7 @@ import {
   filterAreasPendentes,
   isProjetoTotalmenteConcluido,
   filterGlobaisPendentes,
+  statusPorPercentual,
 } from '../logic/execucao/filtros.ts';
 
 let pass = 0, fail = 0;
@@ -70,6 +71,13 @@ const globais = [
 ];
 assert(filterGlobaisPendentes(globais).length === 1, 'filterGlobaisPendentes ignora concluídas e inativas');
 assert(filterGlobaisPendentes(globais)[0].etapa_global_id === 'g1', 'filterGlobaisPendentes mantém só a pendente ativa');
+
+// --- statusPorPercentual ---
+assert(statusPorPercentual(0) === 'Aguardando Início', 'pct 0 → Aguardando Início');
+assert(statusPorPercentual(3.03) === 'Em Andamento', 'pct 3.03 → Em Andamento');
+assert(statusPorPercentual(99.9) === 'Em Andamento', 'pct 99.9 → Em Andamento');
+assert(statusPorPercentual(100) === 'Concluído', 'pct 100 → Concluído');
+assert(statusPorPercentual(undefined as any) === 'Aguardando Início', 'pct undefined → Aguardando Início');
 
 console.log(`\n${pass} pass, ${fail} fail`);
 process.exit(fail > 0 ? 1 : 0);

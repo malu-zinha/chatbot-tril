@@ -38,6 +38,18 @@ export function filterGlobaisPendentes(globais: EtapaGlobalLike[]): EtapaGlobalL
   return globais.filter(g => !g.concluida && g.ativo !== false);
 }
 
+/**
+ * Deriva o texto do status a partir do percentual ponderado da disciplina.
+ * Fonte única — mesma regra das views do dashboard e do emoji ✅.
+ *   pct >= 100 -> Concluído ; pct > 0 -> Em Andamento ; senão -> Aguardando Início
+ */
+export function statusPorPercentual(pct: number): string {
+  const p = Number(pct) || 0;
+  if (p >= 100) return 'Concluído';
+  if (p > 0) return 'Em Andamento';
+  return 'Aguardando Início';
+}
+
 export function filterPavimentosPendentes(pavimentos: PavimentoLike[]): PavimentoLike[] {
   return pavimentos
     .filter(p => p.ativo !== false)

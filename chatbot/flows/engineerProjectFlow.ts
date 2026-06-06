@@ -14,6 +14,7 @@ import {
   filterEtapasPendentes,
   filterPavimentosPendentes,
   filterGlobaisPendentes,
+  statusPorPercentual,
 } from '../../logic/execucao/filtros.ts';
 import { parseMultiSelection, MultiSelectionError } from '../../logic/execucao/parseMultiSelection.ts';
 
@@ -197,10 +198,10 @@ export class EngineerProjectFlow {
             console.log('🔍 [DEBUG] Projeto:', projeto?.codigo_projeto);
             const area = await this.supabase.buscarAreaPorId(atrib.area_id);
             console.log('🔍 [DEBUG] Área:', area?.descricao);
-            const status = atrib.status_id ? await this.supabase.buscarStatusPorId(atrib.status_id) : null;
-            console.log('🔍 [DEBUG] Status:', status?.descricao);
 
-            // Percentual da disciplina (projeto+área): pavimentos + globais
+            // Percentual da disciplina (projeto+área): pavimentos + globais.
+            // O status (texto) deriva do percentual — fonte única, igual ao ✅ e ao dashboard.
+            // (status_id é coluna morta: marcação manual de status foi removida.)
             const percentualFinal = await this.supabase.buscarProgressoArea(atrib.projeto_id, String(atrib.area_id));
 
             atribuicoesEnriquecidas.push({
@@ -209,7 +210,7 @@ export class EngineerProjectFlow {
               cliente: projeto?.cliente || '',
               area: area?.descricao || '',
               area_id: atrib.area_id,
-              status: status?.descricao || '',
+              status: statusPorPercentual(percentualFinal),
               projeto_id: atrib.projeto_id,
               percentual: percentualFinal,
               data_prevista: atrib.data_prevista,
