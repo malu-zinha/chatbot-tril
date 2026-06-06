@@ -2551,6 +2551,82 @@ export class SupabaseService {
       return null;
     }
   }
+
+  /**
+   * Progresso ponderado de uma disciplina (projeto+área).
+   * Fonte única do status/✅ por área (engenheiros_projetos.percentual_ponderado).
+   */
+  async buscarProgressoArea(projetoId: string, areaId: string | number): Promise<number> {
+    if (!this.connected) return 0;
+    try {
+      const { data, error } = await this.supabase
+        .from('engenheiros_projetos')
+        .select('percentual_ponderado')
+        .eq('projeto_id', projetoId)
+        .eq('area_id', areaId)
+        .eq('ativo', true)
+        .limit(1);
+      if (error) {
+        console.error('❌ Erro ao buscar progresso da área:', error);
+        return 0;
+      }
+      return Number((data as any)?.[0]?.percentual_ponderado ?? 0);
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar progresso da área:', error.message);
+      return 0;
+    }
+  }
+
+  /**
+   * Marca várias etapas GLOBAIS de uma vez (UPDATE WHERE IN).
+   * Retorna { ok: número atualizado, falhas: ids não atualizados }.
+   */
+  async marcarEtapasGlobaisBatch(ids: string[], concluida = true): Promise<{ ok: number; falhas: string[] }> {
+    if (!this.connected || ids.length === 0) return { ok: 0, falhas: [...ids] };
+    try {
+      const { data, error } = await this.supabase
+        .from('projeto_etapas_globais')
+        .update({ concluida })
+        .in('etapa_global_id', ids)
+        .eq('ativo', true)
+        .select('etapa_global_id');
+      if (error) {
+        console.error('❌ Erro ao marcar etapas globais em batch:', error);
+        return { ok: 0, falhas: [...ids] };
+      }
+      const okIds = new Set((data ?? []).map((r: any) => r.etapa_global_id));
+      const falhas = ids.filter(id => !okIds.has(id));
+      console.log(`✅ ${okIds.size}/${ids.length} etapa(s) global(is) marcada(s) como ${concluida ? 'concluída' : 'pendente'}`);
+      return { ok: okIds.size, falhas };
+    } catch (error: any) {
+      console.error('❌ Erro ao marcar etapas globais em batch:', error.message);
+      return { ok: 0, falhas: [...ids] };
+    }
+  }
+
+  /**
+   * Marca (100%) ou reabre (0%) uma disciplina (projeto+área) SEM etapas configuradas.
+   * Afeta apenas a área indicada; recalcula o roll-up do projeto via RPC.
+   */
+  async marcarAreaConcluida(projetoId: string, areaId: string | number, concluido = true): Promise<number | null> {
+    if (!this.connected) return null;
+    try {
+      const { data, error } = await this.supabase.rpc('marcar_area_concluida', {
+        p_projeto_id: projetoId,
+        p_area_id: areaId,
+        p_concluido: concluido,
+      });
+      if (error) {
+        console.error('❌ Erro ao marcar área como concluída:', error);
+        return null;
+      }
+      console.log(`✅ Área ${areaId} do projeto ${projetoId} ${concluido ? 'concluída (100%)' : 'reaberta (0%)'}`);
+      return typeof data === 'number' ? data : (concluido ? 100 : 0);
+    } catch (error: any) {
+      console.error('❌ Erro ao marcar área como concluída:', error.message);
+      return null;
+    }
+  }
 }
 
 // =====================================================
