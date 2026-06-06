@@ -22,8 +22,20 @@ export interface PavimentoLike {
   etapas: EtapaLike[];
 }
 
+export interface EtapaGlobalLike {
+  etapa_global_id: string;
+  nome: string;
+  peso?: number;
+  concluida: boolean;
+  ativo?: boolean;
+}
+
 export function filterEtapasPendentes(etapas: EtapaLike[]): EtapaLike[] {
   return etapas.filter(e => !e.concluida && e.ativo !== false);
+}
+
+export function filterGlobaisPendentes(globais: EtapaGlobalLike[]): EtapaGlobalLike[] {
+  return globais.filter(g => !g.concluida && g.ativo !== false);
 }
 
 export function filterPavimentosPendentes(pavimentos: PavimentoLike[]): PavimentoLike[] {

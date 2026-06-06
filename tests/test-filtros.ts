@@ -4,6 +4,7 @@ import {
   isAreaConcluida,
   filterAreasPendentes,
   isProjetoTotalmenteConcluido,
+  filterGlobaisPendentes,
 } from '../logic/execucao/filtros.ts';
 
 let pass = 0, fail = 0;
@@ -60,6 +61,15 @@ const pavSemEtapas = [
 ];
 assert(isAreaConcluida(pavSemEtapas, 'a1') === false, 'área com pavimento sem etapas NÃO está concluída');
 assert(isProjetoTotalmenteConcluido(pavSemEtapas) === false, 'projeto com pavimento sem etapas NÃO está concluído');
+
+// --- Etapas globais pendentes ---
+const globais = [
+  { etapa_global_id: 'g1', nome: 'Memorial',   concluida: false, ativo: true },
+  { etapa_global_id: 'g2', nome: 'Pranchas',   concluida: true,  ativo: true },
+  { etapa_global_id: 'g3', nome: 'Desativada', concluida: false, ativo: false },
+];
+assert(filterGlobaisPendentes(globais).length === 1, 'filterGlobaisPendentes ignora concluídas e inativas');
+assert(filterGlobaisPendentes(globais)[0].etapa_global_id === 'g1', 'filterGlobaisPendentes mantém só a pendente ativa');
 
 console.log(`\n${pass} pass, ${fail} fail`);
 process.exit(fail > 0 ? 1 : 0);
