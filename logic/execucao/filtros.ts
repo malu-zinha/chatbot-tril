@@ -74,6 +74,12 @@ export function montarOpcoesEscopo(nPavEtapas: number, nGlob: number): EscopoOpc
   return ops;
 }
 
+/** Rótulo de uma área na listagem: concluída mostra ✅; senão mostra o %. */
+export function formatAreaLinha(nome: string, pct: number): string {
+  const p = Number(pct) || 0;
+  return p >= 100 ? `${nome} ✅ (100%)` : `${nome} (${p}%)`;
+}
+
 export function filterPavimentosPendentes(pavimentos: PavimentoLike[]): PavimentoLike[] {
   return pavimentos
     .filter(p => p.ativo !== false)
