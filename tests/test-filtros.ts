@@ -7,6 +7,7 @@ import {
   filterGlobaisPendentes,
   statusPorPercentual,
   montarOpcoesEscopo,
+  formatAreaLinha,
 } from '../logic/execucao/filtros.ts';
 
 let pass = 0, fail = 0;
@@ -89,6 +90,11 @@ assert(oSoPav.length === 2 && oSoPav.every(o => o.acao.startsWith('pav')), 'só 
 const oSoGlob = montarOpcoesEscopo(0, 5);
 assert(oSoGlob.length === 2 && oSoGlob.every(o => o.acao.startsWith('glob')), 'só globais → 2 opções glob, sem concluir_tudo');
 assert(montarOpcoesEscopo(0, 0).length === 0, 'nada pendente → nenhuma opção');
+
+// --- formatAreaLinha ---
+assert(formatAreaLinha('Elétrico', 100) === 'Elétrico ✅ (100%)', 'área 100% → ✅');
+assert(formatAreaLinha('Hidráulico', 41.69) === 'Hidráulico (41.69%)', 'área parcial → só %');
+assert(formatAreaLinha('Climatização', 0) === 'Climatização (0%)', 'área 0% → 0%');
 
 console.log(`\n${pass} pass, ${fail} fail`);
 process.exit(fail > 0 ? 1 : 0);

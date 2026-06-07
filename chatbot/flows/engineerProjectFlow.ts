@@ -16,6 +16,7 @@ import {
   filterGlobaisPendentes,
   statusPorPercentual,
   montarOpcoesEscopo,
+  formatAreaLinha,
   type EscopoAcao,
 } from '../../logic/execucao/filtros.ts';
 import { parseMultiSelection, MultiSelectionError } from '../../logic/execucao/parseMultiSelection.ts';
@@ -1534,9 +1535,7 @@ _Digite o número da opção desejada_`;
 
       for (let idx = 0; idx < projetos.length; idx++) {
         const proj = projetos[idx];
-        const concluido = await this._isAtribuicaoConcluida(proj);
-        const flag = concluido ? ' ✅' : '';
-        mensagem += `${idx + 1}️⃣ *${proj.codigo}* - ${proj.cliente}${flag}\n`;
+        mensagem += `${idx + 1}️⃣ *${proj.codigo}* - ${proj.cliente}\n`;
       }
 
       mensagem += `\n_Digite o número do projeto_\n\n*0.* Voltar | *menu* — início`;
@@ -1570,48 +1569,43 @@ _Digite o número da opção desejada_`;
       new Map(areasDoProjeto.map(a => [String(a.area_id), a])).values()
     );
 
-    // Filtrar áreas que ainda têm pendências (percentual < 100) — fonte única
-    const areasUnicas: typeof areasUnicasTodas = [];
+    // Listar TODAS as áreas do engenheiro neste projeto, com o andamento de cada uma.
+    // Concluídas (100%) aparecem com ✅, mas não são selecionáveis para marcar.
+    const areasComPct: Array<{ area_id: string | number; area: string; pct: number }> = [];
     for (const a of areasUnicasTodas) {
       const pct = await this.supabase.buscarProgressoArea(projeto.projeto_id, String(a.area_id));
-      if (pct < 100) areasUnicas.push(a);
+      areasComPct.push({ area_id: a.area_id, area: a.area, pct });
     }
 
-    if (areasUnicas.length === 0) {
+    if (areasComPct.every(a => a.pct >= 100)) {
       return {
-        mensagem: `🎉 Todas as disciplinas do projeto *${projeto.codigo}* já foram concluídas!\n\n⚡ Andamento: ${projeto.percentual ?? 0}%\n\n_Digite "menu" para voltar_`,
+        mensagem: `🎉 Todas as disciplinas do projeto *${projeto.codigo}* já foram concluídas!\n\n_Digite "menu" para voltar_`,
         finalizado: true
       };
     }
 
-    // Sempre pedir a escolha da área — mesmo que haja só uma (mostra a opção única)
-    this.state.areasDisponiveisProjeto = areasUnicas;
+    this.state.areasDisponiveisProjeto = areasComPct as any;
     this.goToStep('progresso_escolher_area');
+    return { mensagem: this.renderMenuAreas(projeto.codigo), finalizado: false };
+  }
 
-    let mensagem = `📦 *Áreas do Projeto ${projeto.codigo}:*\n\n`;
-    areasUnicas.forEach((a, idx) => {
-      mensagem += `${idx + 1}️⃣ ${a.area}\n`;
-    });
-    mensagem += `\n_Digite o número da área_\n\n*0.* Voltar | *menu* — início`;
-
-    return { mensagem, finalizado: false };
+  private renderMenuAreas(codigo?: string): string {
+    const areas = (this.state.areasDisponiveisProjeto ?? []) as any[];
+    let m = `📦 *Áreas do Projeto ${codigo ?? this.state.selectedProjetoCodigo ?? ''}:*\n\n`;
+    areas.forEach((a, idx) => { m += `${idx + 1}️⃣ ${formatAreaLinha(a.area, a.pct)}\n`; });
+    m += `\n_Digite o número de uma área não concluída_\n\n*0.* Voltar | *menu* — início`;
+    return m;
   }
 
   private async stepProgressoEscolherArea(msg: string): Promise<FlowResult> {
-    const areas = this.state.areasDisponiveisProjeto || [];
+    const areas = (this.state.areasDisponiveisProjeto || []) as any[];
 
     // Re-render quando voltando (msg vazio)
     if (!msg.trim()) {
-      let mensagem = `📦 *Áreas do Projeto ${this.state.selectedProjetoCodigo ?? ''}:*\n\n`;
-      areas.forEach((a: any, idx: number) => {
-        mensagem += `${idx + 1}️⃣ ${a.area}\n`;
-      });
-      mensagem += `\n_Digite o número da área_\n\n*0.* Voltar | *menu* — início`;
-      return { mensagem, finalizado: false };
+      return { mensagem: this.renderMenuAreas(), finalizado: false };
     }
 
     const escolha = parseInt(msg.trim()) - 1;
-
     if (isNaN(escolha) || escolha < 0 || escolha >= areas.length) {
       return {
         mensagem: `❌ Opção inválida. Digite um número entre 1 e ${areas.length}`,
@@ -1620,8 +1614,14 @@ _Digite o número da opção desejada_`;
     }
 
     const area = areas[escolha];
-    this.state.selectedAreaId = String(area.area_id);
+    if (area.pct >= 100) {
+      return {
+        mensagem: `✅ A disciplina *${area.area}* já está 100% concluída — escolha uma área não concluída.\n\n` + this.renderMenuAreas(),
+        finalizado: false
+      };
+    }
 
+    this.state.selectedAreaId = String(area.area_id);
     return await this.carregarPavimentosDoProjeto();
   }
 
