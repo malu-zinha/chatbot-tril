@@ -1579,13 +1579,7 @@ _Digite o número da opção desejada_`;
       };
     }
 
-    // Se só tem uma área, pular seleção e ir direto pra pavimentos
-    if (areasUnicas.length <= 1) {
-      this.state.selectedAreaId = areasUnicas[0]?.area_id ? String(areasUnicas[0].area_id) : undefined;
-      return await this.carregarPavimentosDoProjeto();
-    }
-
-    // Múltiplas áreas: pedir escolha
+    // Sempre pedir a escolha da área — mesmo que haja só uma (mostra a opção única)
     this.state.areasDisponiveisProjeto = areasUnicas;
     this.goToStep('progresso_escolher_area');
 
