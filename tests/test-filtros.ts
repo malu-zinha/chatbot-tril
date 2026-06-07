@@ -6,6 +6,7 @@ import {
   isProjetoTotalmenteConcluido,
   filterGlobaisPendentes,
   statusPorPercentual,
+  montarOpcoesEscopo,
 } from '../logic/execucao/filtros.ts';
 
 let pass = 0, fail = 0;
@@ -78,6 +79,16 @@ assert(statusPorPercentual(3.03) === 'Em Andamento', 'pct 3.03 → Em Andamento'
 assert(statusPorPercentual(99.9) === 'Em Andamento', 'pct 99.9 → Em Andamento');
 assert(statusPorPercentual(100) === 'Concluído', 'pct 100 → Concluído');
 assert(statusPorPercentual(undefined as any) === 'Aguardando Início', 'pct undefined → Aguardando Início');
+
+// --- montarOpcoesEscopo ---
+const oAmbos = montarOpcoesEscopo(24, 5);
+assert(oAmbos.length === 5, 'pav+glob → 5 opções (escolher/todas x2 + concluir tudo)');
+assert(oAmbos[oAmbos.length - 1].acao === 'concluir_tudo', 'última opção é concluir_tudo quando há ambos');
+const oSoPav = montarOpcoesEscopo(24, 0);
+assert(oSoPav.length === 2 && oSoPav.every(o => o.acao.startsWith('pav')), 'só pavimentos → 2 opções pav, sem concluir_tudo');
+const oSoGlob = montarOpcoesEscopo(0, 5);
+assert(oSoGlob.length === 2 && oSoGlob.every(o => o.acao.startsWith('glob')), 'só globais → 2 opções glob, sem concluir_tudo');
+assert(montarOpcoesEscopo(0, 0).length === 0, 'nada pendente → nenhuma opção');
 
 console.log(`\n${pass} pass, ${fail} fail`);
 process.exit(fail > 0 ? 1 : 0);

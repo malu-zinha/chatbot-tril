@@ -15,6 +15,8 @@ import {
   filterPavimentosPendentes,
   filterGlobaisPendentes,
   statusPorPercentual,
+  montarOpcoesEscopo,
+  type EscopoAcao,
 } from '../../logic/execucao/filtros.ts';
 import { parseMultiSelection, MultiSelectionError } from '../../logic/execucao/parseMultiSelection.ts';
 
@@ -58,6 +60,7 @@ type FlowStep =
   // Progresso Ponderado — Multi-seleção
   | 'progresso_modo_multiselecao'
   | 'progresso_escopo'
+  | 'progresso_marcar_tudo_confirmar'
   | 'progresso_globais_selecionar'
   | 'progresso_globais_confirmar'
   | 'progresso_sem_etapas_concluir'
@@ -377,6 +380,8 @@ export class EngineerProjectFlow {
           return await this.stepProgressoModoMultiselecao(msg);
         case 'progresso_escopo':
           return await this.stepProgressoEscopo(msg);
+        case 'progresso_marcar_tudo_confirmar':
+          return await this.stepProgressoMarcarTudoConfirmar(msg);
         case 'progresso_globais_selecionar':
           return await this.stepProgressoGlobaisSelecionar(msg);
         case 'progresso_globais_confirmar':
@@ -1579,13 +1584,7 @@ _Digite o número da opção desejada_`;
       };
     }
 
-    // Se só tem uma área, pular seleção e ir direto pra pavimentos
-    if (areasUnicas.length <= 1) {
-      this.state.selectedAreaId = areasUnicas[0]?.area_id ? String(areasUnicas[0].area_id) : undefined;
-      return await this.carregarPavimentosDoProjeto();
-    }
-
-    // Múltiplas áreas: pedir escolha
+    // Sempre pedir a escolha da área — mesmo que haja só uma (mostra a opção única)
     this.state.areasDisponiveisProjeto = areasUnicas;
     this.goToStep('progresso_escolher_area');
 
@@ -1654,15 +1653,9 @@ _Digite o número da opção desejada_`;
     this.state.pavimentosDisponiveis = pavPend;
     (this.state as any).globaisDisponiveis = globPend;
 
-    // Só globais → vai direto; só pavimentos → fluxo atual; ambos → menu de escopo
-    if (pavPend.length === 0) {
-      this.goToStep('progresso_globais_selecionar');
-      return await this.renderProgressoGlobaisSelecionar();
-    }
-    if (globPend.length === 0) {
-      this.goToStep('progresso_modo_multiselecao');
-      return await this.renderProgressoModoMultiselecao();
-    }
+    const nPavEtapas = pavPend.reduce((acc: number, p: any) => acc + (p.etapas?.length ?? 0), 0);
+    (this.state as any).escopoOpcoes = montarOpcoesEscopo(nPavEtapas, globPend.length);
+
     this.goToStep('progresso_escopo');
     return await this.renderProgressoEscopo();
   }
@@ -1672,29 +1665,86 @@ _Digite o número da opção desejada_`;
   // =====================================================
 
   private async renderProgressoEscopo(): Promise<FlowResult> {
-    const nPav = (this.state.pavimentosDisponiveis ?? []).length;
-    const nGlob = ((this.state as any).globaisDisponiveis ?? []).length;
-    return {
-      mensagem:
-        `📋 *O que deseja marcar em ${this.state.selectedProjetoCodigo}?*\n\n` +
-        `1️⃣ Etapas dos pavimentos (${nPav} com pendência)\n` +
-        `2️⃣ Etapas gerais do projeto (${nGlob} pendente(s))\n\n` +
-        `*0.* Voltar | *menu* — início`,
-      finalizado: false
-    };
+    const ops = ((this.state as any).escopoOpcoes ?? []) as { label: string; acao: EscopoAcao }[];
+    let mensagem = `📋 *O que deseja marcar em ${this.state.selectedProjetoCodigo}?*\n\n`;
+    ops.forEach((o, i) => { mensagem += `${i + 1}️⃣ ${o.label}\n`; });
+    mensagem += `\n*0.* Voltar | *menu* — início`;
+    return { mensagem, finalizado: false };
   }
 
   private async stepProgressoEscopo(msg: string): Promise<FlowResult> {
     if (!msg.trim()) return await this.renderProgressoEscopo();
-    if (msg.trim() === '1') {
+    const ops = ((this.state as any).escopoOpcoes ?? []) as { label: string; acao: EscopoAcao }[];
+    const idx = parseInt(msg.trim(), 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= ops.length) {
+      return { mensagem: `❌ Digite um número entre 1 e ${ops.length}.`, finalizado: false };
+    }
+    const acao = ops[idx].acao;
+    if (acao === 'pav_escolher') {
       this.goToStep('progresso_modo_multiselecao');
       return await this.renderProgressoModoMultiselecao();
     }
-    if (msg.trim() === '2') {
+    if (acao === 'glob_escolher') {
       this.goToStep('progresso_globais_selecionar');
       return await this.renderProgressoGlobaisSelecionar();
     }
-    return { mensagem: '❌ Digite *1* ou *2*.', finalizado: false };
+    // pav_todas | glob_todas | concluir_tudo → confirmação
+    (this.state as any).acaoMarcarTudo = acao;
+    this.goToStep('progresso_marcar_tudo_confirmar');
+    return await this.renderProgressoMarcarTudoConfirmar();
+  }
+
+  private _idsPavPendentes(): string[] {
+    const pavs = (this.state.pavimentosDisponiveis ?? []) as any[];
+    return pavs.flatMap(p => (p.etapas ?? []).map((e: any) => e.etapa_id));
+  }
+  private _idsGlobPendentes(): string[] {
+    return ((this.state as any).globaisDisponiveis ?? []).map((g: any) => g.etapa_global_id);
+  }
+
+  private async renderProgressoMarcarTudoConfirmar(): Promise<FlowResult> {
+    const acao = (this.state as any).acaoMarcarTudo as EscopoAcao;
+    const nPav = this._idsPavPendentes().length;
+    const nGlob = this._idsGlobPendentes().length;
+    let resumo = '';
+    if (acao === 'pav_todas') resumo = `todas as *${nPav}* etapas de pavimento pendentes`;
+    else if (acao === 'glob_todas') resumo = `todas as *${nGlob}* etapas gerais pendentes`;
+    else resumo = `*${nPav}* etapas de pavimento + *${nGlob}* gerais (conclui a disciplina em 100%)`;
+    return {
+      mensagem: `🔎 Você vai marcar ${resumo}.\n\n1️⃣ Confirmar e gravar\n2️⃣ Voltar\n\n*0.* Voltar | *menu* — início`,
+      finalizado: false,
+    };
+  }
+
+  private async stepProgressoMarcarTudoConfirmar(msg: string): Promise<FlowResult> {
+    if (!msg.trim()) return await this.renderProgressoMarcarTudoConfirmar();
+    const opcao = msg.trim();
+    if (opcao === '2') { if (this.popStep()) return await this.processarMensagem(''); return this.cancelar(); }
+    if (opcao !== '1') return { mensagem: '❌ Digite *1* para confirmar ou *2* para voltar.', finalizado: false };
+
+    const acao = (this.state as any).acaoMarcarTudo as EscopoAcao;
+    let ok = 0, falhas = 0;
+    if (acao === 'pav_todas' || acao === 'concluir_tudo') {
+      const r = await this.supabase.marcarEtapasBatch(this._idsPavPendentes(), true);
+      ok += r.ok; falhas += r.falhas.length;
+    }
+    if (acao === 'glob_todas' || acao === 'concluir_tudo') {
+      const r = await this.supabase.marcarEtapasGlobaisBatch(this._idsGlobPendentes(), true);
+      ok += r.ok; falhas += r.falhas.length;
+    }
+
+    const pct = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId));
+    let mensagem = `✅ *${ok} etapa(s) marcada(s)!*\n\n`;
+    if (falhas > 0) mensagem += `⚠️ ${falhas} falharam ao gravar.\n\n`;
+    mensagem += pct >= 100
+      ? `🎉 *Disciplina concluída!* ⚡ Andamento: *${pct}%*\n\n`
+      : `⚡ Andamento da disciplina: *${pct}%*\n\n`;
+    mensagem += `_Digite "menu" para voltar ao menu principal_`;
+
+    this.state.snapshotHistory = [];
+    this.state.stepHistory = [];
+    this.goToStep('fim');
+    return { mensagem, finalizado: true };
   }
 
   private async renderProgressoGlobaisSelecionar(): Promise<FlowResult> {

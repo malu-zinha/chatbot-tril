@@ -1241,31 +1241,7 @@ export class OwnerFlow {
       };
     }
 
-    if (resultado.data.length === 1) {
-      // Só uma área/atribuição - ir direto
-      const area = resultado.data[0];
-      this.contexto.edit_atribuicao_id = area.atribuicao_id || area.id;
-      this.contexto.edit_area_descricao = area.descricao;
-      this.contexto.edit_eng_nome = area.engenheiro_nome;
-
-      const detalhes = await getSupabase().buscarAtribuicaoParaEdicao(this.contexto.edit_atribuicao_id!);
-      if (detalhes.success && detalhes.data) {
-        this.contexto.edit_dados_atuais = detalhes.data;
-      } else {
-        console.warn('⚠️ Dados atuais não carregados para edição:', detalhes.error);
-      }
-
-      this.stepAtual = 'edit_menu_categorias';
-      const resultMenu = this.mostrarMenuCategorias();
-      if (!this.contexto.edit_dados_atuais) {
-        resultMenu.mensagem =
-          `⚠️ _Não foi possível carregar os valores atuais. Os campos mostrarão "N/A"._\n\n` +
-          resultMenu.mensagem;
-      }
-      return resultMenu;
-    }
-
-    // Múltiplas áreas - pedir para escolher
+    // Sempre pedir a escolha da área — mesmo que haja só uma (mostra a opção única)
     this.contexto.areas = resultado.data;
     this.stepAtual = 'edit_escolher_area';
 

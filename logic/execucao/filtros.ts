@@ -50,6 +50,30 @@ export function statusPorPercentual(pct: number): string {
   return 'Aguardando Início';
 }
 
+export type EscopoAcao = 'pav_escolher' | 'pav_todas' | 'glob_escolher' | 'glob_todas' | 'concluir_tudo';
+export interface EscopoOpcao { label: string; acao: EscopoAcao; }
+
+/**
+ * Monta as opções do menu "o que marcar" a partir do nº de etapas pendentes.
+ * @param nPavEtapas total de etapas de pavimento pendentes (somadas de todos os pavimentos)
+ * @param nGlob total de etapas globais pendentes
+ */
+export function montarOpcoesEscopo(nPavEtapas: number, nGlob: number): EscopoOpcao[] {
+  const ops: EscopoOpcao[] = [];
+  if (nPavEtapas > 0) {
+    ops.push({ label: `Etapas de pavimentos — escolher (${nPavEtapas} pendente(s))`, acao: 'pav_escolher' });
+    ops.push({ label: `✅ Marcar TODAS as de pavimento (${nPavEtapas})`, acao: 'pav_todas' });
+  }
+  if (nGlob > 0) {
+    ops.push({ label: `Etapas gerais do projeto — escolher (${nGlob} pendente(s))`, acao: 'glob_escolher' });
+    ops.push({ label: `✅ Marcar TODAS as gerais (${nGlob})`, acao: 'glob_todas' });
+  }
+  if (nPavEtapas > 0 && nGlob > 0) {
+    ops.push({ label: `🏁 Concluir disciplina inteira (100%)`, acao: 'concluir_tudo' });
+  }
+  return ops;
+}
+
 export function filterPavimentosPendentes(pavimentos: PavimentoLike[]): PavimentoLike[] {
   return pavimentos
     .filter(p => p.ativo !== false)
