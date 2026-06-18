@@ -6,6 +6,8 @@ import {
   isProjetoTotalmenteConcluido,
   filterGlobaisPendentes,
   statusPorPercentual,
+  isPercentualPendente,
+  filterPendentesPorPercentual,
   montarOpcoesEscopo,
   formatAreaLinha,
 } from '../logic/execucao/filtros.ts';
@@ -80,6 +82,25 @@ assert(statusPorPercentual(3.03) === 'Em Andamento', 'pct 3.03 → Em Andamento'
 assert(statusPorPercentual(99.9) === 'Em Andamento', 'pct 99.9 → Em Andamento');
 assert(statusPorPercentual(100) === 'Concluído', 'pct 100 → Concluído');
 assert(statusPorPercentual(undefined as any) === 'Aguardando Início', 'pct undefined → Aguardando Início');
+
+// --- pendencia por percentual ponderado ---
+assert(isPercentualPendente(99.99) === true, 'pct 99.99 ainda aparece como pendente');
+assert(isPercentualPendente(100) === false, 'pct 100 nao aparece como pendente');
+assert(isPercentualPendente(120) === false, 'pct 120 nao aparece como pendente');
+assert(isPercentualPendente(null as any) === true, 'pct null aparece como pendente');
+assert(isPercentualPendente(undefined as any) === true, 'pct undefined aparece como pendente');
+
+const atribsPorPct = [
+  { id: 'a', percentual: 0 },
+  { id: 'b', percentual: 99.99 },
+  { id: 'c', percentual: 100 },
+  { id: 'd', percentual: undefined as any },
+];
+const pendentesPorPct = filterPendentesPorPercentual(atribsPorPct, item => item.percentual);
+assert(
+  pendentesPorPct.map(item => item.id).join(',') === 'a,b,d',
+  'filterPendentesPorPercentual remove apenas itens com pct >= 100'
+);
 
 // --- montarOpcoesEscopo ---
 const oAmbos = montarOpcoesEscopo(24, 5);

@@ -50,6 +50,17 @@ export function statusPorPercentual(pct: number): string {
   return 'Aguardando Início';
 }
 
+export function isPercentualPendente(pct: number | null | undefined): boolean {
+  return !Number.isFinite(Number(pct)) || Number(pct) < 100;
+}
+
+export function filterPendentesPorPercentual<T>(
+  itens: T[],
+  getPercentual: (item: T) => number | null | undefined
+): T[] {
+  return itens.filter(item => isPercentualPendente(getPercentual(item)));
+}
+
 export type EscopoAcao = 'pav_escolher' | 'pav_todas' | 'glob_escolher' | 'glob_todas' | 'concluir_tudo';
 export interface EscopoOpcao { label: string; acao: EscopoAcao; }
 
