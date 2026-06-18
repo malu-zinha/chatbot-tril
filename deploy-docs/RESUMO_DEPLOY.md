@@ -192,7 +192,7 @@ Todos os arquivos agora usam `.ts`:
 ### Sistema Automático
 
 - ✅ Notificações matinais (09:00)
-- ✅ Notificações noturnas (17:00)
+- ✅ Notificações noturnas (16:30)
 - ✅ Worker de notificações (1min)
 - ✅ Sincronização Supabase → Sheets (5min)
 

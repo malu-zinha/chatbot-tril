@@ -322,7 +322,7 @@ Configure um serviço externo para monitorar:
 O bot envia notificações automaticamente:
 
 - **09:00 (seg-sex):** Notificação matinal
-- **17:00 (seg-sex):** Notificação noturna
+- **16:30 (seg-sex):** Notificação noturna
 - **A cada 1 minuto:** Processa fila de notificações pendentes
 
 **Verificar nos logs:**
