@@ -72,7 +72,7 @@ Digite "ajuda" para instruções
 - ✅ **Editar Projeto**: Modificar informações de projetos existentes
 - ✅ **Notificações**:
   - 🌅 **Manhã (09:00)**: Status + Previsão do dia
-  - 🌙 **Noite (17:00)**: Feito + Retrabalho + Observações
+  - 🌙 **Noite (16:30)**: Feito + Retrabalho + Observações
 
 **Restrições:**
 - ❌ Não pode distribuir tarefas

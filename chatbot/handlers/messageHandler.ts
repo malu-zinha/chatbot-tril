@@ -450,7 +450,7 @@ Marque etapas de pavimentos como concluídas para atualizar o progresso ponderad
 
 🔔 *Notificações automáticas*
 • Manhã (09:00): lembrete para informar status
-• Noite (17:00): lembrete para registrar o que foi feito
+• Noite (16:30): lembrete para registrar o que foi feito
 
 🔄 *Comandos úteis*
 • *menu* — volta ao menu principal
