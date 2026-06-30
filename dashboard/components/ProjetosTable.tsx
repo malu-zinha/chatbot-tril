@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback } from 'react'
-import { X, Search, AlertTriangle } from 'lucide-react'
+import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
 import { searchScore } from '@/lib/search'
 
 interface Projeto {
@@ -41,6 +41,7 @@ export default function ProjetosTable({
   const [searchTerm, setSearchTerm] = React.useState('')
   const [filterStatus, setFilterStatus] = React.useState<string>(initialFilter)
   const [tooltipOpen, setTooltipOpen] = React.useState<string | null>(null)
+  const [expandedConcluidas, setExpandedConcluidas] = React.useState<Set<string>>(new Set())
   
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose()
@@ -71,6 +72,7 @@ export default function ProjetosTable({
       }
       // Limpa busca quando abre o modal
       setSearchTerm('')
+      setExpandedConcluidas(new Set())
     }
   }, [isOpen, initialFilter])
 
@@ -96,6 +98,44 @@ export default function ProjetosTable({
   const getMotivoAtraso = (item: Projeto) =>
     item.motivo_aguardo?.trim() ||
     `Projeto atrasado há ${item.dias_atraso} dia(s). Nenhuma observação registrada.`
+
+  const isDisciplinaConcluida = (item: Projeto) =>
+    Boolean(item.data_conclusao) || item.percentual_andamento >= 100
+
+  const disciplinasConcluidasPorProjeto = React.useMemo(() => {
+    const grupos = new Map<string, Projeto[]>()
+    const chavesPorProjeto = new Map<string, Set<string>>()
+
+    for (const item of data) {
+      if (!isDisciplinaConcluida(item)) continue
+
+      const chave = `${item.area_descricao}|${item.engenheiro_nome}`
+      if (!chavesPorProjeto.has(item.projeto_id)) chavesPorProjeto.set(item.projeto_id, new Set())
+      const chaves = chavesPorProjeto.get(item.projeto_id)!
+      if (chaves.has(chave)) continue
+
+      chaves.add(chave)
+      if (!grupos.has(item.projeto_id)) grupos.set(item.projeto_id, [])
+      grupos.get(item.projeto_id)!.push(item)
+    }
+
+    return grupos
+  }, [data])
+
+  const showConcluidas = filterStatus === 'em_execucao'
+  const totalColunas = 8 + (showConcluidas ? 1 : 0) + (onVerRetrabalho ? 1 : 0)
+
+  const toggleConcluidas = (projetoId: string) => {
+    setExpandedConcluidas((prev) => {
+      const next = new Set(prev)
+      if (next.has(projetoId)) {
+        next.delete(projetoId)
+      } else {
+        next.add(projetoId)
+      }
+      return next
+    })
+  }
 
   const filteredData = data
     .map(item => {
@@ -186,6 +226,11 @@ export default function ProjetosTable({
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Área
                 </th>
+                {showConcluidas && (
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Concluidas
+                  </th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Status
                 </th>
@@ -208,13 +253,19 @@ export default function ProjetosTable({
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={onVerRetrabalho ? 9 : 8} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={totalColunas} className="px-6 py-12 text-center text-gray-500">
                     Nenhum projeto encontrado
                   </td>
                 </tr>
               ) : (
-                filteredData.map((item) => (
-                  <tr key={item.projeto_id} className="hover:bg-gray-50 transition-colors">
+                filteredData.map((item, index) => {
+                  const rowKey = `${item.projeto_id}-${item.area_descricao}-${item.engenheiro_nome}-${index}`
+                  const concluidas = disciplinasConcluidasPorProjeto.get(item.projeto_id) || []
+                  const isExpanded = expandedConcluidas.has(item.projeto_id)
+
+                  return (
+                  <React.Fragment key={rowKey}>
+                  <tr className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-bold text-tecpred-primary">
                         {item.codigo_projeto}
@@ -240,17 +291,34 @@ export default function ProjetosTable({
                         {item.area_descricao}
                       </span>
                     </td>
+                    {showConcluidas && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => toggleConcluidas(item.projeto_id)}
+                          className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                            concluidas.length > 0
+                              ? 'text-green-700 bg-green-50 hover:bg-green-100 border-green-200'
+                              : 'text-gray-500 bg-gray-50 border-gray-200'
+                          }`}
+                          title={`Ver disciplinas concluidas de ${item.codigo_projeto}`}
+                        >
+                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          {concluidas.length > 0 ? `${concluidas.length} concluida(s)` : 'Nenhuma'}
+                        </button>
+                      </td>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap">
                       {isStatusAguardando(item.status_descricao) ? (
                         <div
                           className="relative inline-block"
-                          onMouseEnter={() => setTooltipOpen(item.projeto_id)}
+                          onMouseEnter={() => setTooltipOpen(rowKey)}
                           onMouseLeave={() => setTooltipOpen(null)}
                         >
                           <span className="px-2 py-1 text-xs font-medium rounded-full cursor-help bg-yellow-400 text-white">
                             {item.status_descricao}
                           </span>
-                          {tooltipOpen === item.projeto_id && (
+                          {tooltipOpen === rowKey && (
                             <div className="absolute left-0 top-full mt-2 z-50 w-72 rounded-lg border border-yellow-200 bg-white p-3 text-xs text-gray-700 shadow-xl">
                               <div className="mb-1 font-semibold text-yellow-700">Motivo do aguardo</div>
                               <div className="whitespace-normal leading-relaxed">
@@ -262,13 +330,13 @@ export default function ProjetosTable({
                       ) : item.dias_atraso > 0 ? (
                         <div
                           className="relative inline-block"
-                          onMouseEnter={() => setTooltipOpen(item.projeto_id)}
+                          onMouseEnter={() => setTooltipOpen(rowKey)}
                           onMouseLeave={() => setTooltipOpen(null)}
                         >
                           <span className="px-2 py-1 text-xs font-medium rounded-full cursor-help bg-danger text-white">
                             {item.status_descricao}
                           </span>
-                          {tooltipOpen === item.projeto_id && (
+                          {tooltipOpen === rowKey && (
                             <div className="absolute left-0 top-full mt-2 z-50 w-72 rounded-lg border border-red-200 bg-white p-3 text-xs text-gray-700 shadow-xl">
                               <div className="mb-1 font-semibold text-red-700">Motivo do atraso</div>
                               <div className="whitespace-normal leading-relaxed">
@@ -336,7 +404,31 @@ export default function ProjetosTable({
                       </td>
                     )}
                   </tr>
-                ))
+                  {showConcluidas && isExpanded && (
+                    <tr className="bg-green-50/40">
+                      <td colSpan={totalColunas} className="px-6 py-4">
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700">
+                          <span className="font-semibold text-gray-900">Disciplinas concluidas:</span>
+                          {concluidas.length > 0 ? (
+                            concluidas.map((disciplina) => (
+                              <span
+                                key={`${disciplina.area_descricao}-${disciplina.engenheiro_nome}`}
+                                className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-white px-3 py-1 text-xs font-medium text-green-700"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                {disciplina.area_descricao} - {disciplina.engenheiro_nome}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-gray-500">Nenhuma concluida.</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                  )
+                })
               )}
             </tbody>
           </table>

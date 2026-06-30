@@ -182,6 +182,8 @@ export interface Area {
   areas_ativas: number
   areas_concluidas: number
   percentual_conclusao: number
+  tem_etapas_pavimento?: boolean
+  tem_etapas_globais?: boolean
   ativo?: boolean
 }
 
@@ -527,15 +529,19 @@ export async function fetchEngenheiros(): Promise<Engenheiro[]> {
 
 export async function fetchAreas(): Promise<Area[]> {
   // Busca areas base + engenheiros_projetos para agregar
-  const [areasRes, epRes] = await Promise.all([
+  const [areasRes, epRes, etapasRes] = await Promise.all([
     supabase.from('areas').select('*').eq('ativo', true).order('codigo', { ascending: true }),
     supabase.from('engenheiros_projetos').select('area_id, ativo, data_conclusao').eq('ativo', true),
+    supabase.from('area_etapas_template').select('area_id, tipo, ativo').eq('ativo', true),
   ])
 
   if (areasRes.error) {
     console.error('Erro ao buscar áreas:', areasRes.error)
     return []
   }
+
+  if (epRes.error) console.error('Erro ao buscar atribuicoes por area:', epRes.error)
+  if (etapasRes.error) console.error('Erro ao buscar templates de area:', etapasRes.error)
 
   // Agregar por area_id
   const aggMap = new Map<string, { total: number; ativas: number; concluidas: number }>()
@@ -551,8 +557,18 @@ export async function fetchAreas(): Promise<Area[]> {
     }
   }
 
+  const templateMap = new Map<string, { pavimento: boolean; global: boolean }>()
+  for (const etapa of (etapasRes.data || [])) {
+    const id = etapa.area_id
+    if (!templateMap.has(id)) templateMap.set(id, { pavimento: false, global: false })
+    const flags = templateMap.get(id)!
+    if (etapa.tipo === 'pavimento') flags.pavimento = true
+    if (etapa.tipo === 'global') flags.global = true
+  }
+
   return (areasRes.data || []).map((area): Area => {
     const agg = aggMap.get(area.area_id) || { total: 0, ativas: 0, concluidas: 0 }
+    const templateFlags = templateMap.get(area.area_id) || { pavimento: false, global: false }
     return {
       area_id: area.area_id,
       codigo: area.codigo,
@@ -562,9 +578,54 @@ export async function fetchAreas(): Promise<Area[]> {
       areas_ativas: agg.ativas,
       areas_concluidas: agg.concluidas,
       percentual_conclusao: agg.total > 0 ? (agg.concluidas / agg.total) * 100 : 0,
+      tem_etapas_pavimento: templateFlags.pavimento,
+      tem_etapas_globais: templateFlags.global,
       ativo: area.ativo,
     }
   })
+}
+
+export interface AtribuirProjetoComPavimentosParams {
+  codigo_projeto: string
+  cliente: string
+  descricao?: string
+  area_id: string | number
+  eng_id: string
+  complexidade: 'baixa' | 'media' | 'alta'
+  data_prevista: string
+  pavimentos?: string[]
+}
+
+export async function atribuirProjetoComPavimentos(
+  params: AtribuirProjetoComPavimentosParams
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  const complexidadeMap = {
+    baixa: 'SIMPLES',
+    media: 'MEDIA',
+    alta: 'COMPLEXA',
+  } as const
+
+  const { data, error } = await supabase.rpc('dashboard_atribuir_projeto_com_pavimentos', {
+    p_codigo_projeto: params.codigo_projeto,
+    p_cliente: params.cliente,
+    p_descricao: params.descricao || null,
+    p_area_id: String(params.area_id),
+    p_eng_id: params.eng_id,
+    p_complexidade_codigo: complexidadeMap[params.complexidade] || 'MEDIA',
+    p_data_conclusao_prevista: params.data_prevista || null,
+    p_pavimentos: params.pavimentos || [],
+  })
+
+  if (error) {
+    console.error('Erro ao atribuir projeto com pavimentos:', error)
+    return { success: false, error: error.message }
+  }
+
+  if (data && typeof data === 'object' && data.sucesso === false) {
+    return { success: false, data, error: data.mensagem || 'Falha ao atribuir projeto' }
+  }
+
+  return { success: true, data }
 }
 
 export async function criarProjeto(params: {

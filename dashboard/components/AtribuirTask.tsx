@@ -18,6 +18,8 @@ interface Area {
   codigo: string
   descricao: string
   tempo_trabalho_dias: number
+  tem_etapas_pavimento?: boolean
+  tem_etapas_globais?: boolean
 }
 
 interface AtribuirTaskProps {
@@ -36,6 +38,7 @@ export interface TaskData {
   eng_id: string
   complexidade: 'baixa' | 'media' | 'alta'
   data_prevista: string
+  pavimentos?: string[]
 }
 
 export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAtribuir }: AtribuirTaskProps) {
@@ -43,6 +46,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
     complexidade: 'media'
   })
   const [selectedArea, setSelectedArea] = useState<Area | null>(null)
+  const [pavimentosText, setPavimentosText] = useState('')
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose()
@@ -107,6 +111,23 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
     .sort((a, b) => b.pontuacao - a.pontuacao)
 
   const melhorEngenheiro = engenheirosOrdenados[0]
+  const areaUsaPavimentos = Boolean(selectedArea?.tem_etapas_pavimento)
+
+  const normalizarPavimentos = () =>
+    pavimentosText
+      .split(/\r?\n/)
+      .map((nome) => nome.trim().replace(/\s+/g, ' '))
+      .filter(Boolean)
+
+  const nomesDuplicados = (nomes: string[]) => {
+    const vistos = new Set<string>()
+    return nomes.some((nome) => {
+      const chave = nome.toLowerCase()
+      if (vistos.has(chave)) return true
+      vistos.add(chave)
+      return false
+    })
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -132,11 +153,32 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
       return
     }
 
-    onAtribuir(formData as TaskData)
+    const pavimentos = normalizarPavimentos()
+
+    if (areaUsaPavimentos && pavimentos.length === 0) {
+      alert('Informe pelo menos um pavimento para esta disciplina')
+      return
+    }
+
+    if (nomesDuplicados(pavimentos)) {
+      alert('A lista de pavimentos nao pode ter nomes duplicados')
+      return
+    }
+
+    if (pavimentos.some((nome) => nome.length > 80)) {
+      alert('Cada nome de pavimento deve ter no maximo 80 caracteres')
+      return
+    }
+
+    onAtribuir({
+      ...(formData as TaskData),
+      pavimentos: areaUsaPavimentos ? pavimentos : [],
+    })
     
     // Limpar formulário
     setFormData({ complexidade: 'media' })
     setSelectedArea(null)
+    setPavimentosText('')
     onClose()
   }
 
@@ -236,6 +278,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                       const area = areas.find(a => String(a.area_id) === raw)
                       setFormData({ ...formData, area_id: isNaN(areaId) ? (raw as any) : areaId })
                       setSelectedArea(area || null)
+                      setPavimentosText('')
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
                     required
@@ -248,6 +291,35 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                     ))}
                   </select>
                 </div>
+
+                {selectedArea && (
+                  <div>
+                    {areaUsaPavimentos ? (
+                      <>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Pavimentos do Empreendimento *
+                        </label>
+                        <textarea
+                          value={pavimentosText}
+                          onChange={(e) => setPavimentosText(e.target.value)}
+                          placeholder={'Subsolo\nTerreo\nPav. Tipo\nCobertura'}
+                          rows={5}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
+                          required={areaUsaPavimentos}
+                        />
+                        <div className="mt-2 flex items-start gap-2 text-xs text-gray-500">
+                          <Layers className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <span>Informe um pavimento por linha. Nomes vazios sao ignorados e nomes repetidos nao sao permitidos.</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
+                        <Layers className="w-4 h-4 mt-0.5 flex-shrink-0 text-tecpred-primary" />
+                        <span>Esta disciplina usa apenas etapas gerais; nao e necessario cadastrar pavimentos.</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
