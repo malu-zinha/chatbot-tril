@@ -76,8 +76,6 @@ export default function ProjetosTable({
     }
   }, [isOpen, initialFilter])
 
-  if (!isOpen) return null
-
   // Mapa de cores para o header
   const colorClasses = {
     primary: 'from-tecpred-primary to-tecpred-secondary',
@@ -173,6 +171,8 @@ export default function ProjetosTable({
     .filter(entry => entry.score > 0)
     .sort((a, b) => b.score - a.score) // mais relevantes primeiro (empate mantém ordem)
     .map(entry => entry.item)
+
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
