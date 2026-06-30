@@ -45,6 +45,7 @@ import {
   fetchProjetos,
   fetchEngenheiros,
   fetchAreas,
+  atribuirProjetoComPavimentos,
   subscribeToChanges,
   isSupabaseConfigured,
   VisaoGeral,
@@ -202,63 +203,14 @@ export default function DashboardClient() {
       return
     }
     try {
-      // 1. Buscar ou criar o projeto na tabela projetos
-      let projetoId: string | null = null
+      const result = await atribuirProjetoComPavimentos(data)
 
-      const { data: existente } = await supabase
-        .from('projetos')
-        .select('projeto_id')
-        .eq('codigo_projeto', data.codigo_projeto)
-        .maybeSingle()
-
-      if (existente) {
-        projetoId = existente.projeto_id
-      } else {
-        const { data: novoProjeto, error: errProjeto } = await supabase
-          .from('projetos')
-          .insert({
-            codigo_projeto: data.codigo_projeto,
-            cliente: data.cliente,
-            descricao: data.descricao || null,
-          })
-          .select('projeto_id')
-          .single()
-
-        if (errProjeto || !novoProjeto) {
-          console.error('Erro ao criar projeto:', errProjeto)
-          alert(`Erro ao criar projeto: ${errProjeto?.message}`)
-          return
-        }
-        projetoId = novoProjeto.projeto_id
-      }
-
-      // 2. Buscar complexidade_id correspondente
-      let complexidadeId: number | null = null
-      const { data: comp } = await supabase
-        .from('complexidade_tarefas')
-        .select('complexidade_id')
-        .eq('codigo', data.complexidade.toUpperCase())
-        .maybeSingle()
-      if (comp) complexidadeId = comp.complexidade_id
-
-      // 3. Inserir na tabela de distribuição de tasks
-      const { error } = await supabase.from('evandro_distribuicao_tasks').insert({
-        eng_id: data.eng_id,
-        projeto_id: projetoId,
-        codigo_projeto: data.codigo_projeto,
-        cliente: data.cliente,
-        area_id: data.area_id,
-        complexidade_id: complexidadeId,
-        descricao_task: data.descricao || `Projeto ${data.codigo_projeto}`,
-        data_conclusao_prevista: data.data_prevista,
-      })
-
-      if (error) {
-        console.error('Erro ao atribuir task:', error)
-        alert(`Erro ao atribuir projeto: ${error.message}`)
+      if (!result.success) {
+        alert(`Erro ao atribuir projeto: ${result.error}`)
         return
       }
-      alert(`Projeto ${data.codigo_projeto} atribuído com sucesso!`)
+
+      alert(`Projeto ${data.codigo_projeto} atribuido com sucesso!`)
       loadData()
     } catch (err) {
       console.error('Erro ao atribuir task:', err)

@@ -502,6 +502,8 @@ export const mockAreas = [
     areas_ativas: 5,
     areas_concluidas: 3,
     percentual_conclusao: 37.5,
+    tem_etapas_pavimento: true,
+    tem_etapas_globais: true,
   },
   {
     area_id: '2',
@@ -512,6 +514,8 @@ export const mockAreas = [
     areas_ativas: 3,
     areas_concluidas: 3,
     percentual_conclusao: 50.0,
+    tem_etapas_pavimento: true,
+    tem_etapas_globais: true,
   },
   {
     area_id: '3',
@@ -522,6 +526,8 @@ export const mockAreas = [
     areas_ativas: 4,
     areas_concluidas: 1,
     percentual_conclusao: 20.0,
+    tem_etapas_pavimento: true,
+    tem_etapas_globais: true,
   },
   {
     area_id: '4',
@@ -532,6 +538,8 @@ export const mockAreas = [
     areas_ativas: 0,
     areas_concluidas: 0,
     percentual_conclusao: 0,
+    tem_etapas_pavimento: false,
+    tem_etapas_globais: true,
   },
   {
     area_id: '5',
@@ -542,6 +550,8 @@ export const mockAreas = [
     areas_ativas: 0,
     areas_concluidas: 0,
     percentual_conclusao: 0,
+    tem_etapas_pavimento: false,
+    tem_etapas_globais: true,
   },
   {
     area_id: '6',
@@ -552,6 +562,8 @@ export const mockAreas = [
     areas_ativas: 0,
     areas_concluidas: 0,
     percentual_conclusao: 0,
+    tem_etapas_pavimento: false,
+    tem_etapas_globais: true,
   },
 ]
 
