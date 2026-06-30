@@ -132,6 +132,14 @@ export interface Retrabalho {
 }
 
 // Interface de compatibilidade (para código antigo)
+export interface LimpezaProjetosResult {
+  dry_run: boolean;
+  meses_retencao: number;
+  data_limite: string;
+  projetos_candidatos: number;
+  projetos_excluidos: number;
+}
+
 export interface ProjetoLegacy {
   id: string;
   codigo: string;
@@ -2172,6 +2180,42 @@ export class SupabaseService {
     } catch (error: any) {
       console.error('❌ Erro ao desativar projeto:', error.message);
       return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Exclui fisicamente projetos finalizados ha pelo menos N meses via RPC.
+   * Use dryRun=true para auditar candidatos sem remover dados.
+   */
+  async limparProjetosFinalizadosAntigos(
+    meses: number = 6,
+    dryRun: boolean = true
+  ): Promise<LimpezaProjetosResult> {
+    if (!this.connected) {
+      return {
+        dry_run: dryRun,
+        meses_retencao: meses,
+        data_limite: '',
+        projetos_candidatos: 0,
+        projetos_excluidos: 0,
+      };
+    }
+
+    try {
+      const { data, error } = await this.supabase.rpc('limpar_projetos_finalizados_antigos', {
+        p_meses: meses,
+        p_dry_run: dryRun,
+      });
+
+      if (error) {
+        console.error('❌ Erro ao limpar projetos finalizados antigos:', error);
+        throw error;
+      }
+
+      return data as LimpezaProjetosResult;
+    } catch (error: any) {
+      console.error('❌ Erro ao executar limpeza de projetos:', error.message);
+      throw error;
     }
   }
 

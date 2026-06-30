@@ -7,6 +7,7 @@
 
 import { getSupabaseService } from '../supabase/supabaseService.ts';
 import { getWhatsAppService } from '../whatsapp/whatsappService.ts';
+import { isPercentualPendente, statusPorPercentual } from '../../logic/execucao/filtros.ts';
 import type { WhatsAppService } from '../whatsapp/whatsappService.ts';
 
 // =====================================================
@@ -26,6 +27,7 @@ interface ProjetoAtribuido {
   area_descricao: string;
   status_descricao: string;
   percentual_andamento: number;
+  percentual_ponderado: number;
   data_prevista: string | null;
 }
 
@@ -176,6 +178,7 @@ export class NotificationService {
         areas!inner(descricao),
         status_codes(descricao),
         percentual_andamento,
+        percentual_ponderado,
         data_prevista
       `)
       .eq('ativo', true)
@@ -197,7 +200,11 @@ export class NotificationService {
       const engenheiro: any = atrib.engenheiros;
       const projeto: any = atrib.projetos;
       const area: any = atrib.areas;
-      const status: any = atrib.status_codes;
+      const percentualPonderado = Number(atrib.percentual_ponderado ?? 0);
+
+      if (!isPercentualPendente(percentualPonderado)) {
+        continue;
+      }
 
       const eng_id = engenheiro.eng_id;
 
@@ -214,8 +221,9 @@ export class NotificationService {
         codigo_projeto: projeto.codigo_projeto,
         cliente: projeto.cliente,
         area_descricao: area.descricao,
-        status_descricao: status?.descricao || 'N/A',
-        percentual_andamento: atrib.percentual_andamento || 0,
+        status_descricao: statusPorPercentual(percentualPonderado),
+        percentual_andamento: percentualPonderado,
+        percentual_ponderado: percentualPonderado,
         data_prevista: atrib.data_prevista
       });
     }

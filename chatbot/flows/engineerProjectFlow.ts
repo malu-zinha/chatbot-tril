@@ -15,6 +15,7 @@ import {
   filterPavimentosPendentes,
   filterGlobaisPendentes,
   statusPorPercentual,
+  filterPendentesPorPercentual,
   montarOpcoesEscopo,
   formatAreaLinha,
   type EscopoAcao,
@@ -221,8 +222,13 @@ export class EngineerProjectFlow {
             });
           }
 
+          const atribuicoesPendentes = filterPendentesPorPercentual(
+            atribuicoesEnriquecidas,
+            atrib => atrib.percentual
+          );
           console.log('🔍 [DEBUG] Atribuições enriquecidas:', atribuicoesEnriquecidas.length);
-          return atribuicoesEnriquecidas;
+          console.log('🔍 [DEBUG] Atribuições pendentes:', atribuicoesPendentes.length);
+          return atribuicoesPendentes;
         } else {
           console.log('❌ [DEBUG] Engenheiro não encontrado no Supabase');
         }
@@ -1015,7 +1021,7 @@ _Digite o número da opção desejada_`;
 
     if (todasAtribuicoes.length === 0) {
       return {
-        mensagem: '❌ Você não tem projetos atribuídos.\n\nContate o dono da empresa.',
+        mensagem: '📭 Você não tem projetos pendentes para atualizar no momento.',
         finalizado: true
       };
     }
@@ -1125,7 +1131,7 @@ _Digite o número da opção desejada_`;
 
     if (todasAtribuicoes.length === 0) {
       return {
-        mensagem: '❌ Você não tem projetos atribuídos.\n\nContate o dono da empresa.',
+        mensagem: '📭 Você não tem projetos pendentes para atualizar no momento.',
         finalizado: true
       };
     }
@@ -1404,7 +1410,7 @@ _Digite o número da opção desejada_`;
 
     if (atribuicoes.length === 0) {
       return {
-        mensagem: '📭 Você não tem projetos atribuídos no momento.',
+        mensagem: '📭 Você não tem projetos pendentes no momento.',
         finalizado: true
       };
     }
@@ -1511,7 +1517,7 @@ _Digite o número da opção desejada_`;
 
       if (todasAtribuicoes.length === 0) {
         return {
-          mensagem: '📭 Você não tem projetos atribuídos no momento.',
+          mensagem: '📭 Você não tem projetos pendentes no momento.',
           finalizado: true
         };
       }
