@@ -157,6 +157,19 @@ ON CONFLICT (codigo) DO UPDATE SET
     tempo_trabalho_dias = EXCLUDED.tempo_trabalho_dias;
 
 -- =====================================================
+-- DISCIPLINAS AUXILIARES
+-- =====================================================
+
+INSERT INTO areas (codigo, descricao, tempo_trabalho_dias, ativo) VALUES
+('LIMP_ARQ', 'Limpeza de Arquitetura', 0, true),
+('LIMP_EST', 'Limpeza de Estrutura', 0, true),
+('COMPLEMENTO', 'Complemento', 0, true)
+ON CONFLICT (codigo) DO UPDATE SET
+    descricao = EXCLUDED.descricao,
+    tempo_trabalho_dias = EXCLUDED.tempo_trabalho_dias,
+    ativo = EXCLUDED.ativo;
+
+-- =====================================================
 -- RESUMO DE ÁREAS CADASTRADAS
 -- =====================================================
 
@@ -188,8 +201,10 @@ RESULTADO ESPERADO:
 - T (Telefonia): 4 áreas (1 a 5 dias)
 - G (Gás): 4 áreas (1 a 3 dias)
 - CL (Climatização): 4 áreas (1 a 3 dias)
+- LIMP (Limpeza): 2 áreas (0 dias)
+- COMPLEMENTO: 1 área (0 dias)
 
-TOTAL: 22 áreas cadastradas
+TOTAL: 25 áreas cadastradas
 */
 
 
