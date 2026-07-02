@@ -143,12 +143,15 @@ export interface ProjetosStatus {
 }
 
 export interface Projeto {
+  atribuicao_id?: string
   projeto_id: string
   codigo_projeto: string
   cliente: string
   descricao?: string
   engenheiro_nome: string
+  area_codigo?: string
   area_descricao: string
+  instancia_label?: string | null
   status_descricao: string
   percentual_andamento: number
   data_inicio?: string
@@ -594,6 +597,7 @@ export interface AtribuirProjetoComPavimentosParams {
   complexidade: 'baixa' | 'media' | 'alta'
   data_prevista: string
   pavimentos?: string[]
+  instancia_label?: string
 }
 
 export async function atribuirProjetoComPavimentos(
@@ -614,6 +618,7 @@ export async function atribuirProjetoComPavimentos(
     p_complexidade_codigo: complexidadeMap[params.complexidade] || 'MEDIA',
     p_data_conclusao_prevista: params.data_prevista || null,
     p_pavimentos: params.pavimentos || [],
+    p_instancia_label: params.instancia_label || null,
   })
 
   if (error) {

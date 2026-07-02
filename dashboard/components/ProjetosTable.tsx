@@ -1,14 +1,18 @@
 import React, { useEffect, useCallback } from 'react'
 import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
 import { searchScore } from '@/lib/search'
 
 interface Projeto {
+  atribuicao_id?: string
   projeto_id: string
   codigo_projeto: string
   cliente: string
   descricao?: string
   engenheiro_nome: string
+  area_codigo?: string
   area_descricao: string
+  instancia_label?: string | null
   status_descricao: string
   percentual_andamento: number
   data_inicio?: string
@@ -107,7 +111,7 @@ export default function ProjetosTable({
     for (const item of data) {
       if (!isDisciplinaConcluida(item)) continue
 
-      const chave = `${item.area_descricao}|${item.engenheiro_nome}`
+      const chave = buildCompletedDisciplineKey(item)
       if (!chavesPorProjeto.has(item.projeto_id)) chavesPorProjeto.set(item.projeto_id, new Set())
       const chaves = chavesPorProjeto.get(item.projeto_id)!
       if (chaves.has(chave)) continue
@@ -163,6 +167,7 @@ export default function ProjetosTable({
             item.cliente,
             item.engenheiro_nome,
             item.area_descricao,
+            getProjetoAreaDisplayName(item),
           ])
         : 0
 
@@ -259,7 +264,8 @@ export default function ProjetosTable({
                 </tr>
               ) : (
                 filteredData.map((item, index) => {
-                  const rowKey = `${item.projeto_id}-${item.area_descricao}-${item.engenheiro_nome}-${index}`
+                  const areaDisplayName = getProjetoAreaDisplayName(item)
+                  const rowKey = item.atribuicao_id || `${item.projeto_id}-${areaDisplayName}-${item.engenheiro_nome}-${index}`
                   const concluidas = disciplinasConcluidasPorProjeto.get(item.projeto_id) || []
                   const isExpanded = expandedConcluidas.has(item.projeto_id)
 
@@ -288,7 +294,7 @@ export default function ProjetosTable({
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-medium bg-tecpred-light text-tecpred-primary rounded-full">
-                        {item.area_descricao}
+                        {areaDisplayName}
                       </span>
                     </td>
                     {showConcluidas && (
@@ -412,11 +418,11 @@ export default function ProjetosTable({
                           {concluidas.length > 0 ? (
                             concluidas.map((disciplina) => (
                               <span
-                                key={`${disciplina.area_descricao}-${disciplina.engenheiro_nome}`}
+                                key={`${getProjetoAreaDisplayName(disciplina)}-${disciplina.engenheiro_nome}`}
                                 className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-white px-3 py-1 text-xs font-medium text-green-700"
                               >
                                 <CheckCircle className="w-3.5 h-3.5" />
-                                {disciplina.area_descricao} - {disciplina.engenheiro_nome}
+                                {getProjetoAreaDisplayName(disciplina)} - {disciplina.engenheiro_nome}
                               </span>
                             ))
                           ) : (
