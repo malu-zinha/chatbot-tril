@@ -438,7 +438,10 @@ BEGIN
         LIMIT 1;
     END IF;
 
-    PERFORM configurar_pavimentos_customizados_area(v_projeto_id, p_area_id, p_pavimentos);
+    IF to_regprocedure('configurar_pavimentos_customizados_area(uuid, uuid, text[])') IS NOT NULL THEN
+        EXECUTE 'SELECT configurar_pavimentos_customizados_area($1, $2, $3)'
+        USING v_projeto_id, p_area_id, p_pavimentos;
+    END IF;
 
     RETURN json_build_object(
         'sucesso', true,
