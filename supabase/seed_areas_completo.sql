@@ -161,6 +161,7 @@ ON CONFLICT (codigo) DO UPDATE SET
 -- =====================================================
 
 INSERT INTO areas (codigo, descricao, tempo_trabalho_dias, ativo) VALUES
+('COMPATIBILIZACAO', 'Compatibilização', 5, true),
 ('LIMP_ARQ', 'Limpeza de Arquitetura', 0, true),
 ('LIMP_EST', 'Limpeza de Estrutura', 0, true),
 ('COMPLEMENTO', 'Complemento', 0, true)

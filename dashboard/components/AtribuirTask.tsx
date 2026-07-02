@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { X, UserPlus, AlertCircle, CheckCircle, TrendingUp, Calendar, Layers } from 'lucide-react'
+import { isCompatibilizacaoArea } from '@/lib/compatibilizacao'
 
 interface Engenheiro {
   eng_id: string
@@ -39,6 +40,7 @@ export interface TaskData {
   complexidade: 'baixa' | 'media' | 'alta'
   data_prevista: string
   pavimentos?: string[]
+  instancia_label?: string
 }
 
 export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAtribuir }: AtribuirTaskProps) {
@@ -112,6 +114,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
 
   const melhorEngenheiro = engenheirosOrdenados[0]
   const areaUsaPavimentos = Boolean(selectedArea?.tem_etapas_pavimento)
+  const areaCompatibilizacao = isCompatibilizacaoArea(selectedArea || undefined)
 
   const normalizarPavimentos = () =>
     pavimentosText
@@ -170,9 +173,12 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
       return
     }
 
+    const instanciaLabel = formData.instancia_label?.trim().replace(/\s+/g, ' ')
+
     onAtribuir({
       ...(formData as TaskData),
       pavimentos: areaUsaPavimentos ? pavimentos : [],
+      instancia_label: areaCompatibilizacao ? instanciaLabel : undefined,
     })
     
     // Limpar formulário
@@ -276,7 +282,11 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                       const raw = e.target.value
                       const areaId = Number(raw)
                       const area = areas.find(a => String(a.area_id) === raw)
-                      setFormData({ ...formData, area_id: isNaN(areaId) ? (raw as any) : areaId })
+                      setFormData({
+                        ...formData,
+                        area_id: isNaN(areaId) ? (raw as any) : areaId,
+                        instancia_label: '',
+                      })
                       setSelectedArea(area || null)
                       setPavimentosText('')
                     }}
@@ -318,6 +328,25 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                         <span>Esta disciplina usa apenas etapas gerais; nao e necessario cadastrar pavimentos.</span>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {areaCompatibilizacao && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Identificação da compatibilização
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.instancia_label || ''}
+                      onChange={(e) => setFormData({ ...formData, instancia_label: e.target.value })}
+                      placeholder="Ex.: Revisão Cliente"
+                      maxLength={120}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Se ficar vazio, o sistema numera automaticamente.
+                    </p>
                   </div>
                 )}
 
