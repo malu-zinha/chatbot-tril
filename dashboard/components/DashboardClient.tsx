@@ -46,6 +46,8 @@ import {
   fetchEngenheiros,
   fetchAreas,
   atribuirProjetoComPavimentos,
+  transferirResponsavelAtribuicao,
+  excluirAtribuicao,
   subscribeToChanges,
   isSupabaseConfigured,
   VisaoGeral,
@@ -222,6 +224,38 @@ export default function DashboardClient() {
     loadData()
   }
 
+  const handleTransferirResponsavel = async (projeto: Projeto, novoEngId: string) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase nao esta configurado.')
+    }
+    if (!projeto.atribuicao_id) {
+      throw new Error('Tarefa sem identificador de atribuicao.')
+    }
+
+    const result = await transferirResponsavelAtribuicao(projeto.atribuicao_id, novoEngId)
+    if (!result.success) {
+      throw new Error(result.error || 'Nao foi possivel alterar o responsavel.')
+    }
+
+    await loadData()
+  }
+
+  const handleExcluirTarefa = async (projeto: Projeto) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase nao esta configurado.')
+    }
+    if (!projeto.atribuicao_id) {
+      throw new Error('Tarefa sem identificador de atribuicao.')
+    }
+
+    const result = await excluirAtribuicao(projeto.atribuicao_id)
+    if (!result.success) {
+      throw new Error(result.error || 'Nao foi possivel excluir a tarefa.')
+    }
+
+    await loadData()
+  }
+
   const openRetrabalhoModal = async (
     projetoId: string,
     codigoProjeto?: string,
@@ -370,6 +404,9 @@ export default function DashboardClient() {
           title="Total de Projetos"
           color="warning"
           onVerRetrabalho={handleVerRetrabalhoFromTable}
+          engenheiros={engenheiros}
+          onTransferirResponsavel={handleTransferirResponsavel}
+          onExcluirTarefa={handleExcluirTarefa}
         />
         <ProjetosTable
           isOpen={showProjetosConcluidosModal}
@@ -379,6 +416,9 @@ export default function DashboardClient() {
           title="Projetos Concluídos"
           color="warning"
           onVerRetrabalho={handleVerRetrabalhoFromTable}
+          engenheiros={engenheiros}
+          onTransferirResponsavel={handleTransferirResponsavel}
+          onExcluirTarefa={handleExcluirTarefa}
         />
         <ProjetosTable
           isOpen={showProjetosExecucaoModal}
@@ -388,6 +428,9 @@ export default function DashboardClient() {
           title="Em Execução"
           color="warning"
           onVerRetrabalho={handleVerRetrabalhoFromTable}
+          engenheiros={engenheiros}
+          onTransferirResponsavel={handleTransferirResponsavel}
+          onExcluirTarefa={handleExcluirTarefa}
         />
         <ProjetosTable
           isOpen={showAtrasadosModal}
@@ -397,6 +440,9 @@ export default function DashboardClient() {
           title="Atrasados"
           color="warning"
           onVerRetrabalho={handleVerRetrabalhoFromTable}
+          engenheiros={engenheiros}
+          onTransferirResponsavel={handleTransferirResponsavel}
+          onExcluirTarefa={handleExcluirTarefa}
         />
         <EngenheirosTable
           isOpen={showEngenheirosModal}
