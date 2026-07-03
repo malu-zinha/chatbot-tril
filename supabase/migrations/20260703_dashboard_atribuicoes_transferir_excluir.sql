@@ -285,8 +285,7 @@ FROM projetos p
 LEFT JOIN engenheiros_projetos ep ON ep.projeto_id = p.projeto_id AND ep.ativo = true
 LEFT JOIN engenheiros e ON e.eng_id = ep.eng_id
 LEFT JOIN areas a ON a.area_id = ep.area_id
-WHERE p.ativo = true
-ORDER BY p.created_at DESC;
+WHERE p.ativo = true;
 
 REVOKE ALL ON FUNCTION transferir_atribuicao(UUID, UUID, TEXT, UUID) FROM PUBLIC;
 REVOKE ALL ON FUNCTION desativar_atribuicao(UUID, TEXT, UUID) FROM PUBLIC;

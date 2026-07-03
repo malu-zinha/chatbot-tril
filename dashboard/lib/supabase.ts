@@ -471,6 +471,7 @@ export async function fetchProjetos(): Promise<Projeto[]> {
     .from('vw_projetos_detalhado')
     .select('*')
     .eq('ativo', true)
+    .order('created_at', { ascending: false })
 
   if (error) {
     console.error('Erro ao buscar projetos:', error)

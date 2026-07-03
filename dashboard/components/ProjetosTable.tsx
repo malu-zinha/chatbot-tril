@@ -197,12 +197,14 @@ export default function ProjetosTable({
   )
 
   const abrirTransferencia = (item: Projeto) => {
+    setDeleteProjeto(null)
     setTransferProjeto(item)
     setNovoResponsavelId('')
     setActionError(null)
   }
 
   const abrirExclusao = (item: Projeto) => {
+    setTransferProjeto(null)
     setDeleteProjeto(item)
     setActionError(null)
   }
