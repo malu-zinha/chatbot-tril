@@ -61,10 +61,10 @@ export default function RetrabalhoCard({
           </div>
         </div>
         <div className="bg-gradient-to-r from-danger to-red-600 rounded-lg p-4 text-white">
-          <div className="text-sm font-medium opacity-90">Média Geral</div>
+          <div className="text-sm font-medium opacity-90">Taxa Média</div>
           <div className="text-3xl font-bold mt-1">{mediaGeral.toFixed(1)}%</div>
           <div className="text-xs opacity-90 mt-0.5">
-            média por engenheiro
+            retrabalhos por projetos ativos
           </div>
         </div>
       </div>
@@ -101,7 +101,7 @@ export default function RetrabalhoCard({
                     >
                       {(item.retrabalho_medio_percentual ?? 0).toFixed(1)}%
                     </div>
-                    <div className="text-xs text-gray-500">média</div>
+                    <div className="text-xs text-gray-500">taxa</div>
                   </div>
                 </div>
               </div>
