@@ -499,6 +499,7 @@ export default function ProjetosTable({
                               disabled={!item.atribuicao_id || !item.eng_id}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
                               title="Alterar responsavel"
+                              aria-label="Alterar responsavel"
                             >
                               <UserRoundCog className="h-4 w-4" />
                             </button>
@@ -510,6 +511,7 @@ export default function ProjetosTable({
                               disabled={!item.atribuicao_id}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
                               title="Excluir tarefa"
+                              aria-label="Excluir tarefa"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -591,8 +593,9 @@ export default function ProjetosTable({
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Novo responsavel</label>
+                <label htmlFor="novo-responsavel" className="mb-1 block text-sm font-medium text-gray-700">Novo responsavel</label>
                 <select
+                  id="novo-responsavel"
                   value={novoResponsavelId}
                   onChange={(e) => setNovoResponsavelId(e.target.value)}
                   disabled={isActionSubmitting}
