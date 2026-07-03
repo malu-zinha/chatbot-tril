@@ -1,10 +1,13 @@
 import React, { useEffect, useCallback } from 'react'
-import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight } from 'lucide-react'
+import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog } from 'lucide-react'
 import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
 import { searchScore } from '@/lib/search'
+import type { Engenheiro } from '@/lib/supabase'
 
 interface Projeto {
   atribuicao_id?: string
+  eng_id?: string | null
+  area_id?: string | null
   projeto_id: string
   codigo_projeto: string
   cliente: string
@@ -31,6 +34,9 @@ interface ProjetosTableProps {
   title?: string
   color?: 'primary' | 'success' | 'info' | 'danger' | 'warning'
   onVerRetrabalho?: (projeto: Projeto) => void
+  engenheiros?: Engenheiro[]
+  onTransferirResponsavel?: (projeto: Projeto, novoEngId: string) => Promise<void>
+  onExcluirTarefa?: (projeto: Projeto) => Promise<void>
 }
 
 export default function ProjetosTable({ 
@@ -41,11 +47,19 @@ export default function ProjetosTable({
   title = 'Listagem de Projetos',
   color = 'primary',
   onVerRetrabalho,
+  engenheiros = [],
+  onTransferirResponsavel,
+  onExcluirTarefa,
 }: ProjetosTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
   const [filterStatus, setFilterStatus] = React.useState<string>(initialFilter)
   const [tooltipOpen, setTooltipOpen] = React.useState<string | null>(null)
   const [expandedConcluidas, setExpandedConcluidas] = React.useState<Set<string>>(new Set())
+  const [transferProjeto, setTransferProjeto] = React.useState<Projeto | null>(null)
+  const [deleteProjeto, setDeleteProjeto] = React.useState<Projeto | null>(null)
+  const [novoResponsavelId, setNovoResponsavelId] = React.useState('')
+  const [actionError, setActionError] = React.useState<string | null>(null)
+  const [isActionSubmitting, setIsActionSubmitting] = React.useState(false)
   
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose()
@@ -125,7 +139,8 @@ export default function ProjetosTable({
   }, [data])
 
   const showConcluidas = filterStatus === 'em_execucao'
-  const totalColunas = 8 + (showConcluidas ? 1 : 0) + (onVerRetrabalho ? 1 : 0)
+  const showAcoes = Boolean(onTransferirResponsavel || onExcluirTarefa)
+  const totalColunas = 8 + (showConcluidas ? 1 : 0) + (onVerRetrabalho ? 1 : 0) + (showAcoes ? 1 : 0)
 
   const toggleConcluidas = (projetoId: string) => {
     setExpandedConcluidas((prev) => {
@@ -176,6 +191,66 @@ export default function ProjetosTable({
     .filter(entry => entry.score > 0)
     .sort((a, b) => b.score - a.score) // mais relevantes primeiro (empate mantém ordem)
     .map(entry => entry.item)
+
+  const engenheirosDestino = engenheiros.filter((eng) =>
+    eng.ativo !== false && eng.eng_id !== transferProjeto?.eng_id
+  )
+
+  const abrirTransferencia = (item: Projeto) => {
+    setDeleteProjeto(null)
+    setTransferProjeto(item)
+    setNovoResponsavelId('')
+    setActionError(null)
+  }
+
+  const abrirExclusao = (item: Projeto) => {
+    setTransferProjeto(null)
+    setDeleteProjeto(item)
+    setActionError(null)
+  }
+
+  const fecharAcao = () => {
+    if (isActionSubmitting) return
+    setTransferProjeto(null)
+    setDeleteProjeto(null)
+    setNovoResponsavelId('')
+    setActionError(null)
+  }
+
+  const confirmarTransferencia = async () => {
+    if (!transferProjeto || !onTransferirResponsavel) return
+    if (!novoResponsavelId) {
+      setActionError('Selecione o novo responsavel.')
+      return
+    }
+
+    setIsActionSubmitting(true)
+    setActionError(null)
+    try {
+      await onTransferirResponsavel(transferProjeto, novoResponsavelId)
+      setTransferProjeto(null)
+      setNovoResponsavelId('')
+    } catch (error: any) {
+      setActionError(error?.message || 'Nao foi possivel alterar o responsavel.')
+    } finally {
+      setIsActionSubmitting(false)
+    }
+  }
+
+  const confirmarExclusao = async () => {
+    if (!deleteProjeto || !onExcluirTarefa) return
+
+    setIsActionSubmitting(true)
+    setActionError(null)
+    try {
+      await onExcluirTarefa(deleteProjeto)
+      setDeleteProjeto(null)
+    } catch (error: any) {
+      setActionError(error?.message || 'Nao foi possivel excluir a tarefa.')
+    } finally {
+      setIsActionSubmitting(false)
+    }
+  }
 
   if (!isOpen) return null
 
@@ -251,6 +326,11 @@ export default function ProjetosTable({
                 {onVerRetrabalho && (
                   <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Retrabalho
+                  </th>
+                )}
+                {showAcoes && (
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Ações
                   </th>
                 )}
               </tr>
@@ -409,6 +489,34 @@ export default function ProjetosTable({
                         </button>
                       </td>
                     )}
+                    {showAcoes && (
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <div className="inline-flex items-center gap-2">
+                          {onTransferirResponsavel && (
+                            <button
+                              type="button"
+                              onClick={() => abrirTransferencia(item)}
+                              disabled={!item.atribuicao_id || !item.eng_id}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
+                              title="Alterar responsavel"
+                            >
+                              <UserRoundCog className="h-4 w-4" />
+                            </button>
+                          )}
+                          {onExcluirTarefa && (
+                            <button
+                              type="button"
+                              onClick={() => abrirExclusao(item)}
+                              disabled={!item.atribuicao_id}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
+                              title="Excluir tarefa"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                   {showConcluidas && isExpanded && (
                     <tr className="bg-green-50/40">
@@ -447,6 +555,141 @@ export default function ProjetosTable({
           </div>
         </div>
       </div>
+
+      {transferProjeto && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-40 p-4"
+          onClick={(e) => {
+            e.stopPropagation()
+            fecharAcao()
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Alterar responsavel</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  {transferProjeto.codigo_projeto} - {getProjetoAreaDisplayName(transferProjeto)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={fecharAcao}
+                disabled={isActionSubmitting}
+                className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Responsavel atual</label>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  {transferProjeto.engenheiro_nome}
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Novo responsavel</label>
+                <select
+                  value={novoResponsavelId}
+                  onChange={(e) => setNovoResponsavelId(e.target.value)}
+                  disabled={isActionSubmitting}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-tecpred-primary disabled:bg-gray-50"
+                >
+                  <option value="">Selecione um engenheiro</option>
+                  {engenheirosDestino.map((eng) => (
+                    <option key={eng.eng_id} value={eng.eng_id}>
+                      {eng.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {actionError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {actionError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={fecharAcao}
+                  disabled={isActionSubmitting}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmarTransferencia}
+                  disabled={isActionSubmitting || !novoResponsavelId}
+                  className="inline-flex items-center gap-2 rounded-lg bg-tecpred-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-tecpred-secondary disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteProjeto && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-40 p-4"
+          onClick={(e) => {
+            e.stopPropagation()
+            fecharAcao()
+          }}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-start gap-3">
+              <div className="rounded-lg bg-red-50 p-2 text-red-700">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Excluir tarefa</h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  {deleteProjeto.codigo_projeto} - {getProjetoAreaDisplayName(deleteProjeto)} - {deleteProjeto.engenheiro_nome}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-700">
+              Esta tarefa deixara de aparecer no dashboard e no chatbot, mas permanecera no historico do banco.
+            </p>
+
+            {actionError && (
+              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {actionError}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={fecharAcao}
+                disabled={isActionSubmitting}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarExclusao}
+                disabled={isActionSubmitting}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              >
+                {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

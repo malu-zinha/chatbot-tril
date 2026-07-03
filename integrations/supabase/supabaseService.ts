@@ -853,14 +853,22 @@ export class SupabaseService {
     if (!this.connected) return { success: false, error: 'Supabase não conectado' };
 
     try {
-      const { error } = await this.supabase
-        .from('engenheiros_projetos')
-        .update({ ativo: false, updated_at: new Date().toISOString() })
-        .eq('id', atribuicao_id);
+      const { data, error } = await this.supabase.rpc('desativar_atribuicao', {
+        p_atribuicao_id: atribuicao_id,
+        p_origem: 'chatbot',
+        p_actor_user_id: null,
+      });
 
       if (error) {
         console.error('❌ Erro ao desativar atribuição:', error);
         return { success: false, error: error.message };
+      }
+
+      if (!data?.ok) {
+        return {
+          success: false,
+          error: data?.mensagem || 'Nao foi possivel desativar a atribuicao',
+        };
       }
 
       return { success: true };
@@ -880,37 +888,20 @@ export class SupabaseService {
     if (!this.connected) return { success: false, error: 'Supabase não conectado' };
 
     try {
-      // Buscar atribuição atual para verificar duplicata
-      const { data: atribAtual, error: fetchError } = await this.supabase
-        .from('engenheiros_projetos')
-        .select('*')
-        .eq('id', atribuicao_id)
-        .eq('ativo', true)
-        .single();
+      const { data, error } = await this.supabase.rpc('transferir_atribuicao', {
+        p_atribuicao_id: atribuicao_id,
+        p_novo_eng_id: novo_eng_id,
+        p_origem: 'chatbot',
+        p_actor_user_id: null,
+      });
 
-      if (fetchError || !atribAtual) {
-        return { success: false, error: 'Atribuição não encontrada' };
+      // A RPC centraliza validacao e sincronizacao com evandro_distribuicao_tasks.
+      if (!error && !data?.ok) {
+        return {
+          success: false,
+          error: data?.mensagem || 'Nao foi possivel transferir a atribuicao',
+        };
       }
-
-      // Verificar se o novo engenheiro já tem essa mesma área/projeto
-      const { data: duplicata } = await this.supabase
-        .from('engenheiros_projetos')
-        .select('id')
-        .eq('eng_id', novo_eng_id)
-        .eq('projeto_id', atribAtual.projeto_id)
-        .eq('area_id', atribAtual.area_id)
-        .eq('ativo', true)
-        .maybeSingle();
-
-      if (duplicata) {
-        return { success: false, error: 'O engenheiro destino já possui essa mesma área/projeto' };
-      }
-
-      // Transferir: atualizar eng_id
-      const { error } = await this.supabase
-        .from('engenheiros_projetos')
-        .update({ eng_id: novo_eng_id, updated_at: new Date().toISOString() })
-        .eq('id', atribuicao_id);
 
       if (error) {
         console.error('❌ Erro ao transferir atribuição:', error);

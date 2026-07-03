@@ -144,6 +144,8 @@ export interface ProjetosStatus {
 
 export interface Projeto {
   atribuicao_id?: string
+  eng_id?: string | null
+  area_id?: string | null
   projeto_id: string
   codigo_projeto: string
   cliente: string
@@ -469,6 +471,7 @@ export async function fetchProjetos(): Promise<Projeto[]> {
     .from('vw_projetos_detalhado')
     .select('*')
     .eq('ativo', true)
+    .order('created_at', { ascending: false })
 
   if (error) {
     console.error('Erro ao buscar projetos:', error)
@@ -628,6 +631,47 @@ export async function atribuirProjetoComPavimentos(
 
   if (data && typeof data === 'object' && data.sucesso === false) {
     return { success: false, data, error: data.mensagem || 'Falha ao atribuir projeto' }
+  }
+
+  return { success: true, data }
+}
+
+export async function transferirResponsavelAtribuicao(
+  atribuicaoId: string,
+  novoEngId: string
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  const response = await fetch(`/api/admin/atribuicoes/${atribuicaoId}/responsavel`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ novo_eng_id: novoEngId }),
+  })
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    return {
+      success: false,
+      data,
+      error: data?.error || 'Erro ao alterar responsavel da tarefa.',
+    }
+  }
+
+  return { success: true, data }
+}
+
+export async function excluirAtribuicao(
+  atribuicaoId: string
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  const response = await fetch(`/api/admin/atribuicoes/${atribuicaoId}`, {
+    method: 'DELETE',
+  })
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    return {
+      success: false,
+      data,
+      error: data?.error || 'Erro ao excluir tarefa.',
+    }
   }
 
   return { success: true, data }
