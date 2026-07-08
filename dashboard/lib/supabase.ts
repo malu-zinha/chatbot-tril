@@ -677,6 +677,57 @@ export async function excluirAtribuicao(
   return { success: true, data }
 }
 
+export interface AtribuicaoInfo {
+  ok: boolean
+  atribuicao_id?: string
+  projeto_id?: string
+  codigo_projeto?: string
+  area_descricao?: string
+  engenheiro_nome?: string
+  total_disciplinas_ativas?: number
+  is_ultima_disciplina?: boolean
+  codigo?: string
+  mensagem?: string
+}
+
+export async function verificarAtribuicaoInfo(
+  atribuicaoId: string
+): Promise<{ success: boolean; data?: AtribuicaoInfo; error?: string }> {
+  const response = await fetch(`/api/admin/atribuicoes/${atribuicaoId}/info`, {
+    method: 'GET',
+  })
+
+  const json = await response.json().catch(() => null)
+  if (!response.ok) {
+    return {
+      success: false,
+      data: json?.result,
+      error: json?.error || 'Erro ao verificar informacoes da tarefa.',
+    }
+  }
+
+  return { success: true, data: json?.result }
+}
+
+export async function excluirProjeto(
+  projetoId: string
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  const response = await fetch(`/api/admin/projetos/${projetoId}`, {
+    method: 'DELETE',
+  })
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    return {
+      success: false,
+      data,
+      error: data?.error || 'Erro ao excluir projeto.',
+    }
+  }
+
+  return { success: true, data }
+}
+
 export async function criarProjeto(params: {
   codigo: string
   cliente: string

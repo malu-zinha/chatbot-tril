@@ -48,6 +48,7 @@ import {
   atribuirProjetoComPavimentos,
   transferirResponsavelAtribuicao,
   excluirAtribuicao,
+  excluirProjeto,
   subscribeToChanges,
   isSupabaseConfigured,
   VisaoGeral,
@@ -256,6 +257,22 @@ export default function DashboardClient() {
     await loadData()
   }
 
+  const handleExcluirProjeto = async (projeto: Projeto) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase nao esta configurado.')
+    }
+    if (!projeto.projeto_id) {
+      throw new Error('Projeto sem identificador.')
+    }
+
+    const result = await excluirProjeto(projeto.projeto_id)
+    if (!result.success) {
+      throw new Error(result.error || 'Nao foi possivel excluir o projeto.')
+    }
+
+    await loadData()
+  }
+
   const openRetrabalhoModal = async (
     projetoId: string,
     codigoProjeto?: string,
@@ -407,6 +424,7 @@ export default function DashboardClient() {
           engenheiros={engenheiros}
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
+          onExcluirProjeto={handleExcluirProjeto}
         />
         <ProjetosTable
           isOpen={showProjetosConcluidosModal}
@@ -419,6 +437,7 @@ export default function DashboardClient() {
           engenheiros={engenheiros}
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
+          onExcluirProjeto={handleExcluirProjeto}
         />
         <ProjetosTable
           isOpen={showProjetosExecucaoModal}
@@ -431,6 +450,7 @@ export default function DashboardClient() {
           engenheiros={engenheiros}
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
+          onExcluirProjeto={handleExcluirProjeto}
         />
         <ProjetosTable
           isOpen={showAtrasadosModal}
@@ -443,6 +463,7 @@ export default function DashboardClient() {
           engenheiros={engenheiros}
           onTransferirResponsavel={handleTransferirResponsavel}
           onExcluirTarefa={handleExcluirTarefa}
+          onExcluirProjeto={handleExcluirProjeto}
         />
         <EngenheirosTable
           isOpen={showEngenheirosModal}

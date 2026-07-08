@@ -2141,33 +2141,26 @@ export class SupabaseService {
     if (!this.connected) return { success: false, error: 'Supabase não conectado' };
 
     try {
-      // 1. Desativar o projeto
-      const { error: erroProjeto } = await this.supabase
-        .from('projetos')
-        .update({ ativo: false, updated_at: new Date().toISOString() })
-        .eq('projeto_id', projeto_id);
+      const { data, error } = await this.supabase.rpc('desativar_projeto_completo', {
+        p_projeto_id: projeto_id,
+        p_origem: 'chatbot',
+        p_actor_user_id: null,
+      });
 
-      if (erroProjeto) {
-        console.error('❌ Erro ao desativar projeto:', erroProjeto);
-        return { success: false, error: erroProjeto.message };
+      if (error) {
+        console.error('Erro ao desativar projeto:', error);
+        return { success: false, error: error.message };
       }
 
-      // 2. Desativar todas as atribuições relacionadas
-      const { data: atribuicoes, error: erroAtrib } = await this.supabase
-        .from('engenheiros_projetos')
-        .update({ ativo: false, updated_at: new Date().toISOString() })
-        .eq('projeto_id', projeto_id)
-        .eq('ativo', true)
-        .select('id');
-
-      if (erroAtrib) {
-        console.error('❌ Erro ao desativar atribuições:', erroAtrib);
-        // Projeto já foi desativado, reportar erro parcial
-        return { success: true, error: `Projeto desativado, mas erro nas atribuições: ${erroAtrib.message}`, data: { atribuicoes_desativadas: 0 } };
+      if (!data?.ok) {
+        return {
+          success: false,
+          error: data?.mensagem || 'Erro desconhecido ao desativar projeto',
+        };
       }
 
-      const qtd = atribuicoes?.length || 0;
-      console.log(`✅ Projeto ${projeto_id} desativado com ${qtd} atribuição(ões)`);
+      const qtd = Number(data.atribuicoes_desativadas || 0);
+      console.log(`Projeto ${projeto_id} desativado com ${qtd} atribuicao(oes)`);
       return { success: true, data: { atribuicoes_desativadas: qtd } };
     } catch (error: any) {
       console.error('❌ Erro ao desativar projeto:', error.message);

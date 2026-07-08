@@ -2,7 +2,7 @@ import React, { useEffect, useCallback } from 'react'
 import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog } from 'lucide-react'
 import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
 import { searchScore } from '@/lib/search'
-import type { Engenheiro } from '@/lib/supabase'
+import { verificarAtribuicaoInfo, type Engenheiro } from '@/lib/supabase'
 
 interface Projeto {
   atribuicao_id?: string
@@ -37,6 +37,7 @@ interface ProjetosTableProps {
   engenheiros?: Engenheiro[]
   onTransferirResponsavel?: (projeto: Projeto, novoEngId: string) => Promise<void>
   onExcluirTarefa?: (projeto: Projeto) => Promise<void>
+  onExcluirProjeto?: (projeto: Projeto) => Promise<void>
 }
 
 export default function ProjetosTable({ 
@@ -50,6 +51,7 @@ export default function ProjetosTable({
   engenheiros = [],
   onTransferirResponsavel,
   onExcluirTarefa,
+  onExcluirProjeto,
 }: ProjetosTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
   const [filterStatus, setFilterStatus] = React.useState<string>(initialFilter)
@@ -60,6 +62,8 @@ export default function ProjetosTable({
   const [novoResponsavelId, setNovoResponsavelId] = React.useState('')
   const [actionError, setActionError] = React.useState<string | null>(null)
   const [isActionSubmitting, setIsActionSubmitting] = React.useState(false)
+  const [isCheckingInfo, setIsCheckingInfo] = React.useState(false)
+  const [isUltimaDisciplina, setIsUltimaDisciplina] = React.useState(false)
   
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose()
@@ -203,18 +207,34 @@ export default function ProjetosTable({
     setActionError(null)
   }
 
-  const abrirExclusao = (item: Projeto) => {
+  const abrirExclusao = async (item: Projeto) => {
     setTransferProjeto(null)
     setDeleteProjeto(item)
     setActionError(null)
+    setIsUltimaDisciplina(false)
+
+    if (!item.atribuicao_id) return
+
+    setIsCheckingInfo(true)
+    try {
+      const result = await verificarAtribuicaoInfo(item.atribuicao_id)
+      if (result.success && result.data?.is_ultima_disciplina) {
+        setIsUltimaDisciplina(true)
+      }
+    } catch {
+      // Ignore errors - just show normal delete modal
+    } finally {
+      setIsCheckingInfo(false)
+    }
   }
 
   const fecharAcao = () => {
-    if (isActionSubmitting) return
+    if (isActionSubmitting || isCheckingInfo) return
     setTransferProjeto(null)
     setDeleteProjeto(null)
     setNovoResponsavelId('')
     setActionError(null)
+    setIsUltimaDisciplina(false)
   }
 
   const confirmarTransferencia = async () => {
@@ -238,15 +258,20 @@ export default function ProjetosTable({
   }
 
   const confirmarExclusao = async () => {
-    if (!deleteProjeto || !onExcluirTarefa) return
+    if (!deleteProjeto) return
 
     setIsActionSubmitting(true)
     setActionError(null)
     try {
-      await onExcluirTarefa(deleteProjeto)
+      if (isUltimaDisciplina && onExcluirProjeto) {
+        await onExcluirProjeto(deleteProjeto)
+      } else if (onExcluirTarefa) {
+        await onExcluirTarefa(deleteProjeto)
+      }
       setDeleteProjeto(null)
+      setIsUltimaDisciplina(false)
     } catch (error: any) {
-      setActionError(error?.message || 'Nao foi possivel excluir a tarefa.')
+      setActionError(error?.message || 'Nao foi possivel excluir.')
     } finally {
       setIsActionSubmitting(false)
     }
@@ -649,47 +674,65 @@ export default function ProjetosTable({
           }}
         >
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-start gap-3">
-              <div className="rounded-lg bg-red-50 p-2 text-red-700">
-                <AlertTriangle className="h-5 w-5" />
+            {isCheckingInfo ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Excluir tarefa</h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  {deleteProjeto.codigo_projeto} - {getProjetoAreaDisplayName(deleteProjeto)} - {deleteProjeto.engenheiro_nome}
+            ) : (
+              <>
+                <div className="mb-4 flex items-start gap-3">
+                  <div className="rounded-lg bg-red-50 p-2 text-red-700">
+                    <AlertTriangle className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">
+                      {isUltimaDisciplina ? 'Excluir projeto' : 'Excluir tarefa'}
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {deleteProjeto.codigo_projeto} - {getProjetoAreaDisplayName(deleteProjeto)} - {deleteProjeto.engenheiro_nome}
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-sm text-gray-700">
+                  {isUltimaDisciplina
+                    ? 'Este projeto possui apenas esta disciplina. Ao excluir, o projeto inteiro sera desativado e deixara de aparecer no dashboard e no chatbot.'
+                    : 'Esta tarefa deixara de aparecer no dashboard e no chatbot, mas permanecera no historico do banco.'}
                 </p>
-              </div>
-            </div>
 
-            <p className="text-sm text-gray-700">
-              Esta tarefa deixara de aparecer no dashboard e no chatbot, mas permanecera no historico do banco.
-            </p>
+                {isUltimaDisciplina && (
+                  <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                    O projeto sera marcado como inativo e podera ser reativado futuramente ao cadastrar um novo projeto com o mesmo codigo.
+                  </div>
+                )}
 
-            {actionError && (
-              <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {actionError}
-              </div>
+                {actionError && (
+                  <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {actionError}
+                  </div>
+                )}
+
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={fecharAcao}
+                    disabled={isActionSubmitting}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmarExclusao}
+                    disabled={isActionSubmitting || (!onExcluirTarefa && !isUltimaDisciplina) || (isUltimaDisciplina && !onExcluirProjeto)}
+                    className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                  >
+                    {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {isUltimaDisciplina ? 'Excluir projeto' : 'Excluir'}
+                  </button>
+                </div>
+              </>
             )}
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={fecharAcao}
-                disabled={isActionSubmitting}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmarExclusao}
-                disabled={isActionSubmitting}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-              >
-                {isActionSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                Excluir
-              </button>
-            </div>
           </div>
         </div>
       )}

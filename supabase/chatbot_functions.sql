@@ -149,43 +149,98 @@ CREATE OR REPLACE FUNCTION criar_projeto(
 RETURNS JSON AS $$
 DECLARE
     v_projeto_id UUID;
+    v_projeto_ativo BOOLEAN;
+    v_codigo TEXT;
+    v_cliente TEXT;
+    v_descricao TEXT;
+    v_reativado BOOLEAN := false;
 BEGIN
-    -- Validação
-    IF p_codigo IS NULL OR TRIM(p_codigo) = '' THEN
+    v_codigo := UPPER(TRIM(COALESCE(p_codigo, '')));
+    v_cliente := TRIM(COALESCE(p_cliente, ''));
+    v_descricao := NULLIF(TRIM(COALESCE(p_descricao, '')), '');
+
+    IF v_codigo = '' THEN
         RETURN json_build_object(
             'sucesso', false,
-            'mensagem', 'Código do projeto é obrigatório'
+            'mensagem', 'Codigo do projeto e obrigatorio'
         );
     END IF;
-    
-    IF p_cliente IS NULL OR TRIM(p_cliente) = '' THEN
+
+    IF v_cliente = '' THEN
         RETURN json_build_object(
             'sucesso', false,
-            'mensagem', 'Nome do cliente é obrigatório'
+            'mensagem', 'Nome do cliente e obrigatorio'
         );
     END IF;
-    
-    -- Verifica duplicidade
-    IF EXISTS (SELECT 1 FROM projetos WHERE codigo_projeto = UPPER(TRIM(p_codigo))) THEN
+
+    SELECT projeto_id, ativo INTO v_projeto_id, v_projeto_ativo
+    FROM projetos
+    WHERE codigo_projeto = v_codigo
+    FOR UPDATE;
+
+    IF v_projeto_id IS NOT NULL AND v_projeto_ativo = true THEN
         RETURN json_build_object(
             'sucesso', false,
-            'mensagem', 'Código de projeto já existe'
+            'mensagem', 'Codigo de projeto ja existe'
         );
     END IF;
-    
-    -- Insere
-    INSERT INTO projetos (codigo_projeto, cliente, descricao)
-    VALUES (UPPER(TRIM(p_codigo)), TRIM(p_cliente), p_descricao)
-    RETURNING projeto_id INTO v_projeto_id;
-    
+
+    IF v_projeto_id IS NOT NULL AND v_projeto_ativo = false THEN
+        UPDATE projetos
+        SET
+            ativo = true,
+            cliente = v_cliente,
+            descricao = v_descricao,
+            updated_at = NOW()
+        WHERE projeto_id = v_projeto_id;
+
+        UPDATE engenheiros_projetos
+        SET
+            ativo = false,
+            updated_at = NOW()
+        WHERE projeto_id = v_projeto_id
+          AND ativo = true;
+
+        UPDATE evandro_distribuicao_tasks
+        SET
+            ativo = false,
+            updated_at = NOW()
+        WHERE projeto_id = v_projeto_id
+          AND ativo = true;
+
+        UPDATE notificacoes_whatsapp
+        SET
+            enviada = true,
+            data_envio = COALESCE(data_envio, NOW()),
+            erro_envio = COALESCE(erro_envio, 'Cancelada por exclusao do projeto')
+        WHERE projeto_id = v_projeto_id
+          AND enviada = false;
+
+        DELETE FROM projeto_etapas_globais
+        WHERE projeto_id = v_projeto_id;
+
+        DELETE FROM projeto_pavimentos
+        WHERE projeto_id = v_projeto_id;
+
+        v_reativado := true;
+    ELSE
+        INSERT INTO projetos (codigo_projeto, cliente, descricao, ativo)
+        VALUES (v_codigo, v_cliente, v_descricao, true)
+        RETURNING projeto_id INTO v_projeto_id;
+    END IF;
+
     RETURN json_build_object(
         'sucesso', true,
-        'mensagem', 'Projeto criado com sucesso!',
+        'mensagem', CASE
+            WHEN v_reativado THEN 'Projeto reativado com sucesso!'
+            ELSE 'Projeto criado com sucesso!'
+        END,
         'projeto_id', v_projeto_id,
-        'codigo', UPPER(TRIM(p_codigo)),
-        'cliente', TRIM(p_cliente)
+        'codigo', v_codigo,
+        'cliente', v_cliente,
+        'reativado', v_reativado
     );
-    
+
 EXCEPTION WHEN OTHERS THEN
     RETURN json_build_object(
         'sucesso', false,
@@ -193,7 +248,6 @@ EXCEPTION WHEN OTHERS THEN
     );
 END;
 $$ LANGUAGE plpgsql;
-
 -- =====================================================
 -- FUNCTION: atribuir_area_projeto
 -- Atribui engenheiro a projeto com área específica
@@ -990,3 +1044,71 @@ FOR EACH ROW
 EXECUTE FUNCTION calcular_prazos();
 
 COMMENT ON TRIGGER trg_calcular_prazos ON prazos IS 'Calcula prazos internos e do cliente automaticamente ao inserir ou atualizar';
+
+-- =====================================================
+-- FUNCTION: verificar_atribuicao_info
+-- Retorna info sobre atribuicao para validar exclusao
+-- =====================================================
+CREATE OR REPLACE FUNCTION verificar_atribuicao_info(
+    p_atribuicao_id UUID
+)
+RETURNS JSON AS $$
+DECLARE
+    v_projeto_id UUID;
+    v_codigo_projeto TEXT;
+    v_area_descricao TEXT;
+    v_eng_nome TEXT;
+    v_total_disciplinas INTEGER := 0;
+BEGIN
+    SELECT
+        ep.projeto_id,
+        p.codigo_projeto,
+        a.descricao,
+        e.nome
+    INTO
+        v_projeto_id,
+        v_codigo_projeto,
+        v_area_descricao,
+        v_eng_nome
+    FROM engenheiros_projetos ep
+    JOIN projetos p ON p.projeto_id = ep.projeto_id
+    JOIN areas a ON a.area_id = ep.area_id
+    LEFT JOIN engenheiros e ON e.eng_id = ep.eng_id
+    WHERE ep.id = p_atribuicao_id
+      AND ep.ativo = true
+    LIMIT 1;
+
+    IF v_projeto_id IS NULL THEN
+        RETURN json_build_object(
+            'ok', false,
+            'codigo', 'nao_encontrada',
+            'mensagem', 'Atribuicao nao encontrada ou ja excluida.'
+        );
+    END IF;
+
+    SELECT COUNT(*) INTO v_total_disciplinas
+    FROM engenheiros_projetos
+    WHERE projeto_id = v_projeto_id
+      AND ativo = true;
+
+    RETURN json_build_object(
+        'ok', true,
+        'atribuicao_id', p_atribuicao_id,
+        'projeto_id', v_projeto_id,
+        'codigo_projeto', v_codigo_projeto,
+        'area_descricao', v_area_descricao,
+        'engenheiro_nome', v_eng_nome,
+        'total_disciplinas_ativas', v_total_disciplinas,
+        'is_ultima_disciplina', (v_total_disciplinas <= 1)
+    );
+
+EXCEPTION WHEN OTHERS THEN
+    RETURN json_build_object(
+        'ok', false,
+        'codigo', 'erro_interno',
+        'mensagem', 'Erro ao verificar atribuicao: ' || SQLERRM
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION verificar_atribuicao_info IS 'Retorna informacoes sobre uma atribuicao, incluindo se e a ultima disciplina ativa do projeto.';
