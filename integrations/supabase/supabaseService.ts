@@ -97,6 +97,7 @@ export interface Atribuicao {
   percentual_andamento: number;
   tempo_trabalho_dias?: number;
   observacoes?: string;
+  instancia_label?: string | null;
   ativo: boolean;
   created_at: string;
   updated_at: string;

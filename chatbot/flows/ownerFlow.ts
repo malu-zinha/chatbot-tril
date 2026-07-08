@@ -8,6 +8,7 @@
 // =====================================================
 
 import { getSupabaseService, SupabaseService } from '../../integrations/supabase/supabaseService.ts';
+import { formatProjetoDisciplinaLinha } from '../../logic/projetos/display.ts';
 import { normalizeProjectCode, validateWhatsapp } from '../../logic/validation/validateInput.ts';
 
 // Lazy loading para evitar problemas com dotenv
@@ -477,7 +478,7 @@ export class OwnerFlow {
 
     let msg = `📋 *Projetos de ${eng.nome}:*\n\n`;
     resultado.data.forEach((proj: any, idx: number) => {
-      msg += `${idx + 1}️⃣ ${proj.codigo_projeto} - ${proj.area_descricao}\n`;
+      msg += `${idx + 1}️⃣ ${formatProjetoDisciplinaLinha(proj)}\n`;
     });
     msg += `\n_Digite o número do projeto_`;
 
@@ -497,7 +498,7 @@ export class OwnerFlow {
     this.stepAtual = 'viz_escolher_projeto_eng';
     let msg = `📋 *Projetos:*\n\n`;
     resultado.data.forEach((proj: any, idx: number) => {
-      msg += `${idx + 1}️⃣ ${proj.codigo_projeto} - ${proj.area_descricao}\n`;
+      msg += `${idx + 1}️⃣ ${formatProjetoDisciplinaLinha(proj)}\n`;
     });
     msg += `\n_Digite o número do projeto_`;
     return { mensagem: msg, finalizado: false };
@@ -1980,8 +1981,11 @@ export class OwnerFlow {
       atribsEnriquecidas.push({
         ...atrib,
         codigo_projeto: projeto?.codigo_projeto || '?',
-        cliente: projeto?.cliente || '?',
+        cliente: projeto?.cliente || '',
+        descricao: projeto?.descricao || '',
+        area_codigo: area?.codigo || '',
         area_descricao: area?.descricao || '?',
+        instancia_label: (atrib as any).instancia_label || null,
       });
     }
 
@@ -1994,8 +1998,7 @@ export class OwnerFlow {
 
     let mensagem = `📋 Tarefas de *${engOrigem.nome}*:\n\n`;
     atribsEnriquecidas.forEach((atrib: any, i: number) => {
-      mensagem += `${i + 1}️⃣ *${atrib.codigo_projeto}* - ${atrib.area_descricao}\n`;
-      mensagem += `   Cliente: ${atrib.cliente}\n\n`;
+      mensagem += `${i + 1}️⃣ *${formatProjetoDisciplinaLinha(atrib)}*\n\n`;
     });
     mensagem += `_Digite o número da tarefa para transferir_`;
 
@@ -2012,7 +2015,7 @@ export class OwnerFlow {
 
     const atrib = atribuicoes[escolha];
     this.contexto.transf_atribuicao_id = atrib.id;
-    this.contexto.transf_atribuicao_desc = `${atrib.codigo_projeto} - ${atrib.area_descricao}`;
+    this.contexto.transf_atribuicao_desc = formatProjetoDisciplinaLinha(atrib);
 
     // Listar engenheiros destino (excluindo o de origem)
     const resultado = await getSupabase().listarEngenheiros();
