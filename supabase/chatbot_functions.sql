@@ -1044,3 +1044,71 @@ FOR EACH ROW
 EXECUTE FUNCTION calcular_prazos();
 
 COMMENT ON TRIGGER trg_calcular_prazos ON prazos IS 'Calcula prazos internos e do cliente automaticamente ao inserir ou atualizar';
+
+-- =====================================================
+-- FUNCTION: verificar_atribuicao_info
+-- Retorna info sobre atribuicao para validar exclusao
+-- =====================================================
+CREATE OR REPLACE FUNCTION verificar_atribuicao_info(
+    p_atribuicao_id UUID
+)
+RETURNS JSON AS $$
+DECLARE
+    v_projeto_id UUID;
+    v_codigo_projeto TEXT;
+    v_area_descricao TEXT;
+    v_eng_nome TEXT;
+    v_total_disciplinas INTEGER := 0;
+BEGIN
+    SELECT
+        ep.projeto_id,
+        p.codigo_projeto,
+        a.descricao,
+        e.nome
+    INTO
+        v_projeto_id,
+        v_codigo_projeto,
+        v_area_descricao,
+        v_eng_nome
+    FROM engenheiros_projetos ep
+    JOIN projetos p ON p.projeto_id = ep.projeto_id
+    JOIN areas a ON a.area_id = ep.area_id
+    LEFT JOIN engenheiros e ON e.eng_id = ep.eng_id
+    WHERE ep.id = p_atribuicao_id
+      AND ep.ativo = true
+    LIMIT 1;
+
+    IF v_projeto_id IS NULL THEN
+        RETURN json_build_object(
+            'ok', false,
+            'codigo', 'nao_encontrada',
+            'mensagem', 'Atribuicao nao encontrada ou ja excluida.'
+        );
+    END IF;
+
+    SELECT COUNT(*) INTO v_total_disciplinas
+    FROM engenheiros_projetos
+    WHERE projeto_id = v_projeto_id
+      AND ativo = true;
+
+    RETURN json_build_object(
+        'ok', true,
+        'atribuicao_id', p_atribuicao_id,
+        'projeto_id', v_projeto_id,
+        'codigo_projeto', v_codigo_projeto,
+        'area_descricao', v_area_descricao,
+        'engenheiro_nome', v_eng_nome,
+        'total_disciplinas_ativas', v_total_disciplinas,
+        'is_ultima_disciplina', (v_total_disciplinas <= 1)
+    );
+
+EXCEPTION WHEN OTHERS THEN
+    RETURN json_build_object(
+        'ok', false,
+        'codigo', 'erro_interno',
+        'mensagem', 'Erro ao verificar atribuicao: ' || SQLERRM
+    );
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION verificar_atribuicao_info IS 'Retorna informacoes sobre uma atribuicao, incluindo se e a ultima disciplina ativa do projeto.';
