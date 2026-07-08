@@ -565,5 +565,17 @@ export const mockAreas = [
     tem_etapas_pavimento: false,
     tem_etapas_globais: true,
   },
+  {
+    area_id: '7',
+    codigo: 'ALTERACAO_ENERGISA',
+    descricao: 'Alteração Energisa',
+    tempo_trabalho_dias: 0,
+    total_projetos: 0,
+    areas_ativas: 0,
+    areas_concluidas: 0,
+    percentual_conclusao: 0,
+    tem_etapas_pavimento: false,
+    tem_etapas_globais: true,
+  },
 ]
 
