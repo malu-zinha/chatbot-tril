@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const migrationPath = resolve(
@@ -12,6 +12,10 @@ const chatbotFunctionsSql = readFileSync(
 )
 const supabaseService = readFileSync(
   resolve('integrations/supabase/supabaseService.ts'),
+  'utf8'
+)
+const dashboardSupabaseLib = readFileSync(
+  resolve('dashboard/lib/supabase.ts'),
   'utf8'
 )
 
@@ -42,5 +46,28 @@ assert.match(
   supabaseService,
   /\.rpc\('desativar_projeto_completo'/
 )
+
+// Verifica funcao SQL verificar_atribuicao_info
+assert.match(migrationSql, /CREATE OR REPLACE FUNCTION verificar_atribuicao_info\(/)
+assert.match(migrationSql, /is_ultima_disciplina/)
+assert.match(migrationSql, /total_disciplinas_ativas/)
+assert.match(chatbotFunctionsSql, /CREATE OR REPLACE FUNCTION verificar_atribuicao_info\(/)
+
+// Verifica funcoes cliente no dashboard
+assert.match(dashboardSupabaseLib, /export async function verificarAtribuicaoInfo\(/)
+assert.match(dashboardSupabaseLib, /export async function excluirProjeto\(/)
+assert.match(dashboardSupabaseLib, /\/api\/admin\/atribuicoes\/.*\/info/)
+assert.match(dashboardSupabaseLib, /\/api\/admin\/projetos\//)
+
+// Verifica endpoints API existem
+const infoRouteExists = existsSync(
+  resolve('dashboard/app/api/admin/atribuicoes/[id]/info/route.ts')
+)
+assert.ok(infoRouteExists, 'API route /atribuicoes/[id]/info deve existir')
+
+const projetosRouteExists = existsSync(
+  resolve('dashboard/app/api/admin/projetos/[id]/route.ts')
+)
+assert.ok(projetosRouteExists, 'API route /projetos/[id] deve existir')
 
 console.log('test-projetos-inativos-recadastramento: OK')
