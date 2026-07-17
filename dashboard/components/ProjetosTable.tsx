@@ -1,8 +1,10 @@
 import React, { useEffect, useCallback } from 'react'
-import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog } from 'lucide-react'
+import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown } from 'lucide-react'
 import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
 import { searchScore } from '@/lib/search'
-import { verificarAtribuicaoInfo, type Engenheiro } from '@/lib/supabase'
+import { verificarAtribuicaoInfo, fetchRelatorioProjetoPdf, type Engenheiro } from '@/lib/supabase'
+import { gerarRelatorioPdf } from '@/lib/gerarRelatorioPdf'
+import ProjetoDetalhesModal from './ProjetoDetalhesModal'
 
 interface Projeto {
   atribuicao_id?: string
@@ -64,6 +66,8 @@ export default function ProjetosTable({
   const [isActionSubmitting, setIsActionSubmitting] = React.useState(false)
   const [isCheckingInfo, setIsCheckingInfo] = React.useState(false)
   const [isUltimaDisciplina, setIsUltimaDisciplina] = React.useState(false)
+  const [detalheProjeto, setDetalheProjeto] = React.useState<Projeto | null>(null)
+  const [gerandoPdfProjetoId, setGerandoPdfProjetoId] = React.useState<string | null>(null)
   
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose()
@@ -143,7 +147,7 @@ export default function ProjetosTable({
   }, [data])
 
   const showConcluidas = filterStatus === 'em_execucao'
-  const showAcoes = Boolean(onTransferirResponsavel || onExcluirTarefa)
+  const showAcoes = true
   const totalColunas = 8 + (showConcluidas ? 1 : 0) + (onVerRetrabalho ? 1 : 0) + (showAcoes ? 1 : 0)
 
   const toggleConcluidas = (projetoId: string) => {
@@ -179,12 +183,19 @@ export default function ProjetosTable({
         matchesFilter = item.dias_atraso > 0
       }
 
+      // Na aba em_execucao, incluir engenheiros das disciplinas concluidas do mesmo projeto na busca
+      const engenheirosExtras = filterStatus === 'em_execucao'
+        ? (disciplinasConcluidasPorProjeto.get(item.projeto_id) || [])
+            .map(d => d.engenheiro_nome)
+        : []
+
       // Pontuação de relevância da busca (0 = não casa). Só pontua se passou no filtro.
       const score = matchesFilter
         ? searchScore(searchTerm, [
             item.codigo_projeto,
             item.cliente,
             item.engenheiro_nome,
+            ...engenheirosExtras,
             item.area_descricao,
             getProjetoAreaDisplayName(item),
           ])
@@ -274,6 +285,24 @@ export default function ProjetosTable({
       setActionError(error?.message || 'Nao foi possivel excluir.')
     } finally {
       setIsActionSubmitting(false)
+    }
+  }
+
+  const handleGerarPdf = async (item: Projeto) => {
+    if (gerandoPdfProjetoId) return
+
+    setGerandoPdfProjetoId(item.projeto_id)
+    try {
+      const result = await fetchRelatorioProjetoPdf(item.projeto_id)
+      if (!result.success || !result.data) {
+        console.error('Erro ao buscar dados do relatorio:', result.error)
+        return
+      }
+      gerarRelatorioPdf(result.data)
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error)
+    } finally {
+      setGerandoPdfProjetoId(null)
     }
   }
 
@@ -517,6 +546,31 @@ export default function ProjetosTable({
                     {showAcoes && (
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setDetalheProjeto(item)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-gray-700 transition-colors hover:bg-gray-100"
+                            title="Ver detalhes"
+                            aria-label="Ver detalhes"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          {isDisciplinaConcluida(item) && (
+                            <button
+                              type="button"
+                              onClick={() => handleGerarPdf(item)}
+                              disabled={gerandoPdfProjetoId === item.projeto_id}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-green-200 bg-green-50 text-green-700 transition-colors hover:bg-green-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
+                              title="Gerar PDF do projeto"
+                              aria-label="Gerar PDF do projeto"
+                            >
+                              {gerandoPdfProjetoId === item.projeto_id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <FileDown className="h-4 w-4" />
+                              )}
+                            </button>
+                          )}
                           {onTransferirResponsavel && (
                             <button
                               type="button"
@@ -736,6 +790,12 @@ export default function ProjetosTable({
           </div>
         </div>
       )}
+
+      <ProjetoDetalhesModal
+        isOpen={detalheProjeto !== null}
+        onClose={() => setDetalheProjeto(null)}
+        projeto={detalheProjeto}
+      />
     </div>
   )
 }

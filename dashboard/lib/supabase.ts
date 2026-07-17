@@ -728,6 +728,62 @@ export async function excluirProjeto(
   return { success: true, data }
 }
 
+export interface RelatorioProjetoData {
+  projeto_id: string
+  codigo_projeto: string
+  cliente: string
+  descricao: string | null
+  percentual_projeto: number
+  data_inicio_projeto: string | null
+  data_conclusao_projeto: string | null
+  dias_execucao_total: number
+  total_engenheiros: number
+  total_disciplinas: number
+  disciplinas_concluidas: number
+  dias_retrabalho: number
+  dias_paralisacao: number
+  projeto_criado_em: string
+}
+
+export interface DisciplinaRelatorio {
+  eng_projeto_id: string
+  engenheiro_nome: string
+  area_descricao: string
+  area_codigo: string
+  instancia_label: string | null
+  data_inicio: string | null
+  data_conclusao: string | null
+  data_prevista: string | null
+  percentual_ponderado: number
+  dias_execucao: number
+  dias_retrabalho: number
+}
+
+export interface RelatorioProjetoResponse {
+  relatorio: RelatorioProjetoData
+  disciplinas: DisciplinaRelatorio[]
+  gerado_em: string
+}
+
+export async function fetchRelatorioProjetoPdf(
+  projetoId: string
+): Promise<{ success: boolean; data?: RelatorioProjetoResponse; error?: string }> {
+  const response = await fetch(`/api/admin/projetos/${projetoId}/relatorio`, {
+    method: 'GET',
+  })
+
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    return {
+      success: false,
+      data,
+      error: data?.error || 'Erro ao buscar dados do relatorio.',
+    }
+  }
+
+  return { success: true, data }
+}
+
 export async function criarProjeto(params: {
   codigo: string
   cliente: string
