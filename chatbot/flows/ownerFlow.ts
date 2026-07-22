@@ -26,10 +26,9 @@ export function statusDonoPorProgresso(
     percentual_ponderado?: number | string | null;
     percentual_andamento?: number | string | null;
     data_conclusao?: string | null;
-  },
-  progressoCalculado?: number | null
+  }
 ): string {
-  const progresso = progressoCalculado ?? info.percentual_ponderado ?? info.percentual_andamento ?? 0;
+  const progresso = info.percentual_ponderado ?? info.percentual_andamento ?? 0;
   return statusPorPercentual(Number(progresso) || 0);
 }
 
@@ -688,10 +687,7 @@ export class OwnerFlow {
     msg += `📦 *Área:* ${info.area_descricao}\n`;
     msg += `👷 *Engenheiro:* ${info.engenheiro_nome}\n\n`;
     
-    const progressoArea = info.area_id
-      ? await getSupabase().buscarProgressoArea(info.projeto_id, info.area_id)
-      : null;
-    msg += `📊 *Status:* ${statusDonoPorProgresso(info, progressoArea)}\n`;
+    msg += `📊 *Status:* ${statusDonoPorProgresso(info)}\n`;
     const progressoPonderado = await getSupabase().buscarProgressoPonderado(info.projeto_id);
     const andamento = progressoPonderado ?? info.percentual_andamento ?? 0;
     msg += `⚡ *Andamento Global do Projeto:* ${andamento}%\n\n`;

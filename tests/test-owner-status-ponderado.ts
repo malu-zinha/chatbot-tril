@@ -14,9 +14,20 @@ const mariaRitaRegressao = {
   data_conclusao: '2026-06-12',
 };
 
+assert(statusDonoPorProgresso.length === 1, 'helper do dono recebe apenas dados da view');
+
 assert(
   statusDonoPorProgresso(mariaRitaRegressao) === 'Concluído',
   'dono mostra Concluído quando percentual_ponderado e data_conclusao indicam tarefa finalizada'
+);
+
+assert(
+  statusDonoPorProgresso({
+    status_descricao: 'Aguardando Início',
+    percentual_andamento: 100,
+    data_conclusao: '2026-06-12',
+  }) === 'Concluído',
+  'dono usa percentual_andamento da view para tarefa concluida'
 );
 
 assert(
