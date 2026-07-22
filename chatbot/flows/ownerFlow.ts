@@ -8,6 +8,7 @@
 // =====================================================
 
 import { getSupabaseService, SupabaseService } from '../../integrations/supabase/supabaseService.ts';
+import { statusPorPercentual } from '../../logic/execucao/filtros.ts';
 import { formatProjetoDisciplinaLinha } from '../../logic/projetos/display.ts';
 import { normalizeProjectCode, validateWhatsapp } from '../../logic/validation/validateInput.ts';
 
@@ -18,6 +19,18 @@ function getSupabase(): SupabaseService {
     supabaseServiceInstance = getSupabaseService();
   }
   return supabaseServiceInstance;
+}
+
+export function statusDonoPorProgresso(
+  info: {
+    percentual_ponderado?: number | string | null;
+    percentual_andamento?: number | string | null;
+    data_conclusao?: string | null;
+  },
+  progressoCalculado?: number | null
+): string {
+  const progresso = progressoCalculado ?? info.percentual_ponderado ?? info.percentual_andamento ?? 0;
+  return statusPorPercentual(Number(progresso) || 0);
 }
 
 // =====================================================
@@ -675,7 +688,10 @@ export class OwnerFlow {
     msg += `📦 *Área:* ${info.area_descricao}\n`;
     msg += `👷 *Engenheiro:* ${info.engenheiro_nome}\n\n`;
     
-    msg += `📊 *Status:* ${info.status_descricao || 'N/A'}\n`;
+    const progressoArea = info.area_id
+      ? await getSupabase().buscarProgressoArea(info.projeto_id, info.area_id)
+      : null;
+    msg += `📊 *Status:* ${statusDonoPorProgresso(info, progressoArea)}\n`;
     const progressoPonderado = await getSupabase().buscarProgressoPonderado(info.projeto_id);
     const andamento = progressoPonderado ?? info.percentual_andamento ?? 0;
     msg += `⚡ *Andamento Global do Projeto:* ${andamento}%\n\n`;
