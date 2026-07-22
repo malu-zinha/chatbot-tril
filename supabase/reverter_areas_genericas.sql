@@ -34,7 +34,7 @@ INSERT INTO areas (codigo, descricao, tempo_trabalho_dias) VALUES
 ('FURACAO_ENCAMISAMENTO', 'Furação e Encamisamento', 5),
 ('ESGOTO', 'Esgoto', 10),
 ('CANT_OBRA_BT', 'Canteiro de Obra BT', 5),
-('CANT_OBRA_BRT', 'Canteiro de Obra BRT', 5),
+('DRT', 'DRT', 5),
 ('CANT_OBRA_ENERGISA', 'Canteiro de Obra Energisa', 5),
 ('SUBESTACAO', 'Subestação', 15),
 ('REDE_ESGOTO', 'Rede de Esgoto', 12),
