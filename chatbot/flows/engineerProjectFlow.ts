@@ -1,4 +1,4 @@
-// =====================================================
+﻿// =====================================================
 // FLOW: Gestão de Projetos de Engenharia
 // =====================================================
 // Fluxo conversacional para cadastrar novos projetos
@@ -39,8 +39,10 @@ type FlowStep =
   | 'escolher_projeto_noite'
   | 'escolher_area_noite'
   | 'feito_dia'
+  | 'horas_trabalhadas'
   | 'retrabalho_pergunta'
   | 'retrabalho_motivo'
+  | 'retrabalho_horas'
   | 'observacoes_pergunta'
   | 'observacoes_texto'
 
@@ -121,6 +123,8 @@ interface FlowState {
   feitoTexto?: string;
   teveRetrabalho?: boolean;
   motivoRetrabalho?: string;
+  horasTrabalhadasTotal?: number;
+  horasRetrabalho?: number;
   observacoesTexto?: string;
   // Multi-seleção (Fase 3)
   modoMultiSelecao?: 1 | 2;
@@ -133,6 +137,63 @@ interface FlowResult {
   mensagem: string;
   finalizado: boolean;
   erro?: string;
+}
+
+export const MOTIVOS_RETRABALHO = [
+  'Falta de informação (Construtora)',
+  'Alteração de projeto (Construtora)',
+  'Erro de projeto (TecPred)',
+  'Projeto Suspenso',
+  'Erro de comunicação',
+  'Outro',
+] as const;
+
+export function parseHorasRetrabalho(valor: string): number | null {
+  const normalizado = valor.trim().replace(',', '.');
+  if (!/^\d+(\.\d+)?$/.test(normalizado)) return null;
+
+  const horas = Number(normalizado);
+  return Number.isFinite(horas) ? horas : null;
+}
+
+export function calcularPercentualRetrabalhoHoras(
+  horasRetrabalho: number,
+  horasTrabalhadasTotal: number
+): number {
+  if (horasTrabalhadasTotal <= 0) return 0;
+  return (horasRetrabalho / horasTrabalhadasTotal) * 100;
+}
+
+export function validarHorasRetrabalho(input: {
+  horasTrabalhadasTotal?: number | null;
+  horasRetrabalho?: number | null;
+}): { valido: true } | { valido: false; mensagem: string } {
+  const { horasTrabalhadasTotal, horasRetrabalho } = input;
+
+  if (horasTrabalhadasTotal == null || horasTrabalhadasTotal <= 0) {
+    return {
+      valido: false,
+      mensagem: 'Informe um número maior que zero para as horas trabalhadas.',
+    };
+  }
+
+  if (horasRetrabalho == null) return { valido: true };
+
+  if (horasRetrabalho <= 0) {
+    return {
+      valido: false,
+      mensagem: 'Informe um número maior que zero para as horas de retrabalho.',
+    };
+  }
+
+  if (horasRetrabalho > horasTrabalhadasTotal) {
+    return {
+      valido: false,
+      mensagem: 'As horas de retrabalho não podem ser maiores que as horas trabalhadas totais.',
+    };
+  }
+
+  return { valido: true };
 }
 
 // =====================================================
@@ -348,11 +409,15 @@ export class EngineerProjectFlow {
         case 'escolher_area_noite':
           return await this.stepEscolherAreaNoite(msg); // Processa escolha do projeto
         case 'feito_dia':
-          return await this.stepFeitoDia(msg);
+          return await this.stepFeitoDiaComHoras(msg);
+        case 'horas_trabalhadas':
+          return await this.stepHorasTrabalhadas(msg);
         case 'retrabalho_pergunta':
-          return await this.stepRetrabalhoPergunta(msg);
+          return await this.stepRetrabalhoPerguntaComHoras(msg);
         case 'retrabalho_motivo':
-          return await this.stepRetrabalhoMotivo(msg);
+          return await this.stepRetrabalhoMotivoComHoras(msg);
+        case 'retrabalho_horas':
+          return await this.stepRetrabalhoHoras(msg);
         case 'observacoes_pergunta':
           return await this.stepObservacoesPergunta(msg);
         case 'observacoes_texto':
@@ -1192,7 +1257,7 @@ _Digite o número da opção desejada_`;
     };
   }
 
-  private async stepFeitoDia(msg: string): Promise<FlowResult> {
+  private async stepFeitoDiaComHoras(msg: string): Promise<FlowResult> {
     const feito = msg.trim();
 
     if (feito.length < 5) {
@@ -1203,41 +1268,42 @@ _Digite o número da opção desejada_`;
     }
 
     this.state.feitoTexto = feito;
-    this.goToStep('retrabalho_pergunta');
+    this.goToStep('horas_trabalhadas');
 
     return {
-      mensagem: `✅ Feito registrado!\n\n🔄 *Teve retrabalho hoje?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
+      mensagem: `✅ Feito registrado!\n\n⏱️ *Quantas horas foram trabalhadas hoje nesta tarefa/disciplina?*\n\n_Exemplo: 8 ou 7,5_`,
       finalizado: false
     };
   }
 
-  private async stepRetrabalhoPergunta(msg: string): Promise<FlowResult> {
+  private async stepRetrabalhoPerguntaComHoras(msg: string): Promise<FlowResult> {
     const resposta = msg.trim();
 
     if (resposta === '1') {
-      // Teve retrabalho
       this.state.teveRetrabalho = true;
       this.goToStep('retrabalho_motivo');
 
-      let mensagem = `⚠️ *Motivo do Retrabalho*\n\n`;
-      mensagem += `1️⃣ Erro de dimensionamento\n`;
-      mensagem += `2️⃣ Mudança de requisitos\n`;
-      mensagem += `3️⃣ Falta de informações\n`;
-      mensagem += `4️⃣ Erro de comunicação\n`;
-      mensagem += `5️⃣ Outro\n\n`;
-      mensagem += `_Digite o número do motivo_\n\n*0.* Voltar | *menu* — início`;
+      let mensagem = `⚠️ *Motivo do Retrabalho / Paralisação*\n\n`;
+      MOTIVOS_RETRABALHO.forEach((motivo, index) => {
+        mensagem += `${index + 1}️⃣ ${motivo}\n`;
+      });
+      mensagem += `\n_Digite o número do motivo_\n\n*0.* Voltar | *menu* — início`;
 
       return { mensagem, finalizado: false };
+    }
 
-    } else if (resposta === '2') {
-      // Não teve retrabalho
+    if (resposta === '2') {
       this.state.teveRetrabalho = false;
+      this.state.horasRetrabalho = 0;
 
-      // Registrar dia SEM retrabalho (importante para calcular a taxa corretamente!)
       await this.supabase.registrarRetrabalho(
         this.state.selectedAtribuicaoId!,
-        false, // necessitou_retrabalho = false
-        undefined   // sem motivo
+        false,
+        undefined,
+        undefined,
+        undefined,
+        this.state.horasTrabalhadasTotal,
+        0
       );
 
       this.goToStep('observacoes_pergunta');
@@ -1246,46 +1312,88 @@ _Digite o número da opção desejada_`;
         mensagem: `✅ Sem retrabalho!\n\n📝 *Quer adicionar observações?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
         finalizado: false
       };
-
-    } else {
-      return {
-        mensagem: '❌ Opção inválida. Digite *1* para Sim ou *2* para Não.',
-        finalizado: false
-      };
     }
+
+    return {
+      mensagem: '❌ Opção inválida. Digite *1* para Sim ou *2* para Não.',
+      finalizado: false
+    };
   }
 
-  private async stepRetrabalhoMotivo(msg: string): Promise<FlowResult> {
-    const motivos = [
-      'Erro de dimensionamento',
-      'Mudança de requisitos',
-      'Falta de informações',
-      'Erro de comunicação',
-      'Outro'
-    ];
-
+  private async stepRetrabalhoMotivoComHoras(msg: string): Promise<FlowResult> {
     const escolha = parseInt(msg.trim()) - 1;
 
-    if (isNaN(escolha) || escolha < 0 || escolha >= motivos.length) {
+    if (isNaN(escolha) || escolha < 0 || escolha >= MOTIVOS_RETRABALHO.length) {
       return {
-        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${motivos.length}.`,
+        mensagem: `❌ Opção inválida. Digite um número entre 1 e ${MOTIVOS_RETRABALHO.length}.`,
         finalizado: false
       };
     }
 
-    this.state.motivoRetrabalho = motivos[escolha];
+    this.state.motivoRetrabalho = MOTIVOS_RETRABALHO[escolha];
+    this.goToStep('retrabalho_horas');
 
-    // Registrar retrabalho no Supabase
+    return {
+      mensagem: `✅ Motivo registrado: ${MOTIVOS_RETRABALHO[escolha]}\n\n⏱️ *Quantas horas foram gastas no retrabalho/paralisação?*\n\n_Exemplo: 2 ou 1,5_`,
+      finalizado: false
+    };
+  }
+
+  private async stepRetrabalhoHoras(msg: string): Promise<FlowResult> {
+    const horasRetrabalho = parseHorasRetrabalho(msg);
+    const validacao = validarHorasRetrabalho({
+      horasTrabalhadasTotal: this.state.horasTrabalhadasTotal,
+      horasRetrabalho,
+    });
+
+    if (!validacao.valido) {
+      return {
+        mensagem: `❌ ${validacao.mensagem}\n\n_Exemplo: 2 ou 1,5_`,
+        finalizado: false
+      };
+    }
+
+    this.state.horasRetrabalho = horasRetrabalho!;
+
     await this.supabase.registrarRetrabalho(
       this.state.selectedAtribuicaoId!,
       true,
-      motivos[escolha]
+      this.state.motivoRetrabalho,
+      undefined,
+      undefined,
+      this.state.horasTrabalhadasTotal,
+      this.state.horasRetrabalho
     );
 
     this.goToStep('observacoes_pergunta');
 
+    const percentual = calcularPercentualRetrabalhoHoras(
+      this.state.horasRetrabalho,
+      this.state.horasTrabalhadasTotal!
+    );
+
     return {
-      mensagem: `✅ Motivo registrado: ${motivos[escolha]}\n\n📝 *Quer adicionar observações?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
+      mensagem: `✅ Retrabalho registrado: ${this.state.horasRetrabalho}h de ${this.state.horasTrabalhadasTotal}h (${percentual.toFixed(1)}%)\n\n📝 *Quer adicionar observações?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
+      finalizado: false
+    };
+  }
+
+  private async stepHorasTrabalhadas(msg: string): Promise<FlowResult> {
+    const horas = parseHorasRetrabalho(msg);
+    const validacao = validarHorasRetrabalho({ horasTrabalhadasTotal: horas });
+
+    if (!validacao.valido) {
+      return {
+        mensagem: `❌ ${validacao.mensagem}\n\n_Exemplo: 8 ou 7,5_`,
+        finalizado: false
+      };
+    }
+
+    this.state.horasTrabalhadasTotal = horas!;
+    this.goToStep('retrabalho_pergunta');
+
+    return {
+      mensagem: `✅ Horas registradas: ${horas}\n\n🔄 *Teve retrabalho/paralisação hoje?*\n\n1️⃣ Sim\n2️⃣ Não\n\n_Digite 1 ou 2_`,
       finalizado: false
     };
   }
