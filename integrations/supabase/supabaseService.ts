@@ -128,6 +128,8 @@ export interface Retrabalho {
   motivo_retrabalho?: string;
   descricao?: string;
   tipo_retrabalho?: string;
+  horas_trabalhadas_total?: number | null;
+  horas_retrabalho?: number | null;
   status_id?: number;
   created_at: string;
 }
@@ -1074,7 +1076,9 @@ export class SupabaseService {
     necessitou_retrabalho: boolean,
     motivo?: string,
     tipo?: string,
-    descricao?: string
+    descricao?: string,
+    horasTrabalhadasTotal?: number,
+    horasRetrabalho?: number
   ): Promise<Retrabalho | null> {
     if (!this.connected) return null;
 
@@ -1085,6 +1089,8 @@ export class SupabaseService {
         p_motivo_retrabalho: motivo || null,
         p_tipo_retrabalho: tipo || null,
         p_descricao: descricao || null,
+        p_horas_trabalhadas_total: horasTrabalhadasTotal ?? null,
+        p_horas_retrabalho: horasRetrabalho ?? null,
       });
 
       if (error) {

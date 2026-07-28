@@ -28,6 +28,9 @@ export default function RetrabalhoCard({
   onSelectProjeto,
 }: RetrabalhoCardProps) {
   const totalRetrabalhos = data.reduce((sum, item) => sum + item.total_retrabalhos, 0)
+  const totalHorasRetrabalho =
+    retrabalhoGeral?.horas_retrabalho_total ??
+    data.reduce((sum, item) => sum + (item.horas_retrabalho_total || 0), 0)
   const mediaGeral = data.length > 0
     ? data.reduce((sum, item) => sum + (item.retrabalho_medio_percentual || 0), 0) / data.length
     : 0
@@ -42,14 +45,15 @@ export default function RetrabalhoCard({
           </h3>
         </div>
         <p className="text-xs text-gray-500 mt-1">
-          Visão geral TecPred + por projeto (clique na % para ver datas, engenheiro e motivo)
+          Visao geral TecPred + por projeto (clique na % para ver datas, engenheiro e motivo)
         </p>
       </div>
 
       <div className="mb-6 grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-gradient-to-r from-warning to-orange-600 rounded-lg p-4 text-white">
-          <div className="text-sm font-medium opacity-90">Total de Retrabalhos</div>
-          <div className="text-3xl font-bold mt-1">{totalRetrabalhos}</div>
+          <div className="text-sm font-medium opacity-90">Horas de Retrabalho</div>
+          <div className="text-3xl font-bold mt-1">{totalHorasRetrabalho.toFixed(1)}h</div>
+          <div className="text-xs opacity-90 mt-0.5">{totalRetrabalhos} ocorrencias</div>
         </div>
         <div className="bg-gradient-to-r from-tecpred-primary to-tecpred-secondary rounded-lg p-4 text-white">
           <div className="text-sm font-medium opacity-90">% Geral TecPred</div>
@@ -57,14 +61,14 @@ export default function RetrabalhoCard({
             {retrabalhoGeral ? `${retrabalhoGeral.percentual_geral_retrabalho.toFixed(1)}%` : '0%'}
           </div>
           <div className="text-xs opacity-90 mt-0.5">
-            retrabalhos ÷ projetos ativos
+            horas de retrabalho / horas trabalhadas totais
           </div>
         </div>
         <div className="bg-gradient-to-r from-danger to-red-600 rounded-lg p-4 text-white">
-          <div className="text-sm font-medium opacity-90">Taxa Média</div>
+          <div className="text-sm font-medium opacity-90">Media por Horas</div>
           <div className="text-3xl font-bold mt-1">{mediaGeral.toFixed(1)}%</div>
           <div className="text-xs opacity-90 mt-0.5">
-            retrabalhos por projetos ativos
+            media por horas dos engenheiros
           </div>
         </div>
       </div>
@@ -81,13 +85,15 @@ export default function RetrabalhoCard({
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">{item.engenheiro}</div>
                   <div className="text-xs text-gray-500 mt-1">
-                    {item.qtde_areas_retrabalho} áreas • {item.projetos_com_retrabalho} projetos
+                    {item.qtde_areas_retrabalho} areas • {item.projetos_com_retrabalho} projetos
                   </div>
                 </div>
                 <div className="text-right flex items-center space-x-3">
                   <div>
-                    <div className="text-lg font-bold text-danger">{item.total_retrabalhos}</div>
-                    <div className="text-xs text-gray-500">ocorrências</div>
+                    <div className="text-lg font-bold text-danger">
+                      {(item.horas_retrabalho_total || 0).toFixed(1)}h
+                    </div>
+                    <div className="text-xs text-gray-500">horas retrab.</div>
                   </div>
                   <div>
                     <div
@@ -101,7 +107,7 @@ export default function RetrabalhoCard({
                     >
                       {(item.retrabalho_medio_percentual ?? 0).toFixed(1)}%
                     </div>
-                    <div className="text-xs text-gray-500">taxa</div>
+                    <div className="text-xs text-gray-500">por horas</div>
                   </div>
                 </div>
               </div>
@@ -113,7 +119,7 @@ export default function RetrabalhoCard({
       <div className="pt-4 border-t border-gray-200">
         <h4 className="text-sm font-semibold text-gray-700 mb-2">Por projeto</h4>
         <p className="text-xs text-gray-500 mb-3">
-          % = retrabalhos ÷ profissionais no projeto. Clique na % para ver áreas, motivos e detalhes.
+          % = horas de retrabalho / horas trabalhadas totais. Clique na % para ver areas, motivos e detalhes.
         </p>
         {retrabalhoPorProjeto && retrabalhoPorProjeto.length > 0 ? (
           <div className="overflow-x-auto">
@@ -122,8 +128,8 @@ export default function RetrabalhoCard({
                 <tr className="text-left text-gray-500 border-b">
                   <th className="py-2 pr-4">Projeto</th>
                   <th className="py-2 pr-4">Cliente</th>
-                  <th className="py-2 pr-4 text-right">Retrabalhos</th>
-                  <th className="py-2 pr-4 text-right">Profissionais</th>
+                  <th className="py-2 pr-4 text-right">Horas retrab.</th>
+                  <th className="py-2 pr-4 text-right">Horas totais</th>
                   <th className="py-2 pl-4 text-right">%</th>
                 </tr>
               </thead>
@@ -136,10 +142,10 @@ export default function RetrabalhoCard({
                     <td className="py-2 pr-4 font-medium text-gray-900">{item.codigo_projeto}</td>
                     <td className="py-2 pr-4 text-gray-700">{item.cliente}</td>
                     <td className="py-2 pr-4 text-right text-gray-900">
-                      {item.total_retrabalhos_projeto}
+                      {(item.horas_retrabalho_total || 0).toFixed(1)}h
                     </td>
                     <td className="py-2 pr-4 text-right text-gray-900">
-                      {item.total_engenheiros_projeto}
+                      {(item.horas_trabalhadas_total || 0).toFixed(1)}h
                     </td>
                     <td className="py-2 pl-4 text-right">
                       {onSelectProjeto ? (
@@ -169,7 +175,7 @@ export default function RetrabalhoCard({
       {taxaAreaGeral.length > 0 && (
         <div className="pt-4 border-t border-gray-200 mt-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-1">
-            Taxa de retrabalho por área / projeto
+            Retrabalho por area / projeto
           </h4>
           <RetrabalhoTaxaAreaChart data={taxaAreaGeral} />
         </div>

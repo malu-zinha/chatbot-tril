@@ -18,15 +18,13 @@ interface RetrabalhoTaxaAreaChartProps {
   data: RetrabalhoTaxaArea[]
 }
 
-// Gradiente de cor: verde (baixo) → amarelo → vermelho (alto)
-function taxaColor(taxa: number, max: number): string {
-  const ratio = max > 0 ? taxa / max : 0
-  if (ratio < 0.33) return '#22c55e'   // verde
-  if (ratio < 0.66) return '#f59e0b'   // âmbar
-  return '#ef4444'                      // vermelho
+function percentualColor(percentual: number, max: number): string {
+  const ratio = max > 0 ? percentual / max : 0
+  if (ratio < 0.33) return '#22c55e'
+  if (ratio < 0.66) return '#f59e0b'
+  return '#ef4444'
 }
 
-// Tooltip customizado
 const CustomTooltip = ({
   active,
   payload,
@@ -44,16 +42,22 @@ const CustomTooltip = ({
       <p className="text-gray-600">{d.cliente}</p>
       <div className="mt-2 space-y-1">
         <div className="flex justify-between gap-4">
-          <span className="text-gray-500">Retrabalhos</span>
-          <span className="font-semibold text-gray-800">{d.total_retrabalhos_area}</span>
+          <span className="text-gray-500">Horas retrab.</span>
+          <span className="font-semibold text-gray-800">
+            {(d.horas_retrabalho_total || 0).toFixed(1)}h
+          </span>
         </div>
         <div className="flex justify-between gap-4">
-          <span className="text-gray-500">Dias c/ registro</span>
-          <span className="font-semibold text-gray-800">{d.dias_com_registro}</span>
+          <span className="text-gray-500">Horas totais</span>
+          <span className="font-semibold text-gray-800">
+            {(d.horas_trabalhadas_total || 0).toFixed(1)}h
+          </span>
         </div>
         <div className="flex justify-between gap-4 border-t pt-1">
-          <span className="text-gray-500 font-semibold">Taxa (retrab/dia)</span>
-          <span className="font-bold text-gray-900">{d.taxa_retrabalho_por_dia.toFixed(2)}</span>
+          <span className="text-gray-500 font-semibold">Retrabalho (%)</span>
+          <span className="font-bold text-gray-900">
+            {d.percentual_retrabalho_disciplina.toFixed(2)}%
+          </span>
         </div>
       </div>
     </div>
@@ -66,32 +70,26 @@ export default function RetrabalhoTaxaAreaChart({
   if (!data || data.length === 0) {
     return (
       <p className="text-sm text-gray-500 py-3">
-        Nenhum dado de taxa de retrabalho disponível.
+        Nenhum dado de retrabalho por horas disponivel.
       </p>
     )
   }
 
-  // Limita a 15 barras para não poluir; ordena do maior para o menor
   const sorted = [...data]
-    .sort((a, b) => b.taxa_retrabalho_por_dia - a.taxa_retrabalho_por_dia)
+    .sort((a, b) => b.percentual_retrabalho_disciplina - a.percentual_retrabalho_disciplina)
     .slice(0, 15)
 
-  const maxTaxa = sorted[0]?.taxa_retrabalho_por_dia ?? 1
-
-  // Rótulo no eixo Y: "PROJ / ÁREA"
+  const maxPercentual = sorted[0]?.percentual_retrabalho_disciplina ?? 1
   const chartData = sorted.map((d) => ({
     ...d,
     label: `${d.codigo_projeto} / ${d.area_codigo}`,
   }))
-
-  // Altura dinâmica: mínimo 250px, 40px por barra
   const chartHeight = Math.max(250, chartData.length * 44)
 
   return (
     <div>
       <p className="text-xs text-gray-500 mb-3">
-        Taxa = retrabalhos registrados ÷ dias com registro de retrabalho no projeto.
-        Mostrando até 15 combinações projeto/área com maior taxa.
+        Percentual = horas de retrabalho / horas trabalhadas totais. Mostrando ate 15 combinacoes projeto/area com maior percentual.
       </p>
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart
@@ -104,10 +102,10 @@ export default function RetrabalhoTaxaAreaChart({
           <XAxis
             type="number"
             domain={[0, 'auto']}
-            tickFormatter={(v) => v.toFixed(2)}
+            tickFormatter={(v) => `${v.toFixed(1)}%`}
             tick={{ fontSize: 11, fill: '#6b7280' }}
             label={{
-              value: 'retrabalhos / dia',
+              value: '% por horas',
               position: 'insideBottomRight',
               offset: -4,
               fontSize: 10,
@@ -121,17 +119,17 @@ export default function RetrabalhoTaxaAreaChart({
             tick={{ fontSize: 11, fill: '#374151' }}
           />
           <Tooltip content={<CustomTooltip />} />
-          <Bar dataKey="taxa_retrabalho_por_dia" radius={[0, 4, 4, 0]} maxBarSize={28}>
+          <Bar dataKey="percentual_retrabalho_disciplina" radius={[0, 4, 4, 0]} maxBarSize={28}>
             {chartData.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={taxaColor(entry.taxa_retrabalho_por_dia, maxTaxa)}
+                fill={percentualColor(entry.percentual_retrabalho_disciplina, maxPercentual)}
               />
             ))}
             <LabelList
-              dataKey="taxa_retrabalho_por_dia"
+              dataKey="percentual_retrabalho_disciplina"
               position="right"
-              formatter={(v: number) => v.toFixed(2)}
+              formatter={(v: number) => `${v.toFixed(1)}%`}
               style={{ fontSize: 11, fill: '#374151', fontWeight: 600 }}
             />
           </Bar>
