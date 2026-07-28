@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { RetrabalhoPorProjeto } from '@/lib/supabase'
 
 interface RetrabalhoPorProjetoTableProps {
@@ -21,7 +21,7 @@ export default function RetrabalhoPorProjetoTable({
           Retrabalho por Projeto
         </h3>
         <p className="text-xs text-gray-500">
-          % = retrabalhos ÷ engenheiros no projeto
+          % = horas de retrabalho / horas trabalhadas totais
         </p>
       </div>
 
@@ -31,8 +31,8 @@ export default function RetrabalhoPorProjetoTable({
             <tr className="text-left text-gray-500 border-b">
               <th className="py-2 pr-4">Projeto</th>
               <th className="py-2 pr-4">Cliente</th>
-              <th className="py-2 pr-4 text-right">Retrabalhos</th>
-              <th className="py-2 pr-4 text-right">Profissionais</th>
+              <th className="py-2 pr-4 text-right">Horas retrab.</th>
+              <th className="py-2 pr-4 text-right">Horas totais</th>
               <th className="py-2 pl-4 text-right">%</th>
             </tr>
           </thead>
@@ -51,10 +51,10 @@ export default function RetrabalhoPorProjetoTable({
                   {item.cliente}
                 </td>
                 <td className="py-2 pr-4 text-right text-gray-900">
-                  {item.total_retrabalhos_projeto}
+                  {(item.horas_retrabalho_total || 0).toFixed(1)}h
                 </td>
                 <td className="py-2 pr-4 text-right text-gray-900">
-                  {item.total_engenheiros_projeto}
+                  {(item.horas_trabalhadas_total || 0).toFixed(1)}h
                 </td>
                 <td className="py-2 pl-4 text-right">
                   <button

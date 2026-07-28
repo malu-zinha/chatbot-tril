@@ -74,6 +74,8 @@ export interface RetrabalhoEngenheiro {
   engenheiro: string
   qtde_areas_retrabalho: number
   total_retrabalhos: number
+  horas_trabalhadas_total: number
+  horas_retrabalho_total: number
   retrabalho_medio_percentual: number
   projetos_com_retrabalho: number
 }
@@ -81,6 +83,8 @@ export interface RetrabalhoEngenheiro {
 export interface RetrabalhoGeral {
   total_retrabalhos_geral: number
   total_projetos_ativos: number
+  horas_trabalhadas_total: number
+  horas_retrabalho_total: number
   percentual_geral_retrabalho: number
 }
 
@@ -90,6 +94,8 @@ export interface RetrabalhoPorProjeto {
   cliente: string
   total_retrabalhos_projeto: number
   total_engenheiros_projeto: number
+  horas_trabalhadas_total: number
+  horas_retrabalho_total: number
   percentual_retrabalho_projeto: number
 }
 
@@ -102,6 +108,8 @@ export interface RetrabalhoDetalheProjeto {
   eng_id: string
   engenheiro_nome: string
   motivo_retrabalho: string | null
+  horas_trabalhadas_total: number | null
+  horas_retrabalho: number | null
   area_id: string
   area_codigo: string
   area_descricao: string
@@ -115,6 +123,9 @@ export interface RetrabalhoAreaProjeto {
   area_codigo: string
   area: string
   total_retrabalhos_area: number
+  horas_trabalhadas_total: number
+  horas_retrabalho_total: number
+  percentual_retrabalho_disciplina: number
 }
 
 export interface RetrabalhoMotivo {
@@ -122,6 +133,7 @@ export interface RetrabalhoMotivo {
   quantidade: number
   engenheiros_afetados?: number
   projetos_afetados?: number
+  horas_retrabalho_total?: number
 }
 
 export interface RetrabalhoTaxaArea {
@@ -132,8 +144,9 @@ export interface RetrabalhoTaxaArea {
   area_codigo: string
   area: string
   total_retrabalhos_area: number
-  dias_com_registro: number
-  taxa_retrabalho_por_dia: number
+  horas_trabalhadas_total: number
+  horas_retrabalho_total: number
+  percentual_retrabalho_disciplina: number
 }
 
 export interface ProjetosStatus {
@@ -264,6 +277,20 @@ export async function fetchRetrabalhoEngenheiro(): Promise<RetrabalhoEngenheiro[
 }
 
 export async function fetchRetrabalhoGeral(): Promise<RetrabalhoGeral | null> {
+  const { data, error } = await supabase
+    .from('vw_retrabalho_geral')
+    .select('*')
+    .single()
+
+  if (error) {
+    console.error('Erro ao buscar retrabalho geral:', error)
+    return null
+  }
+
+  return data as RetrabalhoGeral
+}
+
+async function fetchRetrabalhoGeralLegado(): Promise<RetrabalhoGeral | null> {
   // View vw_retrabalho_geral não existe — calcular a partir das tabelas base
   const [retRes, projRes] = await Promise.all([
     supabase.from('retrabalho_projetos').select('id'),
@@ -276,6 +303,8 @@ export async function fetchRetrabalhoGeral(): Promise<RetrabalhoGeral | null> {
   return {
     total_retrabalhos_geral: totalRetrabalhos,
     total_projetos_ativos: totalProjetos,
+    horas_trabalhadas_total: 0,
+    horas_retrabalho_total: 0,
     percentual_geral_retrabalho: totalProjetos > 0
       ? (totalRetrabalhos / totalProjetos) * 100
       : 0,
@@ -283,6 +312,20 @@ export async function fetchRetrabalhoGeral(): Promise<RetrabalhoGeral | null> {
 }
 
 export async function fetchRetrabalhoPorProjeto(): Promise<RetrabalhoPorProjeto[]> {
+  const { data, error } = await supabase
+    .from('vw_retrabalho_por_projeto')
+    .select('*')
+    .order('percentual_retrabalho_projeto', { ascending: false })
+
+  if (error) {
+    console.error('Erro ao buscar retrabalho por projeto:', error)
+    return []
+  }
+
+  return (data as RetrabalhoPorProjeto[]) || []
+}
+
+async function fetchRetrabalhoPorProjetoLegado(): Promise<RetrabalhoPorProjeto[]> {
   // View vw_retrabalho_por_projeto não existe — calcular a partir das tabelas base
   const [retRes, projRes, epRes] = await Promise.all([
     supabase.from('retrabalho_projetos').select('projeto_id'),
@@ -320,6 +363,8 @@ export async function fetchRetrabalhoPorProjeto(): Promise<RetrabalhoPorProjeto[
         cliente: p.cliente,
         total_retrabalhos_projeto: totalRet,
         total_engenheiros_projeto: totalEng,
+        horas_trabalhadas_total: 0,
+        horas_retrabalho_total: 0,
         percentual_retrabalho_projeto: (totalRet / totalEng) * 100,
       }
     })
@@ -394,6 +439,20 @@ export async function fetchRetrabalhoMotivosGeral(): Promise<RetrabalhoMotivo[]>
 }
 
 export async function fetchRetrabalhoTaxaPorArea(): Promise<RetrabalhoTaxaArea[]> {
+  const { data, error } = await supabase
+    .from('vw_retrabalho_taxa_area_projeto')
+    .select('*')
+    .order('percentual_retrabalho_disciplina', { ascending: false })
+
+  if (error) {
+    console.error('Erro ao buscar retrabalho por horas por area:', error)
+    return []
+  }
+
+  return (data as RetrabalhoTaxaArea[]) || []
+}
+
+async function fetchRetrabalhoTaxaPorAreaLegado(): Promise<RetrabalhoTaxaArea[]> {
   const [retRes, epRes, projRes, areaRes] = await Promise.all([
     supabase.from('retrabalho_projetos').select('projeto_id, eng_projeto_id, data_retrabalho'),
     supabase.from('engenheiros_projetos').select('id, projeto_id, area_id'),
@@ -445,12 +504,13 @@ export async function fetchRetrabalhoTaxaPorArea(): Promise<RetrabalhoTaxaArea[]
       area_codigo: area?.codigo ?? 'N/A',
       area: area?.descricao ?? 'N/A',
       total_retrabalhos_area: g.total,
-      dias_com_registro: diasComRegistro,
-      taxa_retrabalho_por_dia: g.total / diasComRegistro,
+      horas_trabalhadas_total: 0,
+      horas_retrabalho_total: 0,
+      percentual_retrabalho_disciplina: g.total / diasComRegistro,
     })
   }
 
-  return result.sort((a, b) => b.taxa_retrabalho_por_dia - a.taxa_retrabalho_por_dia)
+  return result.sort((a, b) => b.percentual_retrabalho_disciplina - a.percentual_retrabalho_disciplina)
 }
 
 export async function fetchProjetosStatus(): Promise<ProjetosStatus[]> {
