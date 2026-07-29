@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback } from 'react'
 import { X, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronRight, Loader2, Trash2, UserRoundCog, Eye, FileDown } from 'lucide-react'
 import { buildCompletedDisciplineKey, getProjetoAreaDisplayName } from '@/lib/compatibilizacao'
+import { isProjetoConcluido, projetoMatchesStatusFilter, type ProjetoStatusFilter } from '@/lib/projetoFilters'
 import { searchScore } from '@/lib/search'
 import { verificarAtribuicaoInfo, fetchRelatorioProjetoPdf, type Engenheiro } from '@/lib/supabase'
 import { gerarRelatorioPdf } from '@/lib/gerarRelatorioPdf'
@@ -56,7 +57,7 @@ export default function ProjetosTable({
   onExcluirProjeto,
 }: ProjetosTableProps) {
   const [searchTerm, setSearchTerm] = React.useState('')
-  const [filterStatus, setFilterStatus] = React.useState<string>(initialFilter)
+  const [filterStatus, setFilterStatus] = React.useState<ProjetoStatusFilter>(initialFilter)
   const [tooltipOpen, setTooltipOpen] = React.useState<string | null>(null)
   const [expandedConcluidas, setExpandedConcluidas] = React.useState<Set<string>>(new Set())
   const [transferProjeto, setTransferProjeto] = React.useState<Projeto | null>(null)
@@ -123,8 +124,7 @@ export default function ProjetosTable({
     item.motivo_aguardo?.trim() ||
     `Projeto atrasado há ${item.dias_atraso} dia(s). Nenhuma observação registrada.`
 
-  const isDisciplinaConcluida = (item: Projeto) =>
-    Boolean(item.data_conclusao) || item.percentual_andamento >= 100
+  const isDisciplinaConcluida = isProjetoConcluido
 
   const disciplinasConcluidasPorProjeto = React.useMemo(() => {
     const grupos = new Map<string, Projeto[]>()
@@ -174,10 +174,8 @@ export default function ProjetosTable({
         matchesFilter = (item.data_conclusao !== null && item.data_conclusao !== undefined) ||
                         item.percentual_andamento >= 100
       } else if (filterStatus === 'em_execucao') {
-        // Em execução: não concluído (sem data_conclusao E percentual < 100) E não atrasado
-        matchesFilter = (item.data_conclusao === null || item.data_conclusao === undefined) &&
-                        item.percentual_andamento < 100 &&
-                        item.dias_atraso === 0
+        // Em execução: não concluído, incluindo projetos atrasados.
+        matchesFilter = projetoMatchesStatusFilter(item, filterStatus)
       } else if (filterStatus === 'atrasado') {
         // Atrasado: tem dias de atraso
         matchesFilter = item.dias_atraso > 0
