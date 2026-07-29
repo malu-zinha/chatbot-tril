@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 
 const dashboardFiles = [
   'dashboard/lib/supabase.ts',
+  'dashboard/lib/mockData.ts',
   'dashboard/components/RetrabalhoCard.tsx',
   'dashboard/components/RetrabalhoPorProjetoTable.tsx',
   'dashboard/components/RetrabalhoTaxaAreaChart.tsx',
@@ -16,6 +17,10 @@ const source = dashboardFiles
 assert.ok(source.includes('horas_retrabalho_total'))
 assert.ok(source.includes('horas_trabalhadas_total'))
 assert.ok(source.includes('percentual_retrabalho_disciplina'))
+
+const mockData = readFileSync(resolve('dashboard/lib/mockData.ts'), 'utf8')
+assert.match(mockData, /mockRetrabalhos[\s\S]*horas_trabalhadas_total/)
+assert.match(mockData, /mockRetrabalhos[\s\S]*horas_retrabalho_total/)
 
 for (const textoAntigo of [
   'retrabalhos ÷ projetos',
