@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { 
   Briefcase, 
@@ -8,6 +8,7 @@ import {
   Play, 
   AlertTriangle,
   TrendingUp,
+  Users,
 } from 'lucide-react'
 import Header from '@/components/Header'
 import KPICard from '@/components/KPICard'
@@ -15,6 +16,7 @@ import AtrasosTable from '@/components/AtrasosTable'
 import RetrabalhoDetalhesModal from '@/components/RetrabalhoDetalhesModal'
 import ProjetosTable from '@/components/ProjetosTable'
 import EngenheirosTable from '@/components/EngenheirosTable'
+import EngenheirosExecucaoTable from '@/components/EngenheirosExecucaoTable'
 import AreasTable from '@/components/AreasTable'
 import AtribuirTask, { TaskData } from '@/components/AtribuirTask'
 import CriarProjeto from '@/components/CriarProjeto'
@@ -66,6 +68,7 @@ import {
   Engenheiro,
   Area,
 } from '@/lib/supabase'
+import { buildEngenheirosExecucao } from '@/lib/engenheirosExecucao'
 
 const ProjetosStatusChart = dynamic(() => import('@/components/ProjetosStatusChart'), {
   ssr: false,
@@ -101,6 +104,7 @@ export default function DashboardClient() {
   const [showProjetosExecucaoModal, setShowProjetosExecucaoModal] = useState(false)
   const [showAtrasadosModal, setShowAtrasadosModal] = useState(false)
   const [showEngenheirosModal, setShowEngenheirosModal] = useState(false)
+  const [showEngenheirosExecucaoModal, setShowEngenheirosExecucaoModal] = useState(false)
   const [showAreasModal, setShowAreasModal] = useState(false)
   const [showAtribuirTaskModal, setShowAtribuirTaskModal] = useState(false)
   const [showCriarProjetoModal, setShowCriarProjetoModal] = useState(false)
@@ -111,6 +115,11 @@ export default function DashboardClient() {
   const [projetoSelecionadoId, setProjetoSelecionadoId] = useState<string | null>(null)
   const [projetoSelecionadoCodigo, setProjetoSelecionadoCodigo] = useState<string | undefined>()
   const [projetoSelecionadoCliente, setProjetoSelecionadoCliente] = useState<string | undefined>()
+  const engenheirosExecucao = useMemo(() => buildEngenheirosExecucao(projetos), [projetos])
+  const totalTarefasEngenheirosExecucao = engenheirosExecucao.reduce(
+    (acc, grupo) => acc + grupo.total_tarefas,
+    0
+  )
 
   const loadData = async () => {
     setIsLoading(true)
@@ -377,7 +386,7 @@ export default function DashboardClient() {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">
             Visão Geral da Produção
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
             <KPICard
               title="Total de Projetos"
               value={visaoGeral?.total_projetos || 0}
@@ -401,6 +410,14 @@ export default function DashboardClient() {
               icon={Play}
               color="warning"
               onClick={() => setShowProjetosExecucaoModal(true)}
+            />
+            <KPICard
+              title="Engenheiros em Execução"
+              value={engenheirosExecucao.length}
+              subtitle={`${totalTarefasEngenheirosExecucao} tarefa(s) em execução`}
+              icon={Users}
+              color="warning"
+              onClick={() => setShowEngenheirosExecucaoModal(true)}
             />
             <KPICard
               title="Atrasados"
@@ -469,6 +486,11 @@ export default function DashboardClient() {
           isOpen={showEngenheirosModal}
           onClose={() => setShowEngenheirosModal(false)}
           data={engenheiros}
+        />
+        <EngenheirosExecucaoTable
+          isOpen={showEngenheirosExecucaoModal}
+          onClose={() => setShowEngenheirosExecucaoModal(false)}
+          projetos={projetos}
         />
         <AreasTable
           isOpen={showAreasModal}
