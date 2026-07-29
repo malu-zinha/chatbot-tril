@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { X, UserPlus, AlertCircle, CheckCircle, TrendingUp, Calendar, Layers } from 'lucide-react'
-import { isCompatibilizacaoArea } from '@/lib/compatibilizacao'
+import { isCompatibilizacaoArea, isComplementoArea } from '@/lib/compatibilizacao'
 
 interface Engenheiro {
   eng_id: string
@@ -41,6 +41,7 @@ export interface TaskData {
   data_prevista: string
   pavimentos?: string[]
   instancia_label?: string
+  complemento_area_ref_id?: string | number
 }
 
 export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAtribuir }: AtribuirTaskProps) {
@@ -115,6 +116,8 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
   const melhorEngenheiro = engenheirosOrdenados[0]
   const areaUsaPavimentos = Boolean(selectedArea?.tem_etapas_pavimento)
   const areaCompatibilizacao = isCompatibilizacaoArea(selectedArea || undefined)
+  const areaComplemento = isComplementoArea(selectedArea || undefined)
+  const areasReferenciaComplemento = areas.filter((area) => !isComplementoArea(area))
 
   const normalizarPavimentos = () =>
     pavimentosText
@@ -173,12 +176,18 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
       return
     }
 
+    if (areaComplemento && !formData.complemento_area_ref_id) {
+      alert('Informe a disciplina que este complemento se refere')
+      return
+    }
+
     const instanciaLabel = formData.instancia_label?.trim().replace(/\s+/g, ' ')
 
     onAtribuir({
       ...(formData as TaskData),
       pavimentos: areaUsaPavimentos ? pavimentos : [],
       instancia_label: areaCompatibilizacao ? instanciaLabel : undefined,
+      complemento_area_ref_id: areaComplemento ? formData.complemento_area_ref_id : undefined,
     })
     
     // Limpar formulário
@@ -286,6 +295,7 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                         ...formData,
                         area_id: isNaN(areaId) ? (raw as any) : areaId,
                         instancia_label: '',
+                        complemento_area_ref_id: '',
                       })
                       setSelectedArea(area || null)
                       setPavimentosText('')
@@ -346,6 +356,37 @@ export default function AtribuirTask({ isOpen, onClose, engenheiros, areas, onAt
                     />
                     <p className="mt-1 text-xs text-gray-500">
                       Se ficar vazio, o sistema numera automaticamente.
+                    </p>
+                  </div>
+                )}
+
+                {areaComplemento && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Disciplina do complemento *
+                    </label>
+                    <select
+                      value={formData.complemento_area_ref_id ?? ''}
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        const areaId = Number(raw)
+                        setFormData({
+                          ...formData,
+                          complemento_area_ref_id: isNaN(areaId) ? (raw as any) : areaId,
+                        })
+                      }}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-tecpred-primary focus:border-transparent"
+                      required={areaComplemento}
+                    >
+                      <option value="">Selecione a disciplina referida</option>
+                      {areasReferenciaComplemento.map((area) => (
+                        <option key={area.area_id} value={area.area_id}>
+                          {area.descricao ?? area.codigo ?? 'Area'}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      O sistema vai numerar automaticamente este complemento para a disciplina selecionada.
                     </p>
                   </div>
                 )}

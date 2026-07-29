@@ -6,6 +6,7 @@ export interface ProjetoAreaLike {
 }
 
 export const COMPATIBILIZACAO_CODIGO = 'COMPATIBILIZACAO'
+export const COMPLEMENTO_CODIGO = 'COMPLEMENTO'
 const COMPATIBILIZACAO_LABEL = 'Compatibilização'
 
 export function isCompatibilizacaoArea(area?: {
@@ -16,6 +17,16 @@ export function isCompatibilizacaoArea(area?: {
   const descricao = area?.descricao?.trim().toLowerCase()
 
   return codigo === COMPATIBILIZACAO_CODIGO || descricao === 'compatibilização'
+}
+
+export function isComplementoArea(area?: {
+  codigo?: string | null
+  descricao?: string | null
+}) {
+  const codigo = area?.codigo?.trim().toUpperCase()
+  const descricao = area?.descricao?.trim().toLowerCase()
+
+  return codigo === COMPLEMENTO_CODIGO || descricao === 'complemento'
 }
 
 export function normalizarInstanciaCompatibilizacao(
@@ -37,7 +48,11 @@ export function getProjetoAreaDisplayName(item: ProjetoAreaLike) {
     item.area_codigo?.trim().toUpperCase() === COMPATIBILIZACAO_CODIGO ||
     item.area_descricao.trim().toLowerCase() === 'compatibilização'
 
-  if (!isCompatibilizacao) return item.area_descricao
+  const isComplemento =
+    item.area_codigo?.trim().toUpperCase() === COMPLEMENTO_CODIGO ||
+    item.area_descricao.trim().toLowerCase() === 'complemento'
+
+  if (!isCompatibilizacao && !isComplemento) return item.area_descricao
 
   return item.instancia_label?.trim() || item.area_descricao
 }

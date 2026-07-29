@@ -661,6 +661,7 @@ export interface AtribuirProjetoComPavimentosParams {
   data_prevista: string
   pavimentos?: string[]
   instancia_label?: string
+  complemento_area_ref_id?: string | number
 }
 
 export async function atribuirProjetoComPavimentos(
@@ -682,6 +683,7 @@ export async function atribuirProjetoComPavimentos(
     p_data_conclusao_prevista: params.data_prevista || null,
     p_pavimentos: params.pavimentos || [],
     p_instancia_label: params.instancia_label || null,
+    p_complemento_area_ref_id: params.complemento_area_ref_id ? String(params.complemento_area_ref_id) : null,
   })
 
   if (error) {
