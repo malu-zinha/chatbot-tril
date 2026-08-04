@@ -1,9 +1,10 @@
 import dotenv from 'dotenv';
 import { NotificationService } from '../integrations/notifications/notificationService.ts';
+import { WhatsAppService, type WhatsAppProvider } from '../integrations/whatsapp/whatsappService.ts';
 
 dotenv.config();
 
-class FakeWhatsAppService {
+class FakeWhatsAppProvider implements WhatsAppProvider {
   sent: Array<{ to: string; message: string }> = [];
 
   async sendMessage(to: string, message: string): Promise<boolean> {
@@ -17,16 +18,17 @@ class FakeWhatsAppService {
 }
 
 async function main() {
-  const fake = new FakeWhatsAppService();
-  const service = new NotificationService(fake as any);
+  const fakeProvider = new FakeWhatsAppProvider();
+  const whatsappService = new WhatsAppService(fakeProvider);
+  const service = new NotificationService(whatsappService);
 
   await service.sendMorningNotifications();
 
-  if (fake.sent.length === 0) {
+  if (fakeProvider.sent.length === 0) {
     throw new Error('Dry-run nao gerou nenhuma notificacao matinal');
   }
 
-  console.log(`test-notifications-dry-run: OK (${fake.sent.length} notificacoes simuladas)`);
+  console.log(`test-notifications-dry-run: OK (${fakeProvider.sent.length} notificacoes simuladas)`);
 }
 
 main().catch((error) => {

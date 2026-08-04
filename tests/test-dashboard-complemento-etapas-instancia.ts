@@ -6,6 +6,21 @@ const migrationPath = resolve('supabase/migrations/20260729_complemento_etapas_i
 assert.ok(existsSync(migrationPath), 'migration de etapas por instancia deve existir')
 
 const sql = readFileSync(migrationPath, 'utf8')
+const zeroUuid = '00000000-0000-0000-0000-000000000000'
+
+function functionBody(name: string): string {
+  const match = sql.match(new RegExp(`CREATE OR REPLACE FUNCTION ${name}\\([\\s\\S]*?\\$\\$ LANGUAGE plpgsql;`, 'i'))
+  assert.ok(match, `funcao ${name} deve existir na migration`)
+  return match[0]
+}
+
+function coalesceFilterFor(identifier: string): RegExp {
+  const escapedIdentifier = identifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(
+    `COALESCE\\(${escapedIdentifier},\\s*'${zeroUuid}'::UUID\\)\\s*=\\s*COALESCE\\(p_eng_projeto_id,\\s*'${zeroUuid}'::UUID\\)`,
+    'i'
+  )
+}
 
 assert.match(
   sql,
@@ -71,6 +86,63 @@ assert.match(
   sql,
   /PERFORM seed_pavimentos_etapas\(NEW\.projeto_id, NEW\.area_id, NEW\.id\)/i,
   'trigger de seed deve usar a instancia da atribuicao'
+)
+
+const ajustarResiduoPesos = functionBody('ajustar_residuo_pesos')
+const calcularProgressoArea = functionBody('calcular_progresso_area')
+const configurarPavimentosCustomizadosArea = functionBody('configurar_pavimentos_customizados_area')
+const instanceAwareFunctions = [
+  ajustarResiduoPesos,
+  calcularProgressoArea,
+  configurarPavimentosCustomizadosArea,
+].join('\n')
+
+assert.doesNotMatch(
+  instanceAwareFunctions,
+  /p_eng_projeto_id\s+IS\s+NULL\s+OR\s+(?:pp\.|peg\.)?eng_projeto_id\s*=\s*p_eng_projeto_id/i,
+  'filtros por instancia nao devem tratar p_eng_projeto_id NULL como coringa'
+)
+
+assert.match(
+  configurarPavimentosCustomizadosArea,
+  /DELETE FROM projeto_pavimentos[\s\S]*AND COALESCE\(eng_projeto_id,\s*'00000000-0000-0000-0000-000000000000'::UUID\)\s*=\s*COALESCE\(p_eng_projeto_id,\s*'00000000-0000-0000-0000-000000000000'::UUID\)/i,
+  'DELETE de pavimentos customizados deve limitar pela instancia, tratando NULL como legado'
+)
+
+assert.match(
+  configurarPavimentosCustomizadosArea,
+  /UPDATE projeto_etapas_globais[\s\S]*SET peso = v_peso_n1[\s\S]*AND COALESCE\(eng_projeto_id,\s*'00000000-0000-0000-0000-000000000000'::UUID\)\s*=\s*COALESCE\(p_eng_projeto_id,\s*'00000000-0000-0000-0000-000000000000'::UUID\)/i,
+  'UPDATE de etapas globais customizadas deve limitar pela instancia, tratando NULL como legado'
+)
+
+assert.match(
+  configurarPavimentosCustomizadosArea,
+  coalesceFilterFor('pp.eng_projeto_id'),
+  'checagem de progresso em pavimentos deve limitar pela instancia'
+)
+
+assert.match(
+  configurarPavimentosCustomizadosArea,
+  coalesceFilterFor('peg.eng_projeto_id'),
+  'checagem de progresso em etapas globais deve limitar pela instancia'
+)
+
+assert.match(
+  ajustarResiduoPesos,
+  coalesceFilterFor('pp.eng_projeto_id'),
+  'calculo do residuo deve somar pavimentos somente da instancia alvo'
+)
+
+assert.match(
+  ajustarResiduoPesos,
+  coalesceFilterFor('peg.eng_projeto_id'),
+  'calculo do residuo deve somar etapas globais somente da instancia alvo'
+)
+
+assert.match(
+  calcularProgressoArea,
+  coalesceFilterFor('eng_projeto_id'),
+  'calculo de progresso deve limitar estruturas pela instancia'
 )
 
 console.log('test-dashboard-complemento-etapas-instancia: OK')

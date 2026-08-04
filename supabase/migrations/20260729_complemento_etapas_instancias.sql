@@ -284,10 +284,8 @@ BEGIN
             WHERE pp.projeto_id = p_projeto_id
               AND pp.area_id = p_area_id
               AND pp.ativo = true
-              AND (
-                  p_eng_projeto_id IS NULL
-                  OR pp.eng_projeto_id = p_eng_projeto_id
-              )
+              AND COALESCE(pp.eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID) =
+                  COALESCE(p_eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID)
         ), 0) +
         COALESCE((
             SELECT SUM(peg.peso)
@@ -295,10 +293,8 @@ BEGIN
             WHERE peg.projeto_id = p_projeto_id
               AND peg.area_id = p_area_id
               AND peg.ativo = true
-              AND (
-                  p_eng_projeto_id IS NULL
-                  OR peg.eng_projeto_id = p_eng_projeto_id
-              )
+              AND COALESCE(peg.eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID) =
+                  COALESCE(p_eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID)
         ), 0)
     INTO v_soma_n1;
 
@@ -310,10 +306,8 @@ BEGIN
         WHERE projeto_id = p_projeto_id
           AND area_id = p_area_id
           AND ativo = true
-          AND (
-              p_eng_projeto_id IS NULL
-              OR eng_projeto_id = p_eng_projeto_id
-          )
+          AND COALESCE(eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID) =
+              COALESCE(p_eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID)
         ORDER BY ordem DESC
         LIMIT 1;
 
@@ -327,10 +321,8 @@ BEGIN
             WHERE projeto_id = p_projeto_id
               AND area_id = p_area_id
               AND ativo = true
-              AND (
-                  p_eng_projeto_id IS NULL
-                  OR eng_projeto_id = p_eng_projeto_id
-              )
+              AND COALESCE(eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID) =
+                  COALESCE(p_eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID)
             ORDER BY created_at DESC
             LIMIT 1;
 
@@ -348,10 +340,8 @@ BEGIN
         WHERE projeto_id = p_projeto_id
           AND area_id = p_area_id
           AND ativo = true
-          AND (
-              p_eng_projeto_id IS NULL
-              OR eng_projeto_id = p_eng_projeto_id
-          )
+          AND COALESCE(eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID) =
+              COALESCE(p_eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID)
     LOOP
         SELECT COALESCE(SUM(peso), 0) INTO v_soma_etapa
         FROM pavimento_etapas
@@ -396,10 +386,8 @@ BEGIN
         WHERE projeto_id = p_projeto_id
           AND area_id = p_area_id
           AND ativo = true
-          AND (
-              p_eng_projeto_id IS NULL
-              OR eng_projeto_id = p_eng_projeto_id
-          )
+          AND COALESCE(eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID) =
+              COALESCE(p_eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID)
     LOOP
         SELECT COALESCE(SUM(peso), 0) INTO v_interno
         FROM pavimento_etapas
@@ -416,10 +404,8 @@ BEGIN
       AND area_id = p_area_id
       AND concluida = true
       AND ativo = true
-      AND (
-          p_eng_projeto_id IS NULL
-          OR eng_projeto_id = p_eng_projeto_id
-      );
+      AND COALESCE(eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID) =
+          COALESCE(p_eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID);
 
     v_total := v_contrib_pav + v_contrib_glob;
     IF v_total > 100 THEN
@@ -624,20 +610,16 @@ BEGIN
         JOIN pavimento_etapas pe ON pe.pavimento_id = pp.pavimento_id
         WHERE pp.projeto_id = p_projeto_id
           AND pp.area_id = p_area_id
-          AND (
-              p_eng_projeto_id IS NULL
-              OR pp.eng_projeto_id = p_eng_projeto_id
-          )
+          AND COALESCE(pp.eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID) =
+              COALESCE(p_eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID)
           AND pe.concluida = true
     ) OR EXISTS (
         SELECT 1
         FROM projeto_etapas_globais peg
         WHERE peg.projeto_id = p_projeto_id
           AND peg.area_id = p_area_id
-          AND (
-              p_eng_projeto_id IS NULL
-              OR peg.eng_projeto_id = p_eng_projeto_id
-          )
+          AND COALESCE(peg.eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID) =
+              COALESCE(p_eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID)
           AND peg.concluida = true
     ) THEN
         RAISE EXCEPTION 'Nao e possivel substituir pavimentos de uma disciplina com progresso concluido';
@@ -646,20 +628,16 @@ BEGIN
     DELETE FROM projeto_pavimentos
     WHERE projeto_id = p_projeto_id
       AND area_id = p_area_id
-      AND (
-          p_eng_projeto_id IS NULL
-          OR eng_projeto_id = p_eng_projeto_id
-      );
+      AND COALESCE(eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID) =
+          COALESCE(p_eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID);
 
     UPDATE projeto_etapas_globais
     SET peso = v_peso_n1
     WHERE projeto_id = p_projeto_id
       AND area_id = p_area_id
       AND ativo = true
-      AND (
-          p_eng_projeto_id IS NULL
-          OR eng_projeto_id = p_eng_projeto_id
-      );
+      AND COALESCE(eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID) =
+          COALESCE(p_eng_projeto_id, '00000000-0000-0000-0000-000000000000'::UUID);
 
     FOREACH v_nome IN ARRAY v_nomes LOOP
         v_ordem := v_ordem + 1;

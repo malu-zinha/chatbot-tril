@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
-const notificationService = readFileSync(resolve('integrations/notifications/notificationService.ts'), 'utf8');
-const supabaseService = readFileSync(resolve('integrations/supabase/supabaseService.ts'), 'utf8');
+const notificationService = readFileSync(
+  new URL('../integrations/notifications/notificationService.ts', import.meta.url),
+  'utf8'
+);
+const supabaseService = readFileSync(
+  new URL('../integrations/supabase/supabaseService.ts', import.meta.url),
+  'utf8'
+);
 
 assert.match(
   notificationService,
