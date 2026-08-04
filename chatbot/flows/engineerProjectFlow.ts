@@ -112,7 +112,7 @@ interface FlowState {
   // Dados temporarios do progresso ponderado
   selectedProjetoId?: string;
   selectedProjetoCodigo?: string;
-  areasDisponiveisProjeto?: Array<{ area_id: string | number; area: string }>;
+  areasDisponiveisProjeto?: Array<{ id: string; area_id: string | number; area: string; pct?: number }>;
   pavimentosDisponiveis?: any[];
   etapasDisponiveis?: any[];
   selectedPavimentoId?: string;
@@ -268,13 +268,13 @@ export class EngineerProjectFlow {
             // Percentual da disciplina (projeto+área): pavimentos + globais.
             // O status (texto) deriva do percentual — fonte única, igual ao ✅ e ao dashboard.
             // (status_id é coluna morta: marcação manual de status foi removida.)
-            const percentualFinal = await this.supabase.buscarProgressoArea(atrib.projeto_id, String(atrib.area_id));
+            const percentualFinal = await this.supabase.buscarProgressoArea(atrib.projeto_id, String(atrib.area_id), atrib.id);
 
             atribuicoesEnriquecidas.push({
               id: atrib.id,  // eng_projeto_id
               codigo: projeto?.codigo_projeto || '',
               cliente: projeto?.cliente || '',
-              area: area?.descricao || '',
+              area: atrib.instancia_label || area?.descricao || '',
               area_id: atrib.area_id,
               status: statusPorPercentual(percentualFinal),
               projeto_id: atrib.projeto_id,
@@ -1036,12 +1036,12 @@ _Digite o número da opção desejada_`;
    * Remove atribuições onde a (projeto, área) já está 100% concluída.
    * Usado nas listagens onde o engenheiro escolhe um projeto para AGIR.
    */
-  private async filtrarAtribuicoesPendentes<T extends { projeto_id: string; area_id: string | number }>(
+  private async filtrarAtribuicoesPendentes<T extends { id: string; projeto_id: string; area_id: string | number }>(
     atribuicoes: T[]
   ): Promise<T[]> {
     const result: T[] = [];
     for (const atrib of atribuicoes) {
-      const pavs = await this.supabase.buscarPavimentosComEtapas(atrib.projeto_id, String(atrib.area_id));
+      const pavs = await this.supabase.buscarPavimentosComEtapas(atrib.projeto_id, String(atrib.area_id), atrib.id);
       // sem pavimentos configurados → manter (engenheiro precisa ver a mensagem)
       if (pavs.length === 0) {
         result.push(atrib);
@@ -1071,10 +1071,10 @@ _Digite o número da opção desejada_`;
    * Retorna false se não há pavimentos configurados (não-configurado ≠ concluído).
    */
   private async _isAtribuicaoConcluida(
-    atrib: { projeto_id: string; area_id: string | number }
+    atrib: { id: string; projeto_id: string; area_id: string | number }
   ): Promise<boolean> {
     // Fonte única: percentual ponderado da disciplina (pavimentos + globais)
-    return (await this.supabase.buscarProgressoArea(atrib.projeto_id, String(atrib.area_id))) >= 100;
+    return (await this.supabase.buscarProgressoArea(atrib.projeto_id, String(atrib.area_id), atrib.id)) >= 100;
   }
 
   // =====================================================
@@ -1475,11 +1475,13 @@ _Digite o número da opção desejada_`;
       try {
         const pavimentos = await this.supabase.buscarPavimentosComEtapas(
           this.state.selectedProjetoId,
-          this.state.selectedAreaId
+          this.state.selectedAreaId,
+          this.state.selectedAtribuicaoId
         );
         const globais = await this.supabase.buscarEtapasGlobais(
           this.state.selectedProjetoId,
-          this.state.selectedAreaId
+          this.state.selectedAreaId,
+          this.state.selectedAtribuicaoId
         );
         const temPendencia =
           filterPavimentosPendentes(pavimentos as any).length > 0 ||
@@ -1673,22 +1675,17 @@ _Digite o número da opção desejada_`;
     this.state.selectedProjetoCodigo = projeto.codigo;
 
     // Filtrar áreas do engenheiro neste projeto
-    const todas = ((this.state as any).todasAtribuicoes || []) as Array<{ projeto_id: string; area_id: string | number; area: string }>;
+    const todas = ((this.state as any).todasAtribuicoes || []) as Array<{ id: string; projeto_id: string; area_id: string | number; area: string }>;
     const areasDoProjeto = todas
       .filter(a => a.projeto_id === projeto.projeto_id)
-      .map(a => ({ area_id: a.area_id, area: a.area }));
-
-    // Deduplicar áreas (caso haja duplicatas)
-    const areasUnicasTodas = Array.from(
-      new Map(areasDoProjeto.map(a => [String(a.area_id), a])).values()
-    );
+      .map(a => ({ id: a.id, area_id: a.area_id, area: a.area }));
 
     // Listar TODAS as áreas do engenheiro neste projeto, com o andamento de cada uma.
     // Concluídas (100%) aparecem com ✅, mas não são selecionáveis para marcar.
-    const areasComPct: Array<{ area_id: string | number; area: string; pct: number }> = [];
-    for (const a of areasUnicasTodas) {
-      const pct = await this.supabase.buscarProgressoArea(projeto.projeto_id, String(a.area_id));
-      areasComPct.push({ area_id: a.area_id, area: a.area, pct });
+    const areasComPct: Array<{ id: string; area_id: string | number; area: string; pct: number }> = [];
+    for (const a of areasDoProjeto) {
+      const pct = await this.supabase.buscarProgressoArea(projeto.projeto_id, String(a.area_id), a.id);
+      areasComPct.push({ id: a.id, area_id: a.area_id, area: a.area, pct });
     }
 
     if (areasComPct.every(a => a.pct >= 100)) {
@@ -1736,15 +1733,17 @@ _Digite o número da opção desejada_`;
     }
 
     this.state.selectedAreaId = String(area.area_id);
+    this.state.selectedAtribuicaoId = area.id;
     return await this.carregarPavimentosDoProjeto();
   }
 
   private async carregarPavimentosDoProjeto(): Promise<FlowResult> {
     const projetoId = this.state.selectedProjetoId!;
     const areaId = this.state.selectedAreaId;
+    const atribId = this.state.selectedAtribuicaoId;
 
-    const pavimentos = await this.supabase.buscarPavimentosComEtapas(projetoId, areaId);
-    const globais = await this.supabase.buscarEtapasGlobais(projetoId, areaId);
+    const pavimentos = await this.supabase.buscarPavimentosComEtapas(projetoId, areaId, atribId);
+    const globais = await this.supabase.buscarEtapasGlobais(projetoId, areaId, atribId);
 
     const pavPend = filterPavimentosPendentes(pavimentos as any);
     const globPend = filterGlobaisPendentes(globais as any);
@@ -1757,7 +1756,7 @@ _Digite o número da opção desejada_`;
 
     // Nada pendente: já está tudo concluído
     if (pavPend.length === 0 && globPend.length === 0) {
-      const pct = await this.supabase.buscarProgressoArea(projetoId, String(areaId));
+      const pct = await this.supabase.buscarProgressoArea(projetoId, String(areaId), atribId);
       return {
         mensagem: `✅ Todas as etapas da disciplina já estão concluídas!\n\n⚡ Andamento: ${pct}%\n\n_Digite "menu" para voltar_`,
         finalizado: true
@@ -1847,7 +1846,7 @@ _Digite o número da opção desejada_`;
       ok += r.ok; falhas += r.falhas.length;
     }
 
-    const pct = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId));
+    const pct = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId), this.state.selectedAtribuicaoId);
     let mensagem = `✅ *${ok} etapa(s) marcada(s)!*\n\n`;
     if (falhas > 0) mensagem += `⚠️ ${falhas} falharam ao gravar.\n\n`;
     mensagem += pct >= 100
@@ -1903,7 +1902,7 @@ _Digite o número da opção desejada_`;
     if (opcao === '1') {
       const ids = ((this.state as any).globalIdsSelecionados ?? []) as string[];
       const result = await this.supabase.marcarEtapasGlobaisBatch(ids, true);
-      const pct = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId));
+      const pct = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId), this.state.selectedAtribuicaoId);
 
       let mensagem = `✅ *${result.ok} etapa(s) geral(is) marcada(s)!*\n\n`;
       if (result.falhas.length > 0) mensagem += `⚠️ ${result.falhas.length} falharam ao gravar.\n\n`;
@@ -1929,7 +1928,7 @@ _Digite o número da opção desejada_`;
   private async renderProgressoSemEtapasConcluir(): Promise<FlowResult> {
     const projetoId = this.state.selectedProjetoId!;
     const codigo = this.state.selectedProjetoCodigo!;
-    const pct = await this.supabase.buscarProgressoArea(projetoId, String(this.state.selectedAreaId));
+    const pct = await this.supabase.buscarProgressoArea(projetoId, String(this.state.selectedAreaId), this.state.selectedAtribuicaoId);
     const jaConcluido = pct >= 100;
 
     return {
@@ -1957,8 +1956,8 @@ _Digite o número da opção desejada_`;
     const projetoId = this.state.selectedProjetoId!;
     const codigo = this.state.selectedProjetoCodigo!;
     const areaId = String(this.state.selectedAreaId);
-    const jaConcluido = (await this.supabase.buscarProgressoArea(projetoId, areaId)) >= 100;
-    const novoValor = await this.supabase.marcarAreaConcluida(projetoId, areaId, !jaConcluido);
+    const jaConcluido = (await this.supabase.buscarProgressoArea(projetoId, areaId, this.state.selectedAtribuicaoId)) >= 100;
+    const novoValor = await this.supabase.marcarAreaConcluida(projetoId, areaId, !jaConcluido, this.state.selectedAtribuicaoId);
 
     if (novoValor === null) {
       return {
@@ -2175,7 +2174,7 @@ _Digite o número da opção desejada_`;
     if (opcao === '1') {
       const ids = this.state.etapaIdsSelecionados ?? [];
       const result = await this.supabase.marcarEtapasBatch(ids, true);
-      const progresso = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId));
+      const progresso = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId), this.state.selectedAtribuicaoId);
 
       let mensagem = `✅ *${result.ok} etapa(s) marcada(s) como concluída(s)!*\n\n`;
       if (result.falhas.length > 0) {
@@ -2277,7 +2276,7 @@ _Digite o número da opção desejada_`;
     }
 
     // Buscar progresso atualizado (trigger já recalculou)
-    const progresso = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId));
+    const progresso = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId), this.state.selectedAtribuicaoId);
 
     let mensagem = `✅ Etapa marcada como concluída!\n\n`;
     mensagem += `📐 *${this.state.selectedProjetoCodigo}*\n`;
@@ -2304,7 +2303,8 @@ _Digite o número da opção desejada_`;
       // Recarregar pavimentos com etapas pendentes atualizadas
       const pavimentos = await this.supabase.buscarPavimentosComEtapas(
         this.state.selectedProjetoId!,
-        this.state.selectedAreaId
+        this.state.selectedAreaId,
+        this.state.selectedAtribuicaoId
       );
 
       const pavimentoAtual = pavimentos.find(
@@ -2316,7 +2316,7 @@ _Digite o número da opção desejada_`;
         : [];
 
       if (etapasPendentes.length === 0) {
-        const progresso = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId));
+        const progresso = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId), this.state.selectedAtribuicaoId);
         return {
           mensagem: `✅ Todas as etapas do pavimento *${this.state.selectedPavimentoNome}* já estão concluídas!\n\n⚡ *Andamento: ${progresso ?? 0}%*\n\n_Digite "menu" para voltar ao menu principal_`,
           finalizado: true
@@ -2433,7 +2433,7 @@ _Digite o número da opção desejada_`;
     }
 
     // Buscar progresso atualizado (trigger já recalculou)
-    const progresso = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId));
+    const progresso = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId), this.state.selectedAtribuicaoId);
 
     let mensagem = `✅ Etapa marcada como concluída!\n\n`;
     mensagem += `🏗️ Pavimento: ${this.state.selectedPavimentoNome}\n`;
@@ -2455,12 +2455,13 @@ _Digite o número da opção desejada_`;
       // Recarregar pavimentos com etapas pendentes atualizadas
       const pavimentos = await this.supabase.buscarPavimentosComEtapas(
         this.state.selectedProjetoId!,
-        this.state.selectedAreaId
+        this.state.selectedAreaId,
+        this.state.selectedAtribuicaoId
       );
       const pavimentosComPendencias = filterPavimentosPendentes(pavimentos as any);
 
       if (pavimentosComPendencias.length === 0) {
-        const progresso = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId));
+        const progresso = await this.supabase.buscarProgressoArea(this.state.selectedProjetoId!, String(this.state.selectedAreaId), this.state.selectedAtribuicaoId);
         return {
           mensagem: `✅ Todas as etapas do projeto estão concluídas!\n\n⚡ *Andamento: ${progresso ?? 0}%*\n\nDescanse bem! 🌙`,
           finalizado: true
