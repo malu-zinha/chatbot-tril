@@ -1985,7 +1985,7 @@ export class OwnerFlow {
       const projeto = await getSupabase().buscarProjetoPorId(atrib.projeto_id);
       const area = await getSupabase().buscarAreaPorId(atrib.area_id);
       // pular atribuições onde a (projeto, área) já está 100% concluída
-      const pavs = await getSupabase().buscarPavimentosComEtapas(atrib.projeto_id, String(atrib.area_id));
+      const pavs = await getSupabase().buscarPavimentosComEtapas(atrib.projeto_id, String(atrib.area_id), atrib.id);
       const aindaPendente = pavs.length === 0 || pavs.some((p: any) =>
         (p.ativo !== false) && p.etapas.some((e: any) => !e.concluida && e.ativo !== false)
       );

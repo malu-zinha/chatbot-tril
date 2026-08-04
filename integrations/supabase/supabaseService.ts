@@ -95,6 +95,7 @@ export interface Atribuicao {
   data_conclusao?: string;
   status_id?: number;
   percentual_andamento: number;
+  percentual_ponderado?: number;
   tempo_trabalho_dias?: number;
   observacoes?: string;
   instancia_label?: string | null;
@@ -1833,7 +1834,7 @@ export class SupabaseService {
         .select(`
           id,
           area_id,
-          areas!inner(area_id, codigo, descricao),
+          areas!engenheiros_projetos_area_id_fkey!inner(area_id, codigo, descricao),
           engenheiros(nome)
         `)
         .eq('projeto_id', projetoId)
@@ -2366,7 +2367,7 @@ export class SupabaseService {
   /**
    * Busca todos os pavimentos de um projeto com suas etapas aninhadas
    */
-  async buscarPavimentosComEtapas(projetoId: string, areaId?: string | number): Promise<any[]> {
+  async buscarPavimentosComEtapas(projetoId: string, areaId?: string | number, engProjetoId?: string): Promise<any[]> {
     if (!this.connected) return [];
 
     try {
@@ -2378,6 +2379,9 @@ export class SupabaseService {
         .eq('ativo', true);
       if (areaId !== undefined && areaId !== null && areaId !== '') {
         pavQuery = pavQuery.eq('area_id', areaId);
+      }
+      if (engProjetoId) {
+        pavQuery = pavQuery.eq('eng_projeto_id', engProjetoId);
       }
       const { data: pavimentos, error: pavError } = await pavQuery.order('ordem', { ascending: true });
 
@@ -2426,7 +2430,7 @@ export class SupabaseService {
   /**
    * Busca todas as etapas globais de um projeto
    */
-  async buscarEtapasGlobais(projetoId: string, areaId?: string | number): Promise<any[]> {
+  async buscarEtapasGlobais(projetoId: string, areaId?: string | number, engProjetoId?: string): Promise<any[]> {
     if (!this.connected) return [];
 
     try {
@@ -2437,6 +2441,9 @@ export class SupabaseService {
         .eq('ativo', true);
       if (areaId !== undefined && areaId !== null && areaId !== '') {
         q = q.eq('area_id', areaId);
+      }
+      if (engProjetoId) {
+        q = q.eq('eng_projeto_id', engProjetoId);
       }
       const { data, error } = await q.order('created_at', { ascending: true });
 
@@ -2591,16 +2598,21 @@ export class SupabaseService {
    * Progresso ponderado de uma disciplina (projeto+área).
    * Fonte única do status/✅ por área (engenheiros_projetos.percentual_ponderado).
    */
-  async buscarProgressoArea(projetoId: string, areaId: string | number): Promise<number> {
+  async buscarProgressoArea(projetoId: string, areaId: string | number, engProjetoId?: string): Promise<number> {
     if (!this.connected) return 0;
     try {
-      const { data, error } = await this.supabase
+      let query = this.supabase
         .from('engenheiros_projetos')
         .select('percentual_ponderado')
         .eq('projeto_id', projetoId)
         .eq('area_id', areaId)
-        .eq('ativo', true)
-        .limit(1);
+        .eq('ativo', true);
+
+      if (engProjetoId) {
+        query = query.eq('id', engProjetoId);
+      }
+
+      const { data, error } = await query.limit(1);
       if (error) {
         console.error('❌ Erro ao buscar progresso da área:', error);
         return 0;
@@ -2643,13 +2655,14 @@ export class SupabaseService {
    * Marca (100%) ou reabre (0%) uma disciplina (projeto+área) SEM etapas configuradas.
    * Afeta apenas a área indicada; recalcula o roll-up do projeto via RPC.
    */
-  async marcarAreaConcluida(projetoId: string, areaId: string | number, concluido = true): Promise<number | null> {
+  async marcarAreaConcluida(projetoId: string, areaId: string | number, concluido = true, engProjetoId?: string): Promise<number | null> {
     if (!this.connected) return null;
     try {
       const { data, error } = await this.supabase.rpc('marcar_area_concluida', {
         p_projeto_id: projetoId,
         p_area_id: areaId,
         p_concluido: concluido,
+        p_eng_projeto_id: engProjetoId ?? null,
       });
       if (error) {
         console.error('❌ Erro ao marcar área como concluída:', error);

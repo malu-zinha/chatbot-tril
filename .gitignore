@@ -30,3 +30,6 @@ temp/
 *.ogg
 *.mp3
 *.wav
+
+auditoria-conclusoes-*.csv
+correcao-conclusoes-*.sql

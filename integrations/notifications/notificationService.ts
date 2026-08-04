@@ -175,14 +175,15 @@ export class NotificationService {
         eng_id,
         engenheiros!inner(eng_id, nome, telefone),
         projetos!inner(codigo_projeto, cliente, ativo),
-        areas!inner(descricao),
+        areas!engenheiros_projetos_area_id_fkey!inner(descricao),
         status_codes(descricao),
         percentual_andamento,
         percentual_ponderado,
         data_prevista
       `)
       .eq('ativo', true)
-      .eq('projetos.ativo', true);
+      .eq('projetos.ativo', true)
+      .eq('engenheiros.ativo', true);
 
     if (error) {
       console.error('❌ Erro ao buscar atribuições:', error);
@@ -203,6 +204,10 @@ export class NotificationService {
       const percentualPonderado = Number(atrib.percentual_ponderado ?? 0);
 
       if (!isPercentualPendente(percentualPonderado)) {
+        continue;
+      }
+
+      if (!engenheiro.telefone) {
         continue;
       }
 
