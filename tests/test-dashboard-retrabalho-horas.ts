@@ -35,4 +35,17 @@ for (const textoAntigo of [
 assert.ok(source.includes('horas de retrabalho'))
 assert.ok(source.includes('horas trabalhadas totais'))
 
+const chart = readFileSync(resolve('dashboard/components/RetrabalhoTaxaAreaChart.tsx'), 'utf8')
+assert.match(
+  chart,
+  /label:\s*formatEdificioDisciplina\(d,\s*true\)/,
+  'chart axis label must include building name via formatEdificioDisciplina'
+)
+assert.match(chart, /d\.cliente/, 'chart must use cliente as building name')
+assert.doesNotMatch(
+  chart,
+  /label:\s*`\$\{d\.codigo_projeto\} \/ \$\{d\.area_codigo\}`/,
+  'chart must not use codigo/area only for the axis label'
+)
+
 console.log('test-dashboard-retrabalho-horas: OK')
