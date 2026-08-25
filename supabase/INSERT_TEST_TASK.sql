@@ -27,7 +27,7 @@ SELECT
 FROM projetos
 CROSS JOIN areas
 WHERE projetos.codigo_projeto = 'PRJ-003'
-  AND areas.codigo = 'CANTEIRO_BT'
+  AND areas.codigo = 'CANT_OBRA_DRT'
 LIMIT 1
 ON CONFLICT (eng_id, projeto_id, area_id) DO NOTHING;
 
