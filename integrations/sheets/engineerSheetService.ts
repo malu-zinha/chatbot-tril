@@ -107,7 +107,6 @@ export const AREAS_PROJETO = [
   'rede de água',
   'furação e encamisamento',
   'esgoto',
-  'cant de obra BT',
   'cant de obra DRT',
   'cant de obra energisa',
   'subestação',
@@ -118,7 +117,9 @@ export const AREAS_PROJETO = [
   'exaustão',
   'solar fotovoltaico',
   'hidrossanitário piscina',
-  'solução sanitária'
+  'solução sanitária',
+  'cálculo de áreas',
+  'estação elevatória de esgoto'
 ];
 
 // TIPOS_OBRA - nova constante

@@ -25,6 +25,31 @@ function percentualColor(percentual: number, max: number): string {
   return '#ef4444'
 }
 
+function textoLimpo(valor?: string | null): string {
+  return (valor || '').trim().replace(/\s+/g, ' ')
+}
+
+function truncarNome(nome: string, max = 24): string {
+  if (nome.length <= max) return nome
+  return `${nome.slice(0, max - 1)}…`
+}
+
+function formatEdificioDisciplina(
+  d: Pick<RetrabalhoTaxaArea, 'cliente' | 'codigo_projeto' | 'area_codigo'>,
+  truncar = false
+): string {
+  const codigo = textoLimpo(d.codigo_projeto)
+  const nomeCompleto = textoLimpo(d.cliente) || codigo
+  const nome = truncar ? truncarNome(nomeCompleto) : nomeCompleto
+  const area = textoLimpo(d.area_codigo)
+
+  if (!codigo || nomeCompleto.toUpperCase() === codigo.toUpperCase()) {
+    return area ? `${nome} / ${area}` : nome
+  }
+
+  return area ? `${nome} (${codigo}) / ${area}` : `${nome} (${codigo})`
+}
+
 const CustomTooltip = ({
   active,
   payload,
@@ -37,9 +62,8 @@ const CustomTooltip = ({
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs max-w-[220px]">
       <p className="font-bold text-gray-900 mb-1">
-        {d.codigo_projeto} / {d.area}
+        {formatEdificioDisciplina(d)}
       </p>
-      <p className="text-gray-600">{d.cliente}</p>
       <div className="mt-2 space-y-1">
         <div className="flex justify-between gap-4">
           <span className="text-gray-500">Horas retrab.</span>
@@ -82,7 +106,7 @@ export default function RetrabalhoTaxaAreaChart({
   const maxPercentual = sorted[0]?.percentual_retrabalho_disciplina ?? 1
   const chartData = sorted.map((d) => ({
     ...d,
-    label: `${d.codigo_projeto} / ${d.area_codigo}`,
+    label: formatEdificioDisciplina(d, true),
   }))
   const chartHeight = Math.max(250, chartData.length * 44)
 
@@ -115,7 +139,7 @@ export default function RetrabalhoTaxaAreaChart({
           <YAxis
             type="category"
             dataKey="label"
-            width={120}
+            width={200}
             tick={{ fontSize: 11, fill: '#374151' }}
           />
           <Tooltip content={<CustomTooltip />} />

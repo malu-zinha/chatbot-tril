@@ -33,7 +33,7 @@ INSERT INTO areas (codigo, descricao, tempo_trabalho_dias) VALUES
 ('REDE_AGUA', 'Rede de Água', 12),
 ('FURACAO_ENCAMISAMENTO', 'Furação e Encamisamento', 5),
 ('ESGOTO', 'Esgoto', 10),
-('CANT_OBRA_BT', 'Canteiro de Obra BT', 5),
+('CANT_OBRA_DRT', 'Canteiro de Obra DRT', 5),
 ('DRT', 'DRT', 5),
 ('CANT_OBRA_ENERGISA', 'Canteiro de Obra Energisa', 5),
 ('SUBESTACAO', 'Subestação', 15),
@@ -44,7 +44,9 @@ INSERT INTO areas (codigo, descricao, tempo_trabalho_dias) VALUES
 ('EXAUSTAO', 'Exaustão', 8),
 ('SOLAR_FOTOVOLTAICO', 'Solar Fotovoltaico', 12),
 ('HIDRAULICO_PISCINA', 'Hidráulico Piscina', 8),
-('SOLUCAO_SANITARIA', 'Solução Sanitária', 7)
+('SOLUCAO_SANITARIA', 'Solução Sanitária', 7),
+('CALCULO_AREAS', 'Cálculo de Áreas', 0),
+('ESTACAO_ELEVATORIA_ESGOTO', 'Estação Elevatória de Esgoto', 0)
 ON CONFLICT (codigo) DO UPDATE SET
     descricao = EXCLUDED.descricao,
     tempo_trabalho_dias = EXCLUDED.tempo_trabalho_dias;
