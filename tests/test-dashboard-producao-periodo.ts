@@ -5,6 +5,8 @@ import { resolve } from 'node:path'
 const fetchSource = readFileSync(resolve('dashboard/lib/supabase.ts'), 'utf8')
 const cardSource = readFileSync(resolve('dashboard/components/ProducaoPeriodoCard.tsx'), 'utf8')
 const dashboardSource = readFileSync(resolve('dashboard/components/DashboardClient.tsx'), 'utf8')
+const headerSource = readFileSync(resolve('dashboard/components/Header.tsx'), 'utf8')
+const hookSource = readFileSync(resolve('dashboard/hooks/useIsOwnerActive.ts'), 'utf8')
 
 assert.match(fetchSource, /export async function fetchProducaoEngenheiroPeriodo/)
 assert.match(fetchSource, /from\('retrabalho_projetos'\)/)
@@ -16,6 +18,10 @@ assert.match(fetchSource, /horas_retrabalho/)
 assert.match(cardSource, /fetchProducaoEngenheiroPeriodo/)
 assert.match(cardSource, /Valor da hora/)
 assert.match(cardSource, /horas_trabalhadas_total \* taxa/)
+assert.match(cardSource, /type="text"/)
+assert.match(cardSource, /inputMode="decimal"/)
+assert.match(cardSource, /aria-label=\{`Valor da hora para \$\{row\.engenheiro\}`\}/)
+assert.doesNotMatch(cardSource, /type="number"/)
 assert.doesNotMatch(
   cardSource,
   /\.from\('engenheiros'\)[\s\S]*\.(insert|update|upsert)/,
@@ -29,10 +35,14 @@ assert.doesNotMatch(
 
 assert.match(dashboardSource, /ProducaoPeriodoCard/)
 assert.match(dashboardSource, /isOwner &&/)
-assert.match(
+assert.match(dashboardSource, /useIsOwnerActive/)
+assert.match(headerSource, /useIsOwnerActive/)
+assert.match(hookSource, /profile\?\.role === 'owner'/)
+assert.match(hookSource, /profile\?\.status === 'active'/)
+assert.doesNotMatch(
   dashboardSource,
   /profile\?\.role === 'owner'/,
-  'production block must be owner-only'
+  'owner check must live in useIsOwnerActive, not DashboardClient'
 )
 
 console.log('test-dashboard-producao-periodo: OK')

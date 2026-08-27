@@ -1,11 +1,12 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import { RefreshCw, LogOut, Shield } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { supabase, isSupabaseConfigured } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
+import { useIsOwnerActive } from '@/hooks/useIsOwnerActive'
 
 interface HeaderProps {
   lastUpdate: Date | null
@@ -15,32 +16,7 @@ interface HeaderProps {
 
 export default function Header({ lastUpdate, isLoading, isConnected = true }: HeaderProps) {
   const router = useRouter()
-  const [isOwner, setIsOwner] = useState(false)
-
-  // Mostra o link do painel admin só pro owner ativo. A RLS de user_profiles
-  // libera o select do próprio perfil; quem não for owner não vê o botão (e a
-  // página /admin também redireciona não-owners).
-  useEffect(() => {
-    if (!isSupabaseConfigured) return
-    let cancelled = false
-    ;(async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('role, status')
-        .eq('user_id', user.id)
-        .single()
-      if (!cancelled && profile?.role === 'owner' && profile?.status === 'active') {
-        setIsOwner(true)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const isOwner = useIsOwnerActive()
 
   async function handleLogout() {
     await supabase.auth.signOut()

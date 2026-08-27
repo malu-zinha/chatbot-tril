@@ -69,6 +69,7 @@ import {
   Area,
 } from '@/lib/supabase'
 import { buildEngenheirosExecucao } from '@/lib/engenheirosExecucao'
+import { useIsOwnerActive } from '@/hooks/useIsOwnerActive'
 
 const ProjetosStatusChart = dynamic(() => import('@/components/ProjetosStatusChart'), {
   ssr: false,
@@ -101,7 +102,7 @@ export default function DashboardClient() {
   const [areas, setAreas] = useState<Area[]>([])
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [isOwner, setIsOwner] = useState(false)
+  const isOwner = useIsOwnerActive()
   
   const [showProjetosModal, setShowProjetosModal] = useState(false)
   const [showProjetosConcluidosModal, setShowProjetosConcluidosModal] = useState(false)
@@ -210,28 +211,6 @@ export default function DashboardClient() {
       channels.forEach((channel) => {
         if (channel) supabase.removeChannel(channel)
       })
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!isSupabaseConfigured) return
-    let cancelled = false
-    ;(async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('role, status')
-        .eq('user_id', user.id)
-        .single()
-      if (!cancelled && profile?.role === 'owner' && profile?.status === 'active') {
-        setIsOwner(true)
-      }
-    })()
-    return () => {
-      cancelled = true
     }
   }, [])
 

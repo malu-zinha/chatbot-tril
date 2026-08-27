@@ -154,10 +154,10 @@ export default function ProducaoPeriodoCard() {
                     </td>
                     <td className="py-2 pr-4 text-right">
                       <input
-                        type="number"
-                        min={0}
-                        step="0.01"
+                        type="text"
                         inputMode="decimal"
+                        pattern="[0-9]+([,.][0-9]{0,2})?"
+                        aria-label={`Valor da hora para ${row.engenheiro}`}
                         placeholder="0,00"
                         value={taxas[row.eng_id] ?? ''}
                         onChange={(e) =>
