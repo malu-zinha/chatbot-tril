@@ -79,6 +79,9 @@ const CargaTrabalhoChart = dynamic(() => import('@/components/CargaTrabalhoChart
 const RetrabalhoCard = dynamic(() => import('@/components/RetrabalhoCard'), {
   ssr: false,
 })
+const ProducaoPeriodoCard = dynamic(() => import('@/components/ProducaoPeriodoCard'), {
+  ssr: false,
+})
 
 export default function DashboardClient() {
   const [visaoGeral, setVisaoGeral] = useState<VisaoGeral | null>(null)
@@ -98,6 +101,7 @@ export default function DashboardClient() {
   const [areas, setAreas] = useState<Area[]>([])
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isOwner, setIsOwner] = useState(false)
   
   const [showProjetosModal, setShowProjetosModal] = useState(false)
   const [showProjetosConcluidosModal, setShowProjetosConcluidosModal] = useState(false)
@@ -206,6 +210,28 @@ export default function DashboardClient() {
       channels.forEach((channel) => {
         if (channel) supabase.removeChannel(channel)
       })
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    let cancelled = false
+    ;(async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role, status')
+        .eq('user_id', user.id)
+        .single()
+      if (!cancelled && profile?.role === 'owner' && profile?.status === 'active') {
+        setIsOwner(true)
+      }
+    })()
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -567,6 +593,12 @@ export default function DashboardClient() {
           </div>
           <AtrasosTable data={atrasosEngenheiro} />
         </section>
+
+        {isOwner && (
+          <section className="mb-8">
+            <ProducaoPeriodoCard />
+          </section>
+        )}
 
         <section className="mb-8">
           <RetrabalhoCard
