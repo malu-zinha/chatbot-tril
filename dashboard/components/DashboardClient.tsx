@@ -69,6 +69,7 @@ import {
   Area,
 } from '@/lib/supabase'
 import { buildEngenheirosExecucao } from '@/lib/engenheirosExecucao'
+import { useIsOwnerActive } from '@/hooks/useIsOwnerActive'
 
 const ProjetosStatusChart = dynamic(() => import('@/components/ProjetosStatusChart'), {
   ssr: false,
@@ -77,6 +78,9 @@ const CargaTrabalhoChart = dynamic(() => import('@/components/CargaTrabalhoChart
   ssr: false,
 })
 const RetrabalhoCard = dynamic(() => import('@/components/RetrabalhoCard'), {
+  ssr: false,
+})
+const ProducaoPeriodoCard = dynamic(() => import('@/components/ProducaoPeriodoCard'), {
   ssr: false,
 })
 
@@ -98,6 +102,7 @@ export default function DashboardClient() {
   const [areas, setAreas] = useState<Area[]>([])
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const isOwner = useIsOwnerActive()
   
   const [showProjetosModal, setShowProjetosModal] = useState(false)
   const [showProjetosConcluidosModal, setShowProjetosConcluidosModal] = useState(false)
@@ -567,6 +572,12 @@ export default function DashboardClient() {
           </div>
           <AtrasosTable data={atrasosEngenheiro} />
         </section>
+
+        {isOwner && (
+          <section className="mb-8">
+            <ProducaoPeriodoCard />
+          </section>
+        )}
 
         <section className="mb-8">
           <RetrabalhoCard

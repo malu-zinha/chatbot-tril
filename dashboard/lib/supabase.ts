@@ -149,6 +149,13 @@ export interface RetrabalhoTaxaArea {
   percentual_retrabalho_disciplina: number
 }
 
+export interface ProducaoEngenheiroPeriodo {
+  eng_id: string
+  engenheiro: string
+  horas_trabalhadas_total: number
+  horas_retrabalho_total: number
+}
+
 export interface ProjetosStatus {
   status: string
   quantidade: number
@@ -450,6 +457,52 @@ export async function fetchRetrabalhoTaxaPorArea(): Promise<RetrabalhoTaxaArea[]
   }
 
   return (data as RetrabalhoTaxaArea[]) || []
+}
+
+export async function fetchProducaoEngenheiroPeriodo(
+  dataInicio: string,
+  dataFim: string
+): Promise<ProducaoEngenheiroPeriodo[]> {
+  const [horasRes, engRes] = await Promise.all([
+    supabase
+      .from('retrabalho_projetos')
+      .select('eng_id, horas_trabalhadas_total, horas_retrabalho')
+      .gte('data_retrabalho', dataInicio)
+      .lte('data_retrabalho', dataFim),
+    supabase.from('engenheiros').select('eng_id, nome'),
+  ])
+
+  if (horasRes.error) {
+    console.error('Erro ao buscar producao por periodo:', horasRes.error)
+    return []
+  }
+
+  if (engRes.error) {
+    console.error('Erro ao buscar nomes de engenheiros:', engRes.error)
+  }
+
+  const nomeMap = new Map((engRes.data || []).map((e) => [e.eng_id, e.nome]))
+  const agg = new Map<string, { horas: number; retrabalho: number }>()
+
+  for (const row of horasRes.data || []) {
+    if (!row.eng_id) continue
+    const horas = Number(row.horas_trabalhadas_total) || 0
+    const retrabalho = Number(row.horas_retrabalho) || 0
+    const prev = agg.get(row.eng_id) || { horas: 0, retrabalho: 0 }
+    prev.horas += horas
+    prev.retrabalho += retrabalho
+    agg.set(row.eng_id, prev)
+  }
+
+  return Array.from(agg.entries())
+    .filter(([, v]) => v.horas > 0)
+    .map(([eng_id, v]) => ({
+      eng_id,
+      engenheiro: nomeMap.get(eng_id) || 'Sem nome',
+      horas_trabalhadas_total: v.horas,
+      horas_retrabalho_total: v.retrabalho,
+    }))
+    .sort((a, b) => a.engenheiro.localeCompare(b.engenheiro, 'pt-BR'))
 }
 
 async function fetchRetrabalhoTaxaPorAreaLegado(): Promise<RetrabalhoTaxaArea[]> {
