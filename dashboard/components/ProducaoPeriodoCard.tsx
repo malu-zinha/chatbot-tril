@@ -3,9 +3,13 @@
 import React, { useState } from 'react'
 import { Calculator } from 'lucide-react'
 import {
-  fetchProducaoEngenheiroPeriodo,
-  ProducaoEngenheiroPeriodo,
+  fetchProducaoApontamentosPeriodo,
 } from '@/lib/supabase'
+import {
+  buildProducaoPeriodo,
+  getProducaoDetalheEngenheiro,
+  type ProducaoPeriodo,
+} from '@/lib/producaoPeriodo'
 
 function parseTaxa(raw: string): number | null {
   const t = raw.trim().replace(/\s/g, '').replace(',', '.')
@@ -26,7 +30,8 @@ function formatReais(valor: number): string {
 export default function ProducaoPeriodoCard() {
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
-  const [rows, setRows] = useState<ProducaoEngenheiroPeriodo[] | null>(null)
+  const [producao, setProducao] = useState<ProducaoPeriodo | null>(null)
+  const [selectedEngId, setSelectedEngId] = useState<string | null>(null)
   const [taxas, setTaxas] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -47,18 +52,23 @@ export default function ProducaoPeriodoCard() {
     }
 
     setIsLoading(true)
+    setSelectedEngId(null)
     try {
-      const data = await fetchProducaoEngenheiroPeriodo(dataInicio, dataFim)
-      setRows(data)
+      const data = await fetchProducaoApontamentosPeriodo(dataInicio, dataFim)
+      setProducao(buildProducaoPeriodo(data))
       setConsultou(true)
     } catch {
       setErrorMessage('Erro ao buscar producao no periodo.')
-      setRows(null)
+      setProducao(null)
     } finally {
       setIsLoading(false)
     }
   }
 
+  const rows = producao?.resumo || null
+  const detalheSelecionado = producao
+    ? getProducaoDetalheEngenheiro(producao, selectedEngId)
+    : null
   const totalHoras = (rows || []).reduce((sum, row) => sum + row.horas_trabalhadas_total, 0)
   const totalRetrabalho = (rows || []).reduce((sum, row) => sum + row.horas_retrabalho_total, 0)
   const totalValor = (rows || []).reduce((sum, row) => {
@@ -144,8 +154,21 @@ export default function ProducaoPeriodoCard() {
                 const taxa = parseTaxa(taxas[row.eng_id] || '')
                 const valor = taxa === null ? null : row.horas_trabalhadas_total * taxa
                 return (
-                  <tr key={row.eng_id} className="border-b last:border-0">
-                    <td className="py-2 pr-4 font-medium text-gray-900">{row.engenheiro}</td>
+                  <tr
+                    key={row.eng_id}
+                    className={`border-b last:border-0 transition-colors ${
+                      selectedEngId === row.eng_id ? 'bg-tecpred-light/70' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <td className="py-2 pr-4">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedEngId(row.eng_id)}
+                        className="text-left font-semibold text-tecpred-primary hover:text-tecpred-secondary hover:underline focus:outline-none focus:ring-2 focus:ring-tecpred-primary focus:ring-offset-2 rounded"
+                      >
+                        {row.engenheiro}
+                      </button>
+                    </td>
                     <td className="py-2 pr-4 text-right text-gray-900">
                       {formatHoras(row.horas_trabalhadas_total)}
                     </td>
@@ -185,6 +208,86 @@ export default function ProducaoPeriodoCard() {
               </tr>
             </tfoot>
           </table>
+
+          {detalheSelecionado && (
+            <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h4 className="text-base font-bold text-gray-900">
+                    Projetos no periodo - {detalheSelecionado.engenheiro}
+                  </h4>
+                  <p className="text-xs text-gray-500">
+                    {dataInicio} a {dataFim}
+                  </p>
+                </div>
+                <div className="text-sm text-gray-700 sm:text-right">
+                  <div className="font-semibold text-gray-900">
+                    {formatHoras(detalheSelecionado.horas_trabalhadas_total)}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {formatHoras(detalheSelecionado.horas_retrabalho_total)} de retrabalho
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {detalheSelecionado.projetos.map((projeto) => (
+                  <div
+                    key={projeto.projeto_id}
+                    className="rounded-lg border border-gray-200 bg-white p-3"
+                  >
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="font-semibold text-gray-900">
+                          {projeto.codigo_projeto}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {projeto.cliente}
+                        </div>
+                      </div>
+                      <div className="text-sm text-gray-700 sm:text-right">
+                        <span className="font-semibold text-gray-900">
+                          {formatHoras(projeto.horas_trabalhadas_total)}
+                        </span>
+                        <span className="mx-2 text-gray-300">|</span>
+                        <span>{formatHoras(projeto.horas_retrabalho_total)} retrab.</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="min-w-full text-xs">
+                        <thead>
+                          <tr className="border-b text-left text-gray-500">
+                            <th className="py-2 pr-4">Area / disciplina</th>
+                            <th className="py-2 pr-4 text-right">Horas trabalhadas</th>
+                            <th className="py-2 pl-4 text-right">Horas retrabalho</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {projeto.disciplinas.map((disciplina) => (
+                            <tr
+                              key={`${projeto.projeto_id}-${disciplina.area_id}-${disciplina.instancia_label || disciplina.area_codigo}`}
+                              className="border-b last:border-0"
+                            >
+                              <td className="py-2 pr-4 font-medium text-gray-800">
+                                {disciplina.disciplina}
+                              </td>
+                              <td className="py-2 pr-4 text-right text-gray-900">
+                                {formatHoras(disciplina.horas_trabalhadas_total)}
+                              </td>
+                              <td className="py-2 pl-4 text-right text-gray-600">
+                                {formatHoras(disciplina.horas_retrabalho_total)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
