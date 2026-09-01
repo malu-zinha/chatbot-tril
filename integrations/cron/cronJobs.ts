@@ -1,7 +1,7 @@
 // =====================================================
 // CRON JOBS: Notificações Automáticas
 // =====================================================
-// Gerencia agendamentos de notificações matinais (09:00) e noturnas (16:30)
+// Gerencia agendamentos de notificações matinais (11:20) e noturnas (16:30)
 // Executa de segunda a sexta-feira
 // =====================================================
 
@@ -12,7 +12,7 @@ import { getSupabaseService } from '../supabase/supabaseService.ts';
 import type { NotificationService } from '../notifications/notificationService.ts';
 import type { NotificationWorker } from '../notifications/notificationWorker.ts';
 
-export const MORNING_NOTIFICATION_CRON = '0 9 * * 1-5';
+export const MORNING_NOTIFICATION_CRON = '20 11 * * 1-5';
 export const NIGHT_NOTIFICATION_CRON = '30 16 * * 1-5';
 export const WORKER_NOTIFICATION_CRON = '*/1 * * * *';
 export const PROJECT_CLEANUP_CRON = '0 3 1 */6 *';
@@ -41,10 +41,10 @@ export class CronJobManager {
   start(): void {
     console.log('⏰ Iniciando Cron Jobs...\n');
 
-    // Notificação Matinal - 09:00 (seg-sex)
+    // Notificação Matinal - 11:20 (seg-sex)
     this.morningJob = cron.schedule(MORNING_NOTIFICATION_CRON, async () => {
       console.log('\n⏰ ========================================');
-      console.log('⏰ Cron Job: Notificações Matinais (09:00)');
+      console.log('⏰ Cron Job: Notificações Matinais (11:20)');
       console.log('⏰ ========================================\n');
       
       try {
@@ -111,7 +111,7 @@ export class CronJobManager {
 
     console.log('✅ Cron Jobs iniciados com sucesso!\n');
     console.log('📅 Agendamentos configurados:');
-    console.log('   🌅 Notificação Matinal:  09:00 (seg-sex)');
+    console.log('   🌅 Notificação Matinal:  11:20 (seg-sex)');
     console.log('   🌙 Notificação Noturna:  16:30 (seg-sex)');
     console.log('   📬 Worker Notificações:  A cada 1 minuto');
     console.log(`   🧹 Limpeza Projetos: ${this.cleanupJob ? 'Ativa (semestral)' : 'Inativa'}`);
@@ -180,7 +180,7 @@ export class CronJobManager {
    */
   getStatus(): { morning: string; night: string; worker: string } {
     return {
-      morning: this.morningJob ? 'Ativo (09:00 seg-sex)' : 'Inativo',
+      morning: this.morningJob ? 'Ativo (11:20 seg-sex)' : 'Inativo',
       night: this.nightJob ? 'Ativo (16:30 seg-sex)' : 'Inativo',
       worker: this.workerJob ? 'Ativo (a cada 1min)' : 'Inativo'
     };

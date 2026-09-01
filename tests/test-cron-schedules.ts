@@ -17,7 +17,7 @@ function assert(cond: boolean, name: string) {
   }
 }
 
-assert(MORNING_NOTIFICATION_CRON === '0 9 * * 1-5', 'cron matinal permanece 09:00 seg-sex');
+assert(MORNING_NOTIFICATION_CRON === '20 11 * * 1-5', 'cron matinal roda 11:20 seg-sex');
 assert(NIGHT_NOTIFICATION_CRON === '30 16 * * 1-5', 'cron noturno roda 16:30 seg-sex');
 assert(WORKER_NOTIFICATION_CRON === '*/1 * * * *', 'worker de notificacoes permanece a cada 1 minuto');
 

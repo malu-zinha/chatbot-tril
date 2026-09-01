@@ -449,7 +449,7 @@ Veja a lista completa dos seus projetos com status e detalhes.
 Marque etapas de pavimentos como concluídas para atualizar o progresso ponderado.
 
 🔔 *Notificações automáticas*
-• Manhã (09:00): lembrete para informar status
+• Manhã (11:20): lembrete para informar status
 • Noite (16:30): lembrete para registrar o que foi feito
 
 🔄 *Comandos úteis*
