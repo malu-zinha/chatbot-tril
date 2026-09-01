@@ -96,10 +96,12 @@ export const TIPOS_PROJETO = [
   'CL1', 'CL2', 'CL3', 'CL4'
 ];
 
-// AREAS_PROJETO - expandido de 3 para 21 opções
+// AREAS_PROJETO - expandido de 3 para 24 opções
 export const AREAS_PROJETO = [
+  'administrativo',
   'climatização',
   'elétrica',
+  'energisa',
   'hidrossanitário',
   'telecom',
   'gás',

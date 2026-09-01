@@ -166,6 +166,8 @@ INSERT INTO areas (codigo, descricao, tempo_trabalho_dias, ativo) VALUES
 ('LIMP_EST', 'Limpeza de Estrutura', 0, true),
 ('COMPLEMENTO', 'Complemento', 0, true),
 ('ALTERACAO_ENERGISA', 'Alteração Energisa', 0, true),
+('ADMINISTRATIVO', 'Administrativo', 0, true),
+('ENERGISA', 'Energisa', 0, true),
 ('CALCULO_AREAS', 'Cálculo de Áreas', 0, true),
 ('ESTACAO_ELEVATORIA_ESGOTO', 'Estação Elevatória de Esgoto', 0, true)
 ON CONFLICT (codigo) DO UPDATE SET
