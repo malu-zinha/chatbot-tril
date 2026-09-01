@@ -116,13 +116,13 @@ WhatsApp → Twilio → Railway (Express) → messageHandler → Supabase
                                       ↓
                                   Cron Jobs
                                       ↓
-                            Notificações (09:00, 16:30)
+                            Notificações (11:20, 16:30)
 ```
 
 ## ✨ Funcionalidades Mantidas
 
 - ✅ Todos os fluxos conversacionais (criar, editar, notificações)
-- ✅ Notificações automáticas (manhã 09:00, noite 16:30)
+- ✅ Notificações automáticas (manhã 11:20, noite 16:30)
 - ✅ Worker de notificações pendentes (a cada 1 minuto)
 - ✅ Autenticação por WhatsApp
 - ✅ Salvamento no Supabase

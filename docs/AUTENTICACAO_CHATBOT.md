@@ -71,7 +71,7 @@ Digite "ajuda" para instruções
 - ✅ **Criar Projeto**: Cadastrar novo projeto com todos os dados
 - ✅ **Editar Projeto**: Modificar informações de projetos existentes
 - ✅ **Notificações**:
-  - 🌅 **Manhã (09:00)**: Status + Previsão do dia
+  - 🌅 **Manhã (11:20)**: Status + Previsão do dia
   - 🌙 **Noite (16:30)**: Feito + Retrabalho + Observações
 
 **Restrições:**

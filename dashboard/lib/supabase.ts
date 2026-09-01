@@ -156,6 +156,21 @@ export interface ProducaoEngenheiroPeriodo {
   horas_retrabalho_total: number
 }
 
+export interface ProducaoApontamentoPeriodo {
+  eng_id: string
+  engenheiro: string
+  projeto_id: string
+  codigo_projeto: string
+  cliente: string
+  area_id: string
+  area_codigo: string
+  area_descricao: string
+  instancia_label: string | null
+  data_retrabalho: string
+  horas_trabalhadas_total: number
+  horas_retrabalho: number
+}
+
 export interface ProjetosStatus {
   status: string
   quantidade: number
@@ -457,6 +472,29 @@ export async function fetchRetrabalhoTaxaPorArea(): Promise<RetrabalhoTaxaArea[]
   }
 
   return (data as RetrabalhoTaxaArea[]) || []
+}
+
+export async function fetchProducaoApontamentosPeriodo(
+  dataInicio: string,
+  dataFim: string
+): Promise<ProducaoApontamentoPeriodo[]> {
+  const { data, error } = await supabase
+    .from('vw_dashboard_producao_apontamentos')
+    .select(
+      'eng_id, engenheiro, projeto_id, codigo_projeto, cliente, area_id, area_codigo, area_descricao, instancia_label, data_retrabalho, horas_trabalhadas_total, horas_retrabalho'
+    )
+    .gte('data_retrabalho', dataInicio)
+    .lte('data_retrabalho', dataFim)
+    .order('engenheiro', { ascending: true })
+    .order('codigo_projeto', { ascending: true })
+    .order('area_descricao', { ascending: true })
+
+  if (error) {
+    console.error('Erro ao buscar apontamentos de producao por periodo:', error)
+    return []
+  }
+
+  return (data as ProducaoApontamentoPeriodo[]) || []
 }
 
 export async function fetchProducaoEngenheiroPeriodo(

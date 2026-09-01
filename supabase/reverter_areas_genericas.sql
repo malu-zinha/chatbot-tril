@@ -45,6 +45,8 @@ INSERT INTO areas (codigo, descricao, tempo_trabalho_dias) VALUES
 ('SOLAR_FOTOVOLTAICO', 'Solar Fotovoltaico', 12),
 ('HIDRAULICO_PISCINA', 'Hidráulico Piscina', 8),
 ('SOLUCAO_SANITARIA', 'Solução Sanitária', 7),
+('ADMINISTRATIVO', 'Administrativo', 0),
+('ENERGISA', 'Energisa', 0),
 ('CALCULO_AREAS', 'Cálculo de Áreas', 0),
 ('ESTACAO_ELEVATORIA_ESGOTO', 'Estação Elevatória de Esgoto', 0)
 ON CONFLICT (codigo) DO UPDATE SET

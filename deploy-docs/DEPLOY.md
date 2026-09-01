@@ -321,13 +321,13 @@ Configure um serviço externo para monitorar:
 
 O bot envia notificações automaticamente:
 
-- **09:00 (seg-sex):** Notificação matinal
+- **11:20 (seg-sex):** Notificação matinal
 - **16:30 (seg-sex):** Notificação noturna
 - **A cada 1 minuto:** Processa fila de notificações pendentes
 
 **Verificar nos logs:**
 ```
-⏰ Cron Job: Notificações Matinais (09:00)
+⏰ Cron Job: Notificações Matinais (11:20)
 📬 Processando 3 notificação(ões) pendente(s)...
 ✅ Enviadas: 3 | ❌ Falhas: 0
 ```
@@ -411,7 +411,7 @@ Error: Cannot find module 'express'
    ```
    ✅ Cron Jobs iniciados com sucesso!
    📅 Agendamentos configurados:
-      🌅 Notificação Matinal:  09:00 (seg-sex)
+      🌅 Notificação Matinal:  11:20 (seg-sex)
    ```
 
 2. **Engenheiros cadastrados?**
