@@ -1,3 +1,12 @@
+-- =====================================================
+-- MIGRACAO: Corrige origem canonica da view de producao
+-- =====================================================
+-- A atribuicao em engenheiros_projetos e a referencia
+-- principal do apontamento. A view usa ep.eng_id e
+-- ep.projeto_id para evitar divergencia com campos
+-- duplicados em retrabalho_projetos.
+-- =====================================================
+
 CREATE OR REPLACE VIEW vw_dashboard_producao_apontamentos AS
 SELECT
     r.id AS apontamento_id,
@@ -22,4 +31,4 @@ JOIN projetos p ON p.projeto_id = ep.projeto_id
 JOIN areas a ON a.area_id = ep.area_id;
 
 COMMENT ON VIEW vw_dashboard_producao_apontamentos IS
-'Apontamentos diarios do WhatsApp para o dashboard de producao por periodo, detalhados por engenheiro, projeto e disciplina.';
+'Apontamentos diarios do WhatsApp para o dashboard de producao por periodo, detalhados pela atribuicao canonica de engenheiro, projeto e disciplina.';

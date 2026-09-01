@@ -167,8 +167,8 @@ export interface ProducaoApontamentoPeriodo {
   area_descricao: string
   instancia_label: string | null
   data_retrabalho: string
-  horas_trabalhadas_total: number | null
-  horas_retrabalho: number | null
+  horas_trabalhadas_total: number
+  horas_retrabalho: number
 }
 
 export interface ProjetosStatus {

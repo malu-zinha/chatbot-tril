@@ -31,6 +31,7 @@ export default function ProducaoPeriodoCard() {
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
   const [producao, setProducao] = useState<ProducaoPeriodo | null>(null)
+  const [periodoConsultado, setPeriodoConsultado] = useState<{ dataInicio: string; dataFim: string } | null>(null)
   const [selectedEngId, setSelectedEngId] = useState<string | null>(null)
   const [taxas, setTaxas] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -53,13 +54,16 @@ export default function ProducaoPeriodoCard() {
 
     setIsLoading(true)
     setSelectedEngId(null)
+    const periodo = { dataInicio, dataFim }
     try {
-      const data = await fetchProducaoApontamentosPeriodo(dataInicio, dataFim)
-      setProducao(buildProducaoPeriodo(data, { dataInicio, dataFim }))
+      const data = await fetchProducaoApontamentosPeriodo(periodo.dataInicio, periodo.dataFim)
+      setProducao(buildProducaoPeriodo(data, periodo))
+      setPeriodoConsultado(periodo)
       setConsultou(true)
     } catch {
       setErrorMessage('Erro ao buscar producao no periodo.')
       setProducao(null)
+      setPeriodoConsultado(null)
     } finally {
       setIsLoading(false)
     }
@@ -209,7 +213,7 @@ export default function ProducaoPeriodoCard() {
             </tfoot>
           </table>
 
-          {detalheSelecionado && (
+          {detalheSelecionado && periodoConsultado && (
             <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -217,7 +221,7 @@ export default function ProducaoPeriodoCard() {
                     Projetos no periodo - {detalheSelecionado.engenheiro}
                   </h4>
                   <p className="text-xs text-gray-500">
-                    {dataInicio} a {dataFim}
+                    {periodoConsultado.dataInicio} a {periodoConsultado.dataFim}
                   </p>
                 </div>
                 <div className="text-sm text-gray-700 sm:text-right">

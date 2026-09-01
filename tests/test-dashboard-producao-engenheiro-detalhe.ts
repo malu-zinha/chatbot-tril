@@ -213,6 +213,8 @@ const migration = readFileSync(migrationPath, 'utf8')
 assert.match(migration, /CREATE OR REPLACE VIEW vw_dashboard_producao_apontamentos AS/i)
 for (const expected of [
   'r.data_retrabalho',
+  'ep.eng_id AS eng_id',
+  'ep.projeto_id AS projeto_id',
   'r.horas_trabalhadas_total',
   'r.horas_retrabalho',
   'ep.instancia_label',
