@@ -55,7 +55,7 @@ export default function ProducaoPeriodoCard() {
     setSelectedEngId(null)
     try {
       const data = await fetchProducaoApontamentosPeriodo(dataInicio, dataFim)
-      setProducao(buildProducaoPeriodo(data))
+      setProducao(buildProducaoPeriodo(data, { dataInicio, dataFim }))
       setConsultou(true)
     } catch {
       setErrorMessage('Erro ao buscar producao no periodo.')

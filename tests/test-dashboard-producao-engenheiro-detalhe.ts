@@ -131,6 +131,79 @@ assert.equal(
   'selected detail must only include the selected engineer projects'
 )
 
+const producaoParcial = buildProducaoPeriodo([
+  {
+    eng_id: 'eng-ana',
+    engenheiro: 'Ana',
+    projeto_id: 'proj-longo',
+    codigo_projeto: 'PRJ-010',
+    cliente: 'Cliente Longo',
+    area_id: 'area-adm',
+    area_codigo: 'ADMINISTRATIVO',
+    area_descricao: 'Administrativo',
+    instancia_label: null,
+    data_retrabalho: '2026-07-31',
+    horas_trabalhadas_total: 7,
+    horas_retrabalho: 1,
+  },
+  {
+    eng_id: 'eng-ana',
+    engenheiro: 'Ana',
+    projeto_id: 'proj-longo',
+    codigo_projeto: 'PRJ-010',
+    cliente: 'Cliente Longo',
+    area_id: 'area-adm',
+    area_codigo: 'ADMINISTRATIVO',
+    area_descricao: 'Administrativo',
+    instancia_label: null,
+    data_retrabalho: '2026-08-01',
+    horas_trabalhadas_total: 4,
+    horas_retrabalho: 0,
+  },
+  {
+    eng_id: 'eng-ana',
+    engenheiro: 'Ana',
+    projeto_id: 'proj-longo',
+    codigo_projeto: 'PRJ-010',
+    cliente: 'Cliente Longo',
+    area_id: 'area-adm',
+    area_codigo: 'ADMINISTRATIVO',
+    area_descricao: 'Administrativo',
+    instancia_label: null,
+    data_retrabalho: '2026-08-15',
+    horas_trabalhadas_total: 2,
+    horas_retrabalho: 0.5,
+  },
+  {
+    eng_id: 'eng-ana',
+    engenheiro: 'Ana',
+    projeto_id: 'proj-longo',
+    codigo_projeto: 'PRJ-010',
+    cliente: 'Cliente Longo',
+    area_id: 'area-adm',
+    area_codigo: 'ADMINISTRATIVO',
+    area_descricao: 'Administrativo',
+    instancia_label: null,
+    data_retrabalho: '2026-09-01',
+    horas_trabalhadas_total: 8,
+    horas_retrabalho: 0,
+  },
+] satisfies ProducaoApontamentoPeriodo[], {
+  dataInicio: '2026-08-01',
+  dataFim: '2026-08-31',
+})
+
+assert.equal(
+  producaoParcial.resumo[0].horas_trabalhadas_total,
+  6,
+  'monthly productivity must include only hours pointed inside the selected period'
+)
+assert.equal(
+  producaoParcial.resumo[0].horas_retrabalho_total,
+  0.5,
+  'monthly productivity must include only rework hours pointed inside the selected period'
+)
+
 const migrationPath = resolve(
   'supabase/migrations/20260831_dashboard_producao_apontamentos.sql'
 )

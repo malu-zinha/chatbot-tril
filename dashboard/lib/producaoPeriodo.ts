@@ -48,6 +48,11 @@ export interface ProducaoPeriodo {
   detalhes: ProducaoEngenheiroDetalhe[]
 }
 
+export interface ProducaoPeriodoFiltro {
+  dataInicio?: string
+  dataFim?: string
+}
+
 function toNumber(value: number | null | undefined): number {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : 0
@@ -61,12 +66,23 @@ function sortByHoursThenName<T extends { horas_trabalhadas_total: number }>(
   return b.horas_trabalhadas_total - a.horas_trabalhadas_total || getName(a).localeCompare(getName(b), 'pt-BR')
 }
 
-export function buildProducaoPeriodo(rows: ProducaoApontamentoPeriodo[]): ProducaoPeriodo {
+function isApontamentoNoPeriodo(row: ProducaoApontamentoPeriodo, filtro: ProducaoPeriodoFiltro): boolean {
+  if (filtro.dataInicio && row.data_retrabalho < filtro.dataInicio) return false
+  if (filtro.dataFim && row.data_retrabalho > filtro.dataFim) return false
+  return true
+}
+
+export function buildProducaoPeriodo(
+  rows: ProducaoApontamentoPeriodo[],
+  filtro: ProducaoPeriodoFiltro = {}
+): ProducaoPeriodo {
   const engenheiros = new Map<string, ProducaoEngenheiroDetalhe>()
   const projetosPorEngenheiro = new Map<string, Map<string, ProducaoProjetoDetalhe>>()
   const disciplinasPorProjeto = new Map<string, Map<string, ProducaoDisciplinaDetalhe>>()
 
   for (const row of rows) {
+    if (!isApontamentoNoPeriodo(row, filtro)) continue
+
     const horas = toNumber(row.horas_trabalhadas_total)
     const retrabalho = toNumber(row.horas_retrabalho)
     if (!row.eng_id || horas <= 0) continue
