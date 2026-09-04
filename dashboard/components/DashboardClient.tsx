@@ -231,7 +231,7 @@ export default function DashboardClient() {
       loadData()
     } catch (err) {
       console.error('Erro ao atribuir task:', err)
-      alert('Erro inesperado ao atribuir projeto. Verifique o console.')
+      alert('Erro inesperado ao atribuir projeto. Tente novamente em alguns instantes.')
     }
   }
 

@@ -35,7 +35,7 @@ Cole: `https://fdwvddfuaqxwllciqcbl.supabase.co`
 ```bash
 vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
-Cole: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZkd3ZkZGZ1YXF4d2xsY2lxY2JsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4MjI5NzMsImV4cCI6MjA4MzM5ODk3M30.W1H2uMCiTdcGpXJxHfop597ktBPxKPB7MhUi8mRIjlE`
+Cole: `<SUA_ANON_KEY_AQUI>`
 
 ### 4️⃣ Deploy Novamente (com as variáveis)
 ```bash

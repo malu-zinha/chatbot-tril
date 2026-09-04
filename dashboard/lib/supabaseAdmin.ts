@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { readCredential } from '@/lib/secrets'
 
 /**
  * Cliente administrativo do Supabase — usa a SERVICE_ROLE_KEY e por isso
@@ -10,8 +11,11 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
  * não embutir no bundle do browser.
  */
 export function createAdminClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || ''
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || ''
+  // readCredential faz trim e rejeita \r, \n e outros caracteres que tornam o
+  // valor inválido como header HTTP. Sem isso, uma chave com quebra de linha
+  // só falha lá dentro do fetch — e a exceção carrega a chave na mensagem.
+  const url = readCredential('NEXT_PUBLIC_SUPABASE_URL')
+  const serviceKey = readCredential('SUPABASE_SERVICE_ROLE_KEY')
 
   if (!url || !serviceKey) {
     throw new Error(
@@ -27,7 +31,13 @@ export function createAdminClient(): SupabaseClient {
   })
 }
 
-/** true quando a service key está configurada no ambiente. */
+/** true quando a service key está configurada e é válida como header. */
 export function isAdminConfigured(): boolean {
-  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim())
+  try {
+    return Boolean(readCredential('SUPABASE_SERVICE_ROLE_KEY'))
+  } catch {
+    // Chave presente mas malformada: tratar como não configurada, para a rota
+    // responder erro genérico em vez de explodir dentro do fetch.
+    return false
+  }
 }

@@ -7,8 +7,12 @@
 // para a planilha do CEO com visão geral de todos os projetos
 // =====================================================
 
-import { createClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
+import {
+  ClienteSupabaseValidado,
+  criarClienteSupabaseValidado,
+  exigirClienteSupabase,
+} from '../supabase/createValidatedClient.ts';
 
 // =====================================================
 // TIPOS E INTERFACES
@@ -43,14 +47,14 @@ interface SyncCEOResult {
 // =====================================================
 
 class CEOSyncService {
-  private supabase: any;
+  private supabase: ClienteSupabaseValidado | null;
   private sheets: any;
 
   constructor() {
-    // Inicializar Supabase
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    // Inicializar Supabase — trim + validação antes do createClient. Sem isso,
+    // um \r\n na variável só falharia lá dentro do fetch, com a chave na
+    // mensagem da exceção.
+    this.supabase = criarClienteSupabaseValidado('CEOSyncService');
 
     // Inicializar Google Sheets
     const auth = new google.auth.GoogleAuth({
@@ -61,6 +65,14 @@ class CEOSyncService {
     this.sheets = google.sheets({ version: 'v4', auth });
   }
 
+  /**
+   * Cliente Supabase garantido. Se as credenciais faltaram no boot, falha aqui
+   * com mensagem clara em vez de um null deref na primeira query.
+   */
+  private get db(): ClienteSupabaseValidado {
+    return exigirClienteSupabase(this.supabase, 'CEOSyncService');
+  }
+
   // =====================================================
   // FUNÇÃO: Buscar Dados Consolidados do Supabase
   // =====================================================
@@ -68,7 +80,7 @@ class CEOSyncService {
   async buscarDadosConsolidados(): Promise<CEODashboardRow[]> {
     try {
       // Usar a view view_dashboard_ceo criada no views.sql
-      const { data, error } = await this.supabase
+      const { data, error } = await this.db
         .from('view_dashboard_ceo')
         .select('*')
         .order('"% Concluído"', { ascending: false });
@@ -338,7 +350,7 @@ class CEOSyncService {
     console.log(`🔄 Iniciando exportação por engenheiro...`);
 
     // Buscar lista de engenheiros
-    const { data: engenheiros, error } = await this.supabase
+    const { data: engenheiros, error } = await this.db
       .from('engenheiros')
       .select('id, nome')
       .eq('ativo', true);
@@ -356,7 +368,7 @@ class CEOSyncService {
       console.log(`\n--- Exportando: ${engenheiro.nome} ---`);
 
       // Buscar apenas projetos deste engenheiro
-      const { data: projetos } = await this.supabase
+      const { data: projetos } = await this.db
         .from('view_dashboard_ceo')
         .select('*')
         .eq('Engenheiro', engenheiro.nome);

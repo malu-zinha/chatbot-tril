@@ -1,5 +1,8 @@
 # Environment variables
-.env
+# Cobre .env, .env.local, .env.production, .env.development, .env*.local —
+# antes só `.env` estava ignorado, e os demais entrariam no commit sem aviso.
+.env*
+!.env.example
 
 # macOS
 .DS_Store

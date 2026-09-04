@@ -13,7 +13,12 @@ import { EngineerProjectFlow } from '../flows/engineerProjectFlow.ts';
 import { OwnerFlow } from '../flows/ownerFlow.ts';
 
 // Supabase para autenticação (lazy loading para evitar problemas com dotenv)
-import { getSupabaseService, SupabaseService } from '../../integrations/supabase/supabaseService.ts';
+import {
+  getSupabaseService,
+  SupabaseService,
+  SupabaseUnavailableError,
+} from '../../integrations/supabase/supabaseService.ts';
+import { redactSecrets } from '../../logic/security/redactSecrets.ts';
 
 // Lazy loading: criar instância apenas quando necessário
 let supabaseServiceInstance: SupabaseService | null = null;
@@ -29,6 +34,17 @@ function getSupabase(): SupabaseService {
 // =====================================================
 
 export type TipoUsuario = 'engenheiro' | 'dono' | 'nao_cadastrado';
+
+/**
+ * Resultado da autenticação por telefone.
+ *
+ * `indisponivel` é um estado à parte de propósito: ele NÃO entra em
+ * TipoUsuario porque não pode ser gravado como tipo de sessão. Uma falha
+ * momentânea do banco não é uma característica do usuário.
+ */
+export type ResultadoAutenticacao =
+  | { tipo: TipoUsuario; user_id?: string }
+  | { indisponivel: true };
 
 export interface UserSession {
   whatsapp: string;
@@ -86,6 +102,15 @@ export class MessageHandler {
         // AUTENTICAÇÃO: Verificar se é engenheiro ou dono
         console.log(`   🔍 [DEBUG] Iniciando autenticação...`);
         const tipoUsuario = await this.autenticarUsuario(whatsappNormalizado);
+
+        if ('indisponivel' in tipoUsuario) {
+          // Sem sessão criada de propósito: gravar 'nao_cadastrado' aqui
+          // envenenaria o cache em memória por até 15 minutos, fazendo a
+          // falha sobreviver à recuperação do banco.
+          console.error(`   ⚠️ Autenticação indisponível — nenhuma sessão criada`);
+          return { resposta: this.mensagemServicoIndisponivel() };
+        }
+
         console.log(`   🔍 [DEBUG] Autenticação concluída: ${tipoUsuario.tipo}`);
 
         sessao = {
@@ -125,6 +150,12 @@ export class MessageHandler {
         // isto só um redeploy reconheceria o número recém-cadastrado.
         console.log(`   🔁 Sessão 'nao_cadastrado' — reautenticando no banco...`);
         const reauth = await this.autenticarUsuario(sessao.whatsapp);
+
+        if ('indisponivel' in reauth) {
+          // Sessão preservada como está: não sabemos nada de novo sobre ela.
+          console.error(`   ⚠️ Reautenticação indisponível — sessão preservada`);
+          return { resposta: this.mensagemServicoIndisponivel() };
+        }
 
         if (reauth.tipo === 'nao_cadastrado') {
           return { resposta: this.mensagemNaoCadastrado() };
@@ -225,11 +256,11 @@ export class MessageHandler {
       console.error('\n❌ ERRO no MessageHandler:');
       console.error(`   WhatsApp: ${whatsapp}`);
       console.error(`   Mensagem: "${mensagem}"`);
-      console.error(`   Erro: ${error.message}`);
-      console.error(`   Stack: ${error.stack}\n`);
+      console.error(`   Erro: ${redactSecrets(error?.message ?? error)}`);
+      console.error(`   Stack: ${redactSecrets(error?.stack)}\n`);
       return {
         resposta: '❌ Desculpe, ocorreu um erro. Tente novamente.',
-        erro: error.message,
+        erro: redactSecrets(error?.message ?? error),
       };
     }
   }
@@ -238,22 +269,32 @@ export class MessageHandler {
   // FUNÇÃO: Autenticar Usuário
   // =====================================================
 
-  private async autenticarUsuario(whatsapp: string): Promise<{ tipo: TipoUsuario; user_id?: string }> {
-    // Verificar se é engenheiro
-    const engenheiro = await getSupabase().buscarEngenheiroPorTelefone(whatsapp);
-    if (engenheiro) {
-      console.log(`   ✅ Engenheiro identificado: ${engenheiro.nome}`);
-      return { tipo: 'engenheiro', user_id: engenheiro.eng_id };
+  private async autenticarUsuario(whatsapp: string): Promise<ResultadoAutenticacao> {
+    try {
+      // Verificar se é engenheiro
+      const engenheiro = await getSupabase().buscarEngenheiroPorTelefone(whatsapp);
+      if (engenheiro) {
+        console.log(`   ✅ Engenheiro identificado: ${engenheiro.nome}`);
+        return { tipo: 'engenheiro', user_id: engenheiro.eng_id };
+      }
+
+      // Verificar se é dono
+      const dono = await getSupabase().buscarDonoPorTelefone(whatsapp);
+      if (dono) {
+        console.log(`   ✅ Dono identificado: ${dono.nome}`);
+        return { tipo: 'dono', user_id: dono.dono_id };
+      }
+    } catch (error) {
+      if (error instanceof SupabaseUnavailableError) {
+        // As consultas não rodaram. Afirmar "não cadastrado" aqui seria mentir
+        // para um engenheiro que está, sim, cadastrado.
+        console.error(`   ⚠️ Cadastro não verificável agora (${error.scope})`);
+        return { indisponivel: true };
+      }
+      throw error;
     }
 
-    // Verificar se é dono
-    const dono = await getSupabase().buscarDonoPorTelefone(whatsapp);
-    if (dono) {
-      console.log(`   ✅ Dono identificado: ${dono.nome}`);
-      return { tipo: 'dono', user_id: dono.dono_id };
-    }
-
-    // Não cadastrado
+    // Consultas rodaram normalmente e o telefone não existe em nenhuma tabela.
     console.log(`   ⚠️ Número não cadastrado: ${whatsapp}`);
     return { tipo: 'nao_cadastrado' };
   }
@@ -461,6 +502,20 @@ Marque etapas de pavimentos como concluídas para atualizar o progresso ponderad
 _Digite "menu" para voltar_`;
   }
 
+  /**
+   * Enviada quando a consulta de cadastro NÃO pôde ser feita.
+   *
+   * Sem nome de banco, tabela, status HTTP, stack ou credencial: o usuário do
+   * WhatsApp não precisa (e não pode) ver detalhe técnico nenhum.
+   */
+  private mensagemServicoIndisponivel(): string {
+    return `⚠️ *Serviço temporariamente indisponível*
+
+Não foi possível verificar seu cadastro neste momento.
+Por favor, tente novamente em alguns minutos.`;
+  }
+
+  /** Enviada SOMENTE quando a consulta rodou e o telefone realmente não existe. */
   private mensagemNaoCadastrado(): string {
     return `❌ *Número não cadastrado*
 

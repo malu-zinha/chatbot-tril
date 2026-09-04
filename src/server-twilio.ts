@@ -13,6 +13,7 @@ import { iniciarSincronizacaoAutomatica } from '../integrations/cron/syncDatabas
 import { getWhatsAppService } from '../integrations/whatsapp/whatsappService.ts';
 import { getNotificationService } from '../integrations/notifications/notificationService.ts';
 import { getNotificationWorker } from '../integrations/notifications/notificationWorker.ts';
+import { redactSecrets } from '../logic/security/redactSecrets.ts';
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -138,8 +139,8 @@ app.post('/webhook/whatsapp', async (req, res) => {
 
   } catch (error: any) {
     console.error('\n❌ ERRO NO WEBHOOK:');
-    console.error(`   Erro: ${error.message}`);
-    console.error(`   Stack: ${error.stack}\n`);
+    console.error(`   Erro: ${redactSecrets(error?.message ?? error)}`);
+    console.error(`   Stack: ${redactSecrets(error?.stack)}\n`);
 
     res.status(500).send('Internal Server Error');
   }

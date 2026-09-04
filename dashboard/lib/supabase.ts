@@ -1,5 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { redactSecrets } from '@/lib/secrets'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || ''
@@ -9,6 +10,11 @@ export const isSupabaseConfigured =
   Boolean(supabaseUrl && supabaseAnonKey) && /^https?:\/\//i.test(supabaseUrl)
 
 const placeholderUrl = 'https://placeholder.supabase.co'
+// NÃO É SEGREDO: chave anon pública de demonstração do Supabase local
+// (payload: iss "supabase-demo", role "anon"), publicada na documentação
+// oficial. Existe só para o createBrowserClient não quebrar quando o .env não
+// está preenchido, junto do placeholderUrl acima. Auditorias de credencial
+// costumam sinalizar esta linha — é falso positivo.
 const placeholderKey =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0'
 
@@ -778,8 +784,11 @@ export async function atribuirProjetoComPavimentos(
   })
 
   if (error) {
-    console.error('Erro ao atribuir projeto com pavimentos:', error)
-    return { success: false, error: error.message }
+    // O texto cru do PostgREST ia parar num alert() na tela. A mensagem de
+    // negócio da própria RPC (data.mensagem, logo abaixo) continua sendo usada
+    // — essa sim é escrita para o usuário.
+    console.error('Erro ao atribuir projeto com pavimentos:', redactSecrets(error))
+    return { success: false, error: 'Nao foi possivel atribuir o projeto. Tente novamente.' }
   }
 
   if (data && typeof data === 'object' && data.sucesso === false) {
@@ -949,8 +958,8 @@ export async function criarProjeto(params: {
   })
 
   if (error) {
-    console.error('Erro ao criar projeto:', error)
-    return { success: false, error: error.message }
+    console.error('Erro ao criar projeto:', redactSecrets(error))
+    return { success: false, error: 'Nao foi possivel criar o projeto. Tente novamente.' }
   }
 
   return { success: true, data }

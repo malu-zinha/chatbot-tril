@@ -11,6 +11,7 @@ import { getSupabaseService, SupabaseService } from '../../integrations/supabase
 import { statusPorPercentual } from '../../logic/execucao/filtros.ts';
 import { formatProjetoDisciplinaLinha } from '../../logic/projetos/display.ts';
 import { normalizeProjectCode, validateWhatsapp } from '../../logic/validation/validateInput.ts';
+import { redactSecrets } from '../../logic/security/redactSecrets.ts';
 
 // Lazy loading para evitar problemas com dotenv
 let supabaseServiceInstance: SupabaseService | null = null;
@@ -228,11 +229,13 @@ export class OwnerFlow {
     try {
       return await stepFunction(mensagem);
     } catch (error: any) {
-      console.error(`❌ Erro no step ${this.stepAtual}:`, error);
+      // A mensagem crua ia direto para o WhatsApp do dono — podia carregar
+      // detalhe do Postgres ou, no caso do incidente, a própria Secret Key.
+      console.error(`❌ Erro no step ${this.stepAtual}:`, redactSecrets(error));
       return {
-        mensagem: `❌ Erro: ${error.message}\n\nDigite "menu" para recomeçar.`,
+        mensagem: '❌ Ocorreu um erro ao processar sua solicitação.\n\nDigite "menu" para recomeçar.',
         finalizado: true,
-        erro: error.message,
+        erro: redactSecrets(error?.message ?? error),
       };
     }
   }

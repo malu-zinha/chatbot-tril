@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getOwnerOrNull } from '@/lib/supabaseServer'
-import { createAdminClient, isAdminConfigured } from '@/lib/supabaseAdmin'
+import { createAdminClient } from '@/lib/supabaseAdmin'
+import { guardOwnerRoute } from '@/lib/apiGuard'
+import { handleApiError } from '@/lib/apiError'
 import { isUuid } from '@/lib/adminAtribuicoes'
 
 export const dynamic = 'force-dynamic'
@@ -45,61 +46,65 @@ export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
-  const owner = await getOwnerOrNull()
-  if (!owner) {
-    return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
-  }
-
-  if (!isAdminConfigured()) {
-    return NextResponse.json(
-      { error: 'SUPABASE_SERVICE_ROLE_KEY nao configurada no servidor.' },
-      { status: 500 }
-    )
-  }
+  const guard = await guardOwnerRoute()
+  if (!guard.ok) return guard.response
 
   if (!isUuid(params.id)) {
     return NextResponse.json({ error: 'Projeto invalido.' }, { status: 400 })
   }
 
-  const admin = createAdminClient()
+  try {
+    const admin = createAdminClient()
 
-  // Buscar metricas agregadas do projeto
-  const { data: relatorio, error: errorRelatorio } = await admin
-    .from('vw_relatorio_projeto_pdf')
-    .select('*')
-    .eq('projeto_id', params.id)
-    .single()
+    // Buscar metricas agregadas do projeto
+    const { data: relatorio, error: errorRelatorio } = await admin
+      .from('vw_relatorio_projeto_pdf')
+      .select('*')
+      .eq('projeto_id', params.id)
+      .single()
 
-  if (errorRelatorio) {
-    if (errorRelatorio.code === 'PGRST116') {
-      return NextResponse.json(
-        { error: 'Projeto nao encontrado.' },
-        { status: 404 }
+    if (errorRelatorio) {
+      if (errorRelatorio.code === 'PGRST116') {
+        return NextResponse.json(
+          { error: 'Projeto nao encontrado.' },
+          { status: 404 }
+        )
+      }
+      const { status, message } = handleApiError(
+        'GET /admin/projetos/[id]/relatorio',
+        errorRelatorio,
+        'Nao foi possivel carregar os dados do relatorio.'
       )
+      return NextResponse.json({ error: message }, { status })
     }
-    return NextResponse.json(
-      { error: errorRelatorio.message },
-      { status: 500 }
+
+    // Buscar detalhamento por disciplina
+    const { data: disciplinas, error: errorDisciplinas } = await admin
+      .from('vw_relatorio_disciplinas_projeto')
+      .select('*')
+      .eq('projeto_id', params.id)
+      .order('data_inicio', { ascending: true, nullsFirst: false })
+
+    if (errorDisciplinas) {
+      const { status, message } = handleApiError(
+        'GET /admin/projetos/[id]/relatorio/disciplinas',
+        errorDisciplinas,
+        'Nao foi possivel carregar os dados do relatorio.'
+      )
+      return NextResponse.json({ error: message }, { status })
+    }
+
+    return NextResponse.json({
+      relatorio: relatorio as RelatorioProjetoData,
+      disciplinas: (disciplinas || []) as DisciplinaRelatorio[],
+      gerado_em: new Date().toISOString(),
+    })
+  } catch (error) {
+    const { status, message } = handleApiError(
+      'GET /admin/projetos/[id]/relatorio',
+      error,
+      'Nao foi possivel carregar os dados do relatorio.'
     )
+    return NextResponse.json({ error: message }, { status })
   }
-
-  // Buscar detalhamento por disciplina
-  const { data: disciplinas, error: errorDisciplinas } = await admin
-    .from('vw_relatorio_disciplinas_projeto')
-    .select('*')
-    .eq('projeto_id', params.id)
-    .order('data_inicio', { ascending: true, nullsFirst: false })
-
-  if (errorDisciplinas) {
-    return NextResponse.json(
-      { error: errorDisciplinas.message },
-      { status: 500 }
-    )
-  }
-
-  return NextResponse.json({
-    relatorio: relatorio as RelatorioProjetoData,
-    disciplinas: (disciplinas || []) as DisciplinaRelatorio[],
-    gerado_em: new Date().toISOString(),
-  })
 }

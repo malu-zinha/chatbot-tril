@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getOwnerOrNull } from '@/lib/supabaseServer'
-import { createAdminClient, isAdminConfigured } from '@/lib/supabaseAdmin'
+import { createAdminClient } from '@/lib/supabaseAdmin'
+import { guardOwnerRoute } from '@/lib/apiGuard'
+import { handleApiError, MENSAGEM_ERRO_GENERICA } from '@/lib/apiError'
 import { normalizePhone } from '@/lib/phone'
 
 export const dynamic = 'force-dynamic'
@@ -10,23 +11,26 @@ export const runtime = 'nodejs'
  * GET /api/admin/engenheiros — lista os engenheiros do chatbot. Owner only.
  */
 export async function GET() {
-  const owner = await getOwnerOrNull()
-  if (!owner) return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
-  if (!isAdminConfigured()) {
-    return NextResponse.json(
-      { error: 'SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.' },
-      { status: 500 }
-    )
+  const guard = await guardOwnerRoute()
+  if (!guard.ok) return guard.response
+
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .from('engenheiros')
+      .select('eng_id, nome, telefone, exclusivo, ativo')
+      .order('nome', { ascending: true })
+
+    if (error) {
+      const { status, message } = handleApiError('GET /admin/engenheiros', error)
+      return NextResponse.json({ error: message }, { status })
+    }
+
+    return NextResponse.json({ engenheiros: data ?? [] })
+  } catch (error) {
+    const { status, message } = handleApiError('GET /admin/engenheiros', error)
+    return NextResponse.json({ error: message }, { status })
   }
-
-  const admin = createAdminClient()
-  const { data, error } = await admin
-    .from('engenheiros')
-    .select('eng_id, nome, telefone, exclusivo, ativo')
-    .order('nome', { ascending: true })
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ engenheiros: data ?? [] })
 }
 
 /**
@@ -34,14 +38,8 @@ export async function GET() {
  * Body: { nome, telefone, exclusivo? }
  */
 export async function POST(request: Request) {
-  const owner = await getOwnerOrNull()
-  if (!owner) return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
-  if (!isAdminConfigured()) {
-    return NextResponse.json(
-      { error: 'SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.' },
-      { status: 500 }
-    )
-  }
+  const guard = await guardOwnerRoute()
+  if (!guard.ok) return guard.response
 
   let body: { nome?: string; telefone?: string; exclusivo?: boolean }
   try {
@@ -63,28 +61,43 @@ export async function POST(request: Request) {
     )
   }
 
-  const admin = createAdminClient()
-  const { data, error } = await admin
-    .from('engenheiros')
-    .insert({
-      nome,
-      telefone,
-      exclusivo: Boolean(body.exclusivo),
-      ativo: true,
-    })
-    .select('eng_id, nome, telefone, exclusivo, ativo')
-    .single()
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .from('engenheiros')
+      .insert({
+        nome,
+        telefone,
+        exclusivo: Boolean(body.exclusivo),
+        ativo: true,
+      })
+      .select('eng_id, nome, telefone, exclusivo, ativo')
+      .single()
 
-  if (error) {
-    // 23505 = unique_violation (telefone já cadastrado)
-    if (error.code === '23505') {
-      return NextResponse.json(
-        { error: 'Já existe um engenheiro com esse telefone.' },
-        { status: 409 }
+    if (error) {
+      // 23505 = unique_violation (telefone já cadastrado). Mensagem própria,
+      // mais útil que a genérica do toApiError para este caso.
+      if (error.code === '23505') {
+        return NextResponse.json(
+          { error: 'Já existe um engenheiro com esse telefone.' },
+          { status: 409 }
+        )
+      }
+      const { status, message } = handleApiError(
+        'POST /admin/engenheiros',
+        error,
+        'Não foi possível cadastrar o engenheiro. Tente novamente.'
       )
+      return NextResponse.json({ error: message }, { status })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
 
-  return NextResponse.json({ engenheiro: data }, { status: 201 })
+    return NextResponse.json({ engenheiro: data }, { status: 201 })
+  } catch (error) {
+    const { status, message } = handleApiError(
+      'POST /admin/engenheiros',
+      error,
+      MENSAGEM_ERRO_GENERICA
+    )
+    return NextResponse.json({ error: message }, { status })
+  }
 }

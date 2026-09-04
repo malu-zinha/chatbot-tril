@@ -8,6 +8,7 @@
 // =====================================================
 
 import dotenv from 'dotenv';
+import { redactSecrets } from '../../logic/security/redactSecrets.ts';
 dotenv.config();
 
 // =====================================================
@@ -92,7 +93,8 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌ Erro ao enviar mensagem via Meta API:', errorData);
+        // A resposta de erro da Meta pode ecoar o header Authorization.
+        console.error('❌ Erro ao enviar mensagem via Meta API:', redactSecrets(errorData));
         return false;
       }
 
@@ -102,7 +104,7 @@ class MetaWhatsAppProvider implements WhatsAppProvider {
       return true;
 
     } catch (error: any) {
-      console.error('❌ Erro ao enviar mensagem via Meta API:', error.message);
+      console.error('❌ Erro ao enviar mensagem via Meta API:', redactSecrets(error?.message ?? error));
       return false;
     }
   }
@@ -178,7 +180,8 @@ class TwilioWhatsAppProvider implements WhatsAppProvider {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌ Erro ao enviar mensagem via Twilio:', errorData);
+        // Idem: a resposta do Twilio pode carregar o Auth Token no eco do request.
+        console.error('❌ Erro ao enviar mensagem via Twilio:', redactSecrets(errorData));
         return false;
       }
 
@@ -188,7 +191,7 @@ class TwilioWhatsAppProvider implements WhatsAppProvider {
       return true;
 
     } catch (error: any) {
-      console.error('❌ Erro ao enviar mensagem via Twilio:', error.message);
+      console.error('❌ Erro ao enviar mensagem via Twilio:', redactSecrets(error?.message ?? error));
       return false;
     }
   }

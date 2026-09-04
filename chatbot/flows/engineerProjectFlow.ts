@@ -10,6 +10,7 @@ import {
   getEngineerSheetService,
 } from '../../integrations/sheets/engineerSheetService.ts';
 import { getSupabaseService } from '../../integrations/supabase/supabaseService.ts';
+import { redactSecrets } from '../../logic/security/redactSecrets.ts';
 import {
   filterEtapasPendentes,
   filterPavimentosPendentes,
@@ -294,8 +295,8 @@ export class EngineerProjectFlow {
           console.log('❌ [DEBUG] Engenheiro não encontrado no Supabase');
         }
       } catch (error: any) {
-        console.error('❌ Erro ao buscar atribuições do Supabase:', error);
-        console.error('❌ Stack:', error.stack);
+        console.error('❌ Erro ao buscar atribuições do Supabase:', redactSecrets(error));
+        console.error('❌ Stack:', redactSecrets(error?.stack));
         // Fallback para planilha
       }
     }
@@ -489,11 +490,11 @@ export class EngineerProjectFlow {
           };
       }
     } catch (error: any) {
-      console.error('Erro no fluxo:', error);
+      console.error('Erro no fluxo:', redactSecrets(error));
       return {
         mensagem: '❌ Erro ao processar. Tente novamente ou digite "cancelar".',
         finalizado: false,
-        erro: error.message
+        erro: redactSecrets(error?.message ?? error)
       };
     }
   }
