@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { InvalidCredentialError, readCredential } from '@/lib/secrets'
 
 /**
  * Protege todo o dashboard atrás do login.
@@ -9,8 +10,21 @@ import { NextResponse, type NextRequest } from 'next/server'
  *   e respondem 401, em vez de devolver HTML de redirect).
  */
 export async function middleware(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || ''
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || ''
+  let url = ''
+  let key = ''
+  try {
+    url = readCredential('NEXT_PUBLIC_SUPABASE_URL')
+    key = readCredential('NEXT_PUBLIC_SUPABASE_ANON_KEY')
+  } catch (error) {
+    // Credencial malformada. A mensagem do InvalidCredentialError nunca inclui
+    // o valor; qualquer outra coisa não é logada, para não arriscar vazamento.
+    console.error(
+      error instanceof InvalidCredentialError
+        ? `[middleware] ${error.message}`
+        : '[middleware] Credencial Supabase inválida.'
+    )
+    return NextResponse.next({ request })
+  }
 
   // Sem env configurado (ex.: dev sem .env.local) -> não bloqueia, pra não
   // derrubar o ambiente. Em produção as variáveis estão sempre setadas.
