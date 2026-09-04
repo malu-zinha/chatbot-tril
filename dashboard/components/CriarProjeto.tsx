@@ -70,8 +70,9 @@ export default function CriarProjeto({ isOpen, onClose, onSuccess }: CriarProjet
         setFormData(emptyForm)
         onSuccess()
       }
-    } catch (err: any) {
-      setErrorMessage(err?.message || 'Erro inesperado ao criar projeto.')
+    } catch {
+      // Mensagem fixa: err.message pode carregar detalhe do PostgREST.
+      setErrorMessage('Erro inesperado ao criar projeto.')
     } finally {
       setIsLoading(false)
     }
