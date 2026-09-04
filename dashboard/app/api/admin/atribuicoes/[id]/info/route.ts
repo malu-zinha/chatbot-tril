@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
-import { getOwnerOrNull } from '@/lib/supabaseServer'
-import { createAdminClient, isAdminConfigured } from '@/lib/supabaseAdmin'
+import { createAdminClient } from '@/lib/supabaseAdmin'
+import { guardOwnerRoute } from '@/lib/apiGuard'
+import { handleApiError } from '@/lib/apiError'
 import {
   getAtribuicaoActionMessage,
   getAtribuicaoActionStatus,
   isAtribuicaoActionSuccess,
   isUuid,
+  sanitizeAtribuicaoActionResult,
   type AtribuicaoActionResult,
 } from '@/lib/adminAtribuicoes'
 
@@ -20,33 +22,46 @@ export async function GET(
   _request: Request,
   { params }: { params: { id: string } }
 ) {
-  const owner = await getOwnerOrNull()
-  if (!owner) return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
-  if (!isAdminConfigured()) {
-    return NextResponse.json(
-      { error: 'SUPABASE_SERVICE_ROLE_KEY nao configurada no servidor.' },
-      { status: 500 }
-    )
-  }
+  const guard = await guardOwnerRoute()
+  if (!guard.ok) return guard.response
 
   if (!isUuid(params.id)) {
     return NextResponse.json({ error: 'Tarefa invalida.' }, { status: 400 })
   }
 
-  const admin = createAdminClient()
-  const { data, error } = await admin.rpc('verificar_atribuicao_info', {
-    p_atribuicao_id: params.id,
-  })
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin.rpc('verificar_atribuicao_info', {
+      p_atribuicao_id: params.id,
+    })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      const { status, message } = handleApiError(
+        'GET /admin/atribuicoes/[id]/info',
+        error,
+        'Nao foi possivel carregar as informacoes da tarefa.'
+      )
+      return NextResponse.json({ error: message }, { status })
+    }
 
-  const result = data as AtribuicaoActionResult
-  if (!isAtribuicaoActionSuccess(result)) {
-    return NextResponse.json(
-      { error: getAtribuicaoActionMessage(result), result },
-      { status: getAtribuicaoActionStatus(result) }
+    const result = data as AtribuicaoActionResult
+    if (!isAtribuicaoActionSuccess(result)) {
+      return NextResponse.json(
+        {
+          error: getAtribuicaoActionMessage(result),
+          result: sanitizeAtribuicaoActionResult(result),
+        },
+        { status: getAtribuicaoActionStatus(result) }
+      )
+    }
+
+    return NextResponse.json({ result })
+  } catch (error) {
+    const { status, message } = handleApiError(
+      'GET /admin/atribuicoes/[id]/info',
+      error,
+      'Nao foi possivel carregar as informacoes da tarefa.'
     )
+    return NextResponse.json({ error: message }, { status })
   }
-
-  return NextResponse.json({ result })
 }

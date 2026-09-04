@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getOwnerOrNull } from '@/lib/supabaseServer'
-import { createAdminClient, isAdminConfigured } from '@/lib/supabaseAdmin'
+import { createAdminClient } from '@/lib/supabaseAdmin'
+import { guardOwnerRoute } from '@/lib/apiGuard'
+import { handleApiError } from '@/lib/apiError'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -10,28 +11,26 @@ export const runtime = 'nodejs'
  * Lista todos os perfis da plataforma. Só o owner ativo pode chamar.
  */
 export async function GET() {
-  const owner = await getOwnerOrNull()
-  if (!owner) {
-    return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
-  }
-  if (!isAdminConfigured()) {
-    return NextResponse.json(
-      { error: 'SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.' },
-      { status: 500 }
-    )
-  }
+  const guard = await guardOwnerRoute()
+  if (!guard.ok) return guard.response
 
-  const admin = createAdminClient()
-  const { data, error } = await admin
-    .from('user_profiles')
-    .select('user_id, email, display_name, role, status, created_at')
-    .order('created_at', { ascending: true })
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .from('user_profiles')
+      .select('user_id, email, display_name, role, status, created_at')
+      .order('created_at', { ascending: true })
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      const { status, message } = handleApiError('GET /admin/users', error)
+      return NextResponse.json({ error: message }, { status })
+    }
+
+    return NextResponse.json({ users: data ?? [] })
+  } catch (error) {
+    const { status, message } = handleApiError('GET /admin/users', error)
+    return NextResponse.json({ error: message }, { status })
   }
-
-  return NextResponse.json({ users: data ?? [] })
 }
 
 /**
@@ -40,16 +39,8 @@ export async function GET() {
  * Body: { email, password, display_name? }
  */
 export async function POST(request: Request) {
-  const owner = await getOwnerOrNull()
-  if (!owner) {
-    return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
-  }
-  if (!isAdminConfigured()) {
-    return NextResponse.json(
-      { error: 'SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.' },
-      { status: 500 }
-    )
-  }
+  const guard = await guardOwnerRoute()
+  if (!guard.ok) return guard.response
 
   let body: { email?: string; password?: string; display_name?: string }
   try {
@@ -72,43 +63,67 @@ export async function POST(request: Request) {
     )
   }
 
-  const admin = createAdminClient()
+  try {
+    const admin = createAdminClient()
 
-  // 1. Cria o usuário no Auth (já confirmado, pra entrar sem verificar email).
-  const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  })
-
-  if (createError || !created.user) {
-    const msg = createError?.message || 'Erro ao criar usuário.'
-    const alreadyExists = /already|exist|registered/i.test(msg)
-    return NextResponse.json(
-      { error: alreadyExists ? 'Já existe um usuário com esse email.' : msg },
-      { status: alreadyExists ? 409 : 500 }
-    )
-  }
-
-  // 2. Cria o perfil correspondente (papel engenheiro, ativo).
-  const { data: profile, error: profileError } = await admin
-    .from('user_profiles')
-    .insert({
-      user_id: created.user.id,
+    // 1. Cria o usuário no Auth (já confirmado, pra entrar sem verificar email).
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
-      display_name: displayName,
-      role: 'engenheiro',
-      status: 'active',
-      created_by: owner.id,
+      password,
+      email_confirm: true,
     })
-    .select('user_id, email, display_name, role, status, created_at')
-    .single()
 
-  if (profileError) {
-    // Rollback: remove o usuário do Auth para não deixar órfão sem perfil.
-    await admin.auth.admin.deleteUser(created.user.id)
-    return NextResponse.json({ error: profileError.message }, { status: 500 })
+    if (createError || !created.user) {
+      // O teste de "já existe" continua olhando a mensagem do GoTrue — mas
+      // agora só como classificação interna. Quando não casa, o browser recebe
+      // texto genérico em vez da mensagem crua do serviço de autenticação.
+      const alreadyExists = /already|exist|registered/i.test(createError?.message ?? '')
+      if (alreadyExists) {
+        return NextResponse.json(
+          { error: 'Já existe um usuário com esse email.' },
+          { status: 409 }
+        )
+      }
+      const { status, message } = handleApiError(
+        'POST /admin/users/createUser',
+        createError,
+        'Não foi possível criar o login. Tente novamente.'
+      )
+      return NextResponse.json({ error: message }, { status })
+    }
+
+    // 2. Cria o perfil correspondente (papel engenheiro, ativo).
+    const { data: profile, error: profileError } = await admin
+      .from('user_profiles')
+      .insert({
+        user_id: created.user.id,
+        email,
+        display_name: displayName,
+        role: 'engenheiro',
+        status: 'active',
+        created_by: guard.owner.id,
+      })
+      .select('user_id, email, display_name, role, status, created_at')
+      .single()
+
+    if (profileError) {
+      // Rollback: remove o usuário do Auth para não deixar órfão sem perfil.
+      await admin.auth.admin.deleteUser(created.user.id)
+      const { status, message } = handleApiError(
+        'POST /admin/users/profile',
+        profileError,
+        'Não foi possível criar o login. Tente novamente.'
+      )
+      return NextResponse.json({ error: message }, { status })
+    }
+
+    return NextResponse.json({ user: profile }, { status: 201 })
+  } catch (error) {
+    const { status, message } = handleApiError(
+      'POST /admin/users',
+      error,
+      'Não foi possível criar o login. Tente novamente.'
+    )
+    return NextResponse.json({ error: message }, { status })
   }
-
-  return NextResponse.json({ user: profile }, { status: 201 })
 }

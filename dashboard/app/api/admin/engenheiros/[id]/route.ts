@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getOwnerOrNull } from '@/lib/supabaseServer'
-import { createAdminClient, isAdminConfigured } from '@/lib/supabaseAdmin'
+import { createAdminClient } from '@/lib/supabaseAdmin'
+import { guardOwnerRoute } from '@/lib/apiGuard'
+import { handleApiError } from '@/lib/apiError'
 import { normalizePhone } from '@/lib/phone'
 
 export const dynamic = 'force-dynamic'
@@ -15,14 +16,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const owner = await getOwnerOrNull()
-  if (!owner) return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
-  if (!isAdminConfigured()) {
-    return NextResponse.json(
-      { error: 'SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.' },
-      { status: 500 }
-    )
-  }
+  const guard = await guardOwnerRoute()
+  if (!guard.ok) return guard.response
 
   let body: { nome?: string; telefone?: string; exclusivo?: boolean; ativo?: boolean }
   try {
@@ -57,26 +52,43 @@ export async function PATCH(
     return NextResponse.json({ error: 'Nada para atualizar.' }, { status: 400 })
   }
 
-  const admin = createAdminClient()
-  const { data, error } = await admin
-    .from('engenheiros')
-    .update(patch)
-    .eq('eng_id', params.id)
-    .select('eng_id, nome, telefone, exclusivo, ativo')
-    .single()
+  try {
+    const admin = createAdminClient()
+    const { data, error } = await admin
+      .from('engenheiros')
+      .update(patch)
+      .eq('eng_id', params.id)
+      .select('eng_id, nome, telefone, exclusivo, ativo')
+      .single()
 
-  if (error) {
-    if (error.code === '23505') {
-      return NextResponse.json(
-        { error: 'Já existe um engenheiro com esse telefone.' },
-        { status: 409 }
+    if (error) {
+      if (error.code === '23505') {
+        return NextResponse.json(
+          { error: 'Já existe um engenheiro com esse telefone.' },
+          { status: 409 }
+        )
+      }
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Engenheiro não encontrado.' }, { status: 404 })
+      }
+      const { status, message } = handleApiError(
+        'PATCH /admin/engenheiros/[id]',
+        error,
+        'Não foi possível atualizar o engenheiro. Tente novamente.'
       )
+      return NextResponse.json({ error: message }, { status })
     }
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-  if (!data) {
-    return NextResponse.json({ error: 'Engenheiro não encontrado.' }, { status: 404 })
-  }
+    if (!data) {
+      return NextResponse.json({ error: 'Engenheiro não encontrado.' }, { status: 404 })
+    }
 
-  return NextResponse.json({ engenheiro: data })
+    return NextResponse.json({ engenheiro: data })
+  } catch (error) {
+    const { status, message } = handleApiError(
+      'PATCH /admin/engenheiros/[id]',
+      error,
+      'Não foi possível atualizar o engenheiro. Tente novamente.'
+    )
+    return NextResponse.json({ error: message }, { status })
+  }
 }

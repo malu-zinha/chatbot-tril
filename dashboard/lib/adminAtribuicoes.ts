@@ -64,3 +64,20 @@ export function getAtribuicaoActionMessage(
   const mensagem = typeof result?.mensagem === 'string' ? result.mensagem.trim() : ''
   return mensagem || 'Nao foi possivel concluir a acao.'
 }
+
+/**
+ * Reduz o resultado da RPC aos campos que o browser pode ver.
+ *
+ * AtribuicaoActionResult tem index signature, entao devolver o objeto inteiro
+ * no caminho de erro expunha qualquer campo novo que a funcao SQL passasse a
+ * retornar. No caminho de SUCESSO o objeto continua indo completo — o cliente
+ * consome result.data (lib/supabase.ts) e is_ultima_disciplina (ProjetosTable).
+ */
+export function sanitizeAtribuicaoActionResult(
+  result: AtribuicaoActionResult | null | undefined
+): { codigo?: string; mensagem?: string } {
+  const safe: { codigo?: string; mensagem?: string } = {}
+  if (typeof result?.codigo === 'string') safe.codigo = result.codigo
+  if (typeof result?.mensagem === 'string') safe.mensagem = result.mensagem
+  return safe
+}
