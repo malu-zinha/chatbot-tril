@@ -18,8 +18,8 @@
 // dos engenheiros para o banco de dados Supabase
 // =====================================================
 
-import { createClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
+import { criarClienteSupabaseValidado } from '../supabase/createValidatedClient.ts';
 
 // =====================================================
 // TIPOS E INTERFACES
@@ -55,10 +55,8 @@ class EngineerSyncService {
   private sheets: any;
 
   constructor() {
-    // Inicializar Supabase
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    // Inicializar Supabase — ver comentário em criarClienteSupabaseValidado.
+    this.supabase = criarClienteSupabaseValidado('EngineerSyncService');
 
     // Inicializar Google Sheets
     const auth = new google.auth.GoogleAuth({

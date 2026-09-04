@@ -7,8 +7,8 @@
 // para a planilha do CEO com visão geral de todos os projetos
 // =====================================================
 
-import { createClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
+import { criarClienteSupabaseValidado } from '../supabase/createValidatedClient.ts';
 
 // =====================================================
 // TIPOS E INTERFACES
@@ -47,10 +47,10 @@ class CEOSyncService {
   private sheets: any;
 
   constructor() {
-    // Inicializar Supabase
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+    // Inicializar Supabase — trim + validação antes do createClient. Sem isso,
+    // um \r\n na variável só falharia lá dentro do fetch, com a chave na
+    // mensagem da exceção.
+    this.supabase = criarClienteSupabaseValidado('CEOSyncService');
 
     // Inicializar Google Sheets
     const auth = new google.auth.GoogleAuth({
