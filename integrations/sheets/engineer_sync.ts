@@ -19,7 +19,11 @@
 // =====================================================
 
 import { google } from 'googleapis';
-import { criarClienteSupabaseValidado } from '../supabase/createValidatedClient.ts';
+import {
+  ClienteSupabaseValidado,
+  criarClienteSupabaseValidado,
+  exigirClienteSupabase,
+} from '../supabase/createValidatedClient.ts';
 
 // =====================================================
 // TIPOS E INTERFACES
@@ -51,7 +55,7 @@ interface SyncResult {
 // =====================================================
 
 class EngineerSyncService {
-  private supabase: any;
+  private supabase: ClienteSupabaseValidado | null;
   private sheets: any;
 
   constructor() {
@@ -65,6 +69,14 @@ class EngineerSyncService {
     });
 
     this.sheets = google.sheets({ version: 'v4', auth });
+  }
+
+  /**
+   * Cliente Supabase garantido. Se as credenciais faltaram no boot, falha aqui
+   * com mensagem clara em vez de um null deref na primeira query.
+   */
+  private get db(): ClienteSupabaseValidado {
+    return exigirClienteSupabase(this.supabase, 'EngineerSyncService');
   }
 
   // =====================================================
@@ -114,7 +126,7 @@ class EngineerSyncService {
   // =====================================================
 
   async buscarEngenheiroPorWhatsapp(whatsapp: string): Promise<string | null> {
-    const { data, error } = await this.supabase
+    const { data, error } = await this.db
       .from('engenheiros')
       .select('id')
       .eq('whatsapp', whatsapp)
@@ -138,7 +150,7 @@ class EngineerSyncService {
   ): Promise<{ created: boolean; updated: boolean; error?: string }> {
     try {
       // Verificar se projeto já existe (por código)
-      const { data: projetoExistente, error: searchError } = await this.supabase
+      const { data: projetoExistente, error: searchError } = await this.db
         .from('projetos')
         .select('id, percentual_total')
         .eq('codigo', projeto.codigo)
@@ -165,7 +177,7 @@ class EngineerSyncService {
 
       if (projetoExistente) {
         // ATUALIZAR projeto existente
-        const { error: updateError } = await this.supabase
+        const { error: updateError } = await this.db
           .from('projetos')
           .update(projetoData)
           .eq('id', projetoExistente.id);
@@ -178,7 +190,7 @@ class EngineerSyncService {
         return { created: false, updated: true };
       } else {
         // CRIAR novo projeto
-        const { error: insertError } = await this.supabase
+        const { error: insertError } = await this.db
           .from('projetos')
           .insert(projetoData);
 
