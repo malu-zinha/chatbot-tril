@@ -9,8 +9,32 @@
 console.log('🔍 [SUPABASE] Arquivo supabaseService.ts sendo importado...');
 
 import { createClient } from '@supabase/supabase-js';
+import { logSupabaseError, redactSecrets } from '../../logic/security/redactSecrets.ts';
+import { InvalidCredentialError, readCredential } from '../../logic/security/envSecret.ts';
 
 console.log('🔍 [SUPABASE] createClient importado do @supabase/supabase-js');
+
+// =====================================================
+// ERROS
+// =====================================================
+
+/**
+ * Falha de INFRAESTRUTURA ao consultar o Supabase.
+ *
+ * Existe para separar dois estados que o código antigo fundia num único
+ * `null`: "a consulta rodou e não há registro" (usuário não cadastrado) e
+ * "a consulta não rodou" (chave inválida, rede, timeout, RLS). Confundir os
+ * dois foi o que fez engenheiros cadastrados receberem
+ * "❌ Número não cadastrado" durante a indisponibilidade.
+ *
+ * A mensagem é um código fixo — nunca carrega detalhe do Supabase.
+ */
+export class SupabaseUnavailableError extends Error {
+  constructor(public readonly scope: string) {
+    super('SUPABASE_QUERY_FAILED');
+    this.name = 'SupabaseUnavailableError';
+  }
+}
 
 // =====================================================
 // TIPOS E INTERFACES
@@ -168,8 +192,28 @@ export class SupabaseService {
 
   constructor() {
     console.log('🔍 [SUPABASE] Construtor chamado...');
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    // trim + validação ANTES do createClient: um \n colado ao copiar a chave
+    // para o painel do Railway vira `Headers.set: "<chave>" is an invalid
+    // header value` lá dentro do fetch, com a credencial na mensagem.
+    let supabaseUrl = '';
+    let supabaseKey = '';
+    try {
+      supabaseUrl = readCredential('SUPABASE_URL');
+      supabaseKey = readCredential('SUPABASE_SERVICE_ROLE_KEY');
+    } catch (error) {
+      // Credencial presente mas malformada. Não derrubamos o processo: sem
+      // cliente, `connected` fica false e as buscas de autenticação lançam
+      // SupabaseUnavailableError — o engenheiro recebe "serviço
+      // indisponível", não "número não cadastrado".
+      console.error(
+        error instanceof InvalidCredentialError
+          ? `❌ [SUPABASE] ${error.message}`
+          : `❌ [SUPABASE] ${redactSecrets(error)}`
+      );
+      this.supabase = null as any;
+      return;
+    }
 
     console.log('🔍 [SUPABASE] URL:', supabaseUrl ? 'OK' : 'FALTA');
     console.log('🔍 [SUPABASE] KEY:', supabaseKey ? 'OK' : 'FALTA');
@@ -189,7 +233,7 @@ export class SupabaseService {
       this.connected = true;
       console.log('✅ Supabase conectado (Schema N:N)');
     } catch (error: any) {
-      console.error('❌ Erro ao conectar Supabase:', error.message);
+      console.error('❌ Erro ao conectar Supabase:', redactSecrets(error?.message ?? error));
       this.supabase = null as any;
     }
     console.log('🔍 [SUPABASE] Construtor finalizado');
@@ -212,9 +256,23 @@ export class SupabaseService {
 
   /**
    * Busca engenheiro por WhatsApp (via campo telefone)
+   *
+   * NÃO usar para autenticação — use buscarEngenheiroPorTelefone, que
+   * distingue "não cadastrado" de "banco indisponível".
+   *
+   * Este wrapper serve o sync de planilhas (syncDatabaseToSheets,
+   * criarOuBuscarEngenheiro) e o engineerProjectFlow, que já rodam DEPOIS da
+   * autenticação e cujo contrato histórico é "null em qualquer problema".
+   * Mantemos esse contrato de propósito: propagar a exceção aqui mudaria o
+   * comportamento do cron em produção, fora do escopo deste fix.
    */
   async buscarEngenheiroPorWhatsapp(whatsapp: string): Promise<Engenheiro | null> {
-    return await this.buscarEngenheiroPorTelefone(whatsapp);
+    try {
+      return await this.buscarEngenheiroPorTelefone(whatsapp);
+    } catch (error) {
+      if (error instanceof SupabaseUnavailableError) return null;
+      throw error;
+    }
   }
 
   /**
@@ -1413,12 +1471,23 @@ export class SupabaseService {
 
   /**
    * Busca engenheiro por telefone (campo telefone direto na tabela engenheiros)
+   *
+   * Contrato:
+   *   consulta rodou e não achou linha  -> null  (usuário não cadastrado)
+   *   consulta não rodou                -> SupabaseUnavailableError
+   *
+   * Os dois casos NUNCA se misturam. É esta distinção que impede o chatbot
+   * de dizer "número não cadastrado" para um engenheiro cadastrado quando o
+   * banco está fora do ar.
    */
   async buscarEngenheiroPorTelefone(telefone: string): Promise<Engenheiro | null> {
     console.log(`      🔍 [SUPABASE] buscarEngenheiroPorTelefone("${telefone}")`);
     if (!this.connected) {
-      console.log(`      ❌ [SUPABASE] Não conectado`);
-      return null;
+      // Sem cliente não houve consulta — não dá para afirmar que o número não
+      // existe. Antes isto retornava null e derrubava 100% dos usuários para
+      // "não cadastrado" sempre que faltasse configuração.
+      console.error(`      ❌ [SUPABASE] Não conectado — impossível verificar cadastro`);
+      throw new SupabaseUnavailableError('buscarEngenheiroPorTelefone');
     }
 
     try {
@@ -1426,36 +1495,49 @@ export class SupabaseService {
       console.log(`      🔍 [SUPABASE] Telefone normalizado: "${telefoneNormalizado}"`);
       console.log(`      🔍 [SUPABASE] Executando query...`);
 
+      // maybeSingle(), não single(): com single() "0 linhas" chega como erro
+      // PGRST116, pelo mesmo caminho de um timeout. Aqui, 0 linhas devolve
+      // data: null / error: null, e `error` volta a significar falha real.
       const { data, error } = await this.supabase
         .from('engenheiros')
         .select('*')
         .eq('telefone', telefoneNormalizado)
         .eq('ativo', true)
-        .single();
+        .maybeSingle();
 
       console.log(`      🔍 [SUPABASE] Query concluída!`);
 
-      if (error || !data) {
-        console.log(`      ⚠️ [SUPABASE] Não encontrado ou erro: ${error?.message || 'sem data'}`);
+      if (error) {
+        logSupabaseError('Falha ao consultar cadastro do engenheiro', error);
+        throw new SupabaseUnavailableError('buscarEngenheiroPorTelefone');
+      }
+
+      if (!data) {
+        console.log(`      ⚠️ [SUPABASE] Nenhum engenheiro com este telefone`);
         return null;
       }
 
       console.log(`      ✅ [SUPABASE] Engenheiro encontrado: ${data.nome}`);
       return data;
     } catch (error: any) {
-      console.error(`      ❌ [SUPABASE] Exceção: ${error.message}`);
-      return null;
+      if (error instanceof SupabaseUnavailableError) throw error;
+      // fetch failed, DNS, timeout, chave inválida: também é infraestrutura.
+      logSupabaseError('Exceção ao consultar cadastro do engenheiro', error);
+      throw new SupabaseUnavailableError('buscarEngenheiroPorTelefone');
     }
   }
 
   /**
    * Busca dono por telefone
+   *
+   * Mesmo contrato de buscarEngenheiroPorTelefone: null = não cadastrado,
+   * SupabaseUnavailableError = a consulta não rodou.
    */
   async buscarDonoPorTelefone(telefone: string): Promise<any | null> {
     console.log(`      🔍 [SUPABASE] buscarDonoPorTelefone("${telefone}")`);
     if (!this.connected) {
-      console.log(`      ❌ [SUPABASE] Não conectado`);
-      return null;
+      console.error(`      ❌ [SUPABASE] Não conectado — impossível verificar cadastro`);
+      throw new SupabaseUnavailableError('buscarDonoPorTelefone');
     }
 
     try {
@@ -1468,20 +1550,26 @@ export class SupabaseService {
         .select('*')
         .eq('telefone', telefoneNormalizado)
         .eq('ativo', true)
-        .single();
+        .maybeSingle();
 
       console.log(`      🔍 [SUPABASE] Query concluída!`);
 
-      if (error || !data) {
-        console.log(`      ⚠️ [SUPABASE] Não encontrado ou erro: ${error?.message || 'sem data'}`);
+      if (error) {
+        logSupabaseError('Falha ao consultar cadastro do dono', error);
+        throw new SupabaseUnavailableError('buscarDonoPorTelefone');
+      }
+
+      if (!data) {
+        console.log(`      ⚠️ [SUPABASE] Nenhum dono com este telefone`);
         return null;
       }
 
       console.log(`      ✅ [SUPABASE] Dono encontrado: ${data.nome}`);
       return data;
     } catch (error: any) {
-      console.error(`      ❌ [SUPABASE] Exceção: ${error.message}`);
-      return null;
+      if (error instanceof SupabaseUnavailableError) throw error;
+      logSupabaseError('Exceção ao consultar cadastro do dono', error);
+      throw new SupabaseUnavailableError('buscarDonoPorTelefone');
     }
   }
 
